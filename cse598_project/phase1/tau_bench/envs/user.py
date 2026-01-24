@@ -7,6 +7,7 @@ from litellm import completion
 from typing import Optional, List, Dict, Any, Union
 import os
 import json
+from tau_bench.model_utils.model.utils import prune_messages
 
 def get_model_api_base(model: str) -> Optional[str]:
     port_map_str = os.getenv("TAUBENCH_PORT_MAP")
@@ -186,7 +187,7 @@ class VerifyUserSimulationEnv(LLMUserSimulationEnv):
             res = completion(
                 model=self.model, 
                 custom_llm_provider=self.provider, 
-                messages=messages,
+                messages=prune_messages(messages),
                 api_base=get_model_api_base(self.model)
             )
             cur_message = res.choices[0].message
