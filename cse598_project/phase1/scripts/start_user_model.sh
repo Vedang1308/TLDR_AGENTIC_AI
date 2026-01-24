@@ -2,6 +2,12 @@ MODEL="Qwen/Qwen3-32B"
 ALIAS="User-Qwen3-32B"
 PORT=8001
 
+# Force cache to scratch to avoid Disk Full issues
+export HF_HOME=/scratch/vavaghad/huggingface_cache
+export XDG_CACHE_HOME=/scratch/vavaghad/xdg_cache
+mkdir -p $HF_HOME
+mkdir -p $XDG_CACHE_HOME
+
 # Check if port is in use
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
     echo "Port $PORT is already in use. Killing process..."
@@ -21,6 +27,6 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --max-model-len 8192 \
     --max-num-batched-tokens 8192 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.80 
+    --gpu-memory-utilization 0.82 
     # Note: reduced gpu utilization if running alongside another model, 
     # but practically we might need sequential execution if single GPU.
