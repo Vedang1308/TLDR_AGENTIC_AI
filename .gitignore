@@ -5,3 +5,4 @@ results/**
 __pycache__/
 *.py[cod]
 *.egg-info/
+cse598_project/phase1/venv/
