@@ -9,7 +9,7 @@ if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
 fi
 
 # Use venv python relative to this script
-PYTHON_EXEC="$(dirname "$0")/../venv/bin/python"
+PYTHON_EXEC="python3"
 
 echo "Starting vLLM server for Agent ($MODEL) on port $PORT..."
 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
