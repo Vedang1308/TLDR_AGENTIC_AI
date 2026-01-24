@@ -3,6 +3,18 @@
 import json
 from litellm import completion
 from typing import List, Optional, Dict, Any
+import os
+
+def get_model_api_base(model: str) -> Optional[str]:
+    port_map_str = os.getenv("TAUBENCH_PORT_MAP")
+    if port_map_str:
+        try:
+            port_map = json.loads(port_map_str)
+            if model in port_map:
+                return f"http://localhost:{port_map[model]}/v1"
+        except json.JSONDecodeError:
+            pass
+    return None
 
 from tau_bench.agents.base import Agent
 from tau_bench.envs.base import Env
@@ -43,6 +55,7 @@ class ToolCallingAgent(Agent):
                 custom_llm_provider=self.provider,
                 tools=self.tools_info,
                 temperature=self.temperature,
+                api_base=get_model_api_base(self.model)
             )
             next_message = res.choices[0].message.model_dump()
             total_cost += res._hidden_params["response_cost"] or 0

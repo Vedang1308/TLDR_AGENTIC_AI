@@ -12,6 +12,18 @@ from tau_bench.types import (
     RESPOND_ACTION_FIELD_NAME,
 )
 from typing import Optional, List, Dict, Any, Tuple
+import os
+
+def get_model_api_base(model: str) -> Optional[str]:
+    port_map_str = os.getenv("TAUBENCH_PORT_MAP")
+    if port_map_str:
+        try:
+            port_map = json.loads(port_map_str)
+            if model in port_map:
+                return f"http://localhost:{port_map[model]}/v1"
+        except json.JSONDecodeError:
+            pass
+    return None
 
 
 class ChatReActAgent(Agent):
@@ -42,6 +54,7 @@ class ChatReActAgent(Agent):
             custom_llm_provider=self.provider,
             messages=messages,
             temperature=self.temperature,
+            api_base=get_model_api_base(self.model)
         )
         message = res.choices[0].message
         action_str = message.content.split("Action:")[-1].strip()
