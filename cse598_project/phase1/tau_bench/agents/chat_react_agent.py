@@ -13,6 +13,7 @@ from tau_bench.types import (
 )
 from typing import Optional, List, Dict, Any, Tuple
 import os
+from tau_bench.model_utils.model.utils import prune_messages
 
 def get_model_api_base(model: str) -> Optional[str]:
     port_map_str = os.getenv("TAUBENCH_PORT_MAP")
@@ -52,7 +53,7 @@ class ChatReActAgent(Agent):
         res = completion(
             model=self.model,
             custom_llm_provider=self.provider,
-            messages=messages,
+            messages=prune_messages(messages),
             temperature=self.temperature,
             api_base=get_model_api_base(self.model)
         )

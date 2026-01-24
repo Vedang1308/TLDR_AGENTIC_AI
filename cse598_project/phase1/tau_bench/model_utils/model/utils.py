@@ -15,6 +15,33 @@ class InputType(enum.Enum):
     COMPLETION = "completion"
 
 
+def prune_messages(messages: list[dict[str, Any]], max_tokens: int = 30000) -> list[dict[str, Any]]:
+    """Prunes messages to fit within a token limit, keeping system messages and the most recent context."""
+    if not messages:
+        return messages
+    
+    # Always keep system messages
+    system_messages = [m for m in messages if m.get("role") == "system"]
+    other_messages = [m for m in messages if m.get("role") != "system"]
+    
+    # Simple heuristic: 1 token ~= 4 chars (very rough, but sufficient for safety buffer)
+    # We want to keep total length < max_tokens * 4 chars
+    limit_chars = max_tokens * 3  # Be conservative
+    
+    current_chars = sum(len(str(m.get("content", ""))) for m in system_messages)
+    pruned_others = []
+    
+    # Add messages from the end until we hit the limit
+    for msg in reversed(other_messages):
+        msg_len = len(str(msg.get("content", "")))
+        if current_chars + msg_len > limit_chars:
+            break
+        pruned_others.insert(0, msg)
+        current_chars += msg_len
+        
+    return system_messages + pruned_others
+
+
 def display_choices(choices: list[str]) -> tuple[str, dict[str, int]]:
     choice_displays = []
     decode_map = {}

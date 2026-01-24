@@ -4,6 +4,7 @@ import json
 from litellm import completion
 from typing import List, Optional, Dict, Any
 import os
+from tau_bench.model_utils.model.utils import prune_messages
 
 def get_model_api_base(model: str) -> Optional[str]:
     port_map_str = os.getenv("TAUBENCH_PORT_MAP")
@@ -50,7 +51,7 @@ class ToolCallingAgent(Agent):
         ]
         for _ in range(max_num_steps):
             res = completion(
-                messages=messages,
+                messages=prune_messages(messages),
                 model=self.model,
                 custom_llm_provider=self.provider,
                 tools=self.tools_info,
