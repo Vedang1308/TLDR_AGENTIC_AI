@@ -5,6 +5,19 @@ import enum
 from litellm import completion
 
 from typing import Optional, List, Dict, Any, Union
+import os
+import json
+
+def get_model_api_base(model: str) -> Optional[str]:
+    port_map_str = os.getenv("TAUBENCH_PORT_MAP")
+    if port_map_str:
+        try:
+            port_map = json.loads(port_map_str)
+            if model in port_map:
+                return f"http://localhost:{port_map[model]}/v1"
+        except json.JSONDecodeError:
+            pass
+    return None
 
 
 class BaseUserSimulationEnv(abc.ABC):
@@ -165,7 +178,10 @@ class VerifyUserSimulationEnv(LLMUserSimulationEnv):
         cur_message = None
         while attempts < self.max_attempts:
             res = completion(
-                model=self.model, custom_llm_provider=self.provider, messages=messages
+                model=self.model, 
+                custom_llm_provider=self.provider, 
+                messages=messages,
+                api_base=get_model_api_base(self.model)
             )
             cur_message = res.choices[0].message
             self.total_cost = res._hidden_params["response_cost"]
