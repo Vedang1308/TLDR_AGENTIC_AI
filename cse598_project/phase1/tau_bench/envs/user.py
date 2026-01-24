@@ -58,7 +58,10 @@ class LLMUserSimulationEnv(BaseUserSimulationEnv):
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
         res = completion(
-            model=self.model, custom_llm_provider=self.provider, messages=messages
+            model=self.model, 
+            custom_llm_provider=self.provider, 
+            messages=messages,
+            api_base=get_model_api_base(self.model)
         )
         message = res.choices[0].message
         self.messages.append(message.model_dump())
@@ -129,7 +132,10 @@ User Response:
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
         res = completion(
-            model=self.model, custom_llm_provider=self.provider, messages=messages
+            model=self.model, 
+            custom_llm_provider=self.provider, 
+            messages=messages,
+            api_base=get_model_api_base(self.model)
         )
         message = res.choices[0].message
         self.messages.append(message.model_dump())
