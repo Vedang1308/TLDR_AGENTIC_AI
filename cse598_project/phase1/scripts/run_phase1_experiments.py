@@ -39,6 +39,23 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
     output_path = os.path.join(results_dir, domain, model_safe_name, strategy, f"trial_{trial}")
     os.makedirs(output_path, exist_ok=True)
     
+    # Determine model provider (assuming openai for vLLM/GPT)
+    model_provider = "openai" 
+    
+    # Set up Port Map for Local vLLM
+    # Maps specific models to ports 8000 (Agent) and 8001 (User)
+    port_map = {
+        "Qwen/Qwen3-4B": 8000,
+        "Qwen/Qwen3-8B": 8000,
+        "Qwen/Qwen3-14B": 8000,
+        "Qwen/Qwen3-32B": 8000,
+        "User-Qwen3-32B": 8001,
+        "gpt-4o": 8001 # Fallback if using gpt-4o as alias for user
+    }
+    
+    # Export Port Map to environment so get_env can find local servers
+    os.environ["TAUBENCH_PORT_MAP"] = json.dumps(port_map)
+    
     # SMART RESUME LOGIC
     completed_ids = get_existing_completed_tasks(output_path)
     
@@ -66,19 +83,6 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
 
     print(f"Resuming/Retrying {len(needed_ids)} tasks: {needed_ids[:5]}...")
 
-    # Determine model provider (assuming openai for vLLM/GPT)
-    model_provider = "openai" 
-    
-    # Set up Port Map for Local vLLM
-    # Maps specific models to ports 8000 (Agent) and 8001 (User)
-    port_map = {
-        "Qwen/Qwen3-4B": 8000,
-        "Qwen/Qwen3-8B": 8000,
-        "Qwen/Qwen3-14B": 8000,
-        "Qwen/Qwen3-32B": 8000,
-        "User-Qwen3-32B": 8001,
-        "gpt-4o": 8001 # Fallback if using gpt-4o as alias for user
-    }
     
     env = os.environ.copy()
     env["TAUBENCH_PORT_MAP"] = json.dumps(port_map)
