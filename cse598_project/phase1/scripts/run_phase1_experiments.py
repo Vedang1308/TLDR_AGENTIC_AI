@@ -5,15 +5,64 @@ import os
 import time
 import sys
 import json
+import glob
+from tau_bench.envs import get_env
+
+def get_existing_completed_tasks(output_path):
+    completed_ids = set()
+    # Check all json files in the directory
+    files = glob.glob(os.path.join(output_path, "*.json"))
+    for fpath in files:
+        try:
+            with open(fpath, "r") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict) and "task_id" in item:
+                            # Check if it was a crash/error
+                            info = item.get("info", {})
+                            if info and "error" in info:
+                                continue # Treat as failed/missing
+                            completed_ids.add(item["task_id"])
+        except Exception:
+            pass # Ignore corrupt files
+    return completed_ids
 
 def run_experiment(domain, model, strategy, user_model, user_strategy, trial, start_index=0, results_dir="results/phase1"):
-    print(f"Running Experiment: Domain={domain}, Model={model}, Strategy={strategy}, Trial={trial}, StartIndex={start_index}")
+    print(f"Running Experiment: Domain={domain}, Model={model}, Strategy={strategy}, Trial={trial}, ResumeFrom={start_index}")
     
     # Construct output path
     model_safe_name = model.replace("/", "_")
     output_path = os.path.join(results_dir, domain, model_safe_name, strategy, f"trial_{trial}")
     os.makedirs(output_path, exist_ok=True)
     
+    # SMART RESUME LOGIC
+    completed_ids = get_existing_completed_tasks(output_path)
+    
+    # Get total tasks count (lightweight init)
+    # Note: We assume 'test' split as per default
+    try:
+        temp_env = get_env(domain, user_strategy=user_strategy, user_model=user_model, task_split="test")
+        total_tasks = len(temp_env.tasks)
+        print(f"Total tasks in dataset: {total_tasks}. Completed so far: {len(completed_ids)}")
+    except Exception as e:
+        print(f"Warning: Could not determine total tasks ({e}). Falling back to simple start-index.")
+        total_tasks = 116 # Default fallback for retail-test
+    
+    # Calculate needed tasks
+    # We want everything from 0 to total_tasks that is NOT in completed_ids
+    # But only if it's >= start_index (if user explicitly asked to skip first N)
+    needed_ids = []
+    for i in range(total_tasks):
+        if i >= start_index and i not in completed_ids:
+            needed_ids.append(str(i))
+            
+    if not needed_ids:
+        print("All tasks completed! Skipping.")
+        return
+
+    print(f"Resuming/Retrying {len(needed_ids)} tasks: {needed_ids[:5]}...")
+
     # Determine model provider (assuming openai for vLLM/GPT)
     model_provider = "openai" 
     
@@ -32,6 +81,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
     env["TAUBENCH_PORT_MAP"] = json.dumps(port_map)
     env["OPENAI_API_KEY"] = "EMPTY" # Ensure key is present
     
+    # Pass explicit task_ids to run.py
     cmd = [
         sys.executable, "run.py",
         "--agent-strategy", "tool-calling" if strategy == "fc" else strategy,
@@ -42,10 +92,10 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
         "--user-model-provider", "openai",
         "--user-strategy", user_strategy,
         "--max-concurrency", "1", # Sequential for local
-        "--start-index", str(start_index),
         "--seed", str(trial),
-        "--log-dir", output_path
-    ]
+        "--log-dir", output_path,
+        "--task-ids"
+    ] + needed_ids
     
     try:
         subprocess.run(cmd, check=True, env=env)
