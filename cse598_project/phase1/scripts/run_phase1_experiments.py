@@ -6,8 +6,8 @@ import time
 import sys
 import json
 
-def run_experiment(domain, model, strategy, user_model, user_strategy, trial, results_dir="results/phase1"):
-    print(f"Running Experiment: Domain={domain}, Model={model}, Strategy={strategy}, Trial={trial}")
+def run_experiment(domain, model, strategy, user_model, user_strategy, trial, start_index=0, results_dir="results/phase1"):
+    print(f"Running Experiment: Domain={domain}, Model={model}, Strategy={strategy}, Trial={trial}, StartIndex={start_index}")
     
     # Construct output path
     model_safe_name = model.replace("/", "_")
@@ -42,6 +42,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, re
         "--user-model-provider", "openai",
         "--user-strategy", user_strategy,
         "--max-concurrency", "1", # Sequential for local
+        "--start-index", str(start_index),
         "--seed", str(trial),
         "--log-dir", output_path
     ]
@@ -58,6 +59,7 @@ def main():
     parser.add_argument("--strategy", choices=["react", "act", "fc", "all"], default="all")
     parser.add_argument("--model", type=str, help="Specific model to run (e.g., Qwen/Qwen3-4B-Instruct)")
     parser.add_argument("--user-model", type=str, default="User-Qwen3-32B", help="Fixed user model")
+    parser.add_argument("--start-index", type=int, default=0, help="Task index to start execution from")
     parser.add_argument("--trials", type=int, default=5)
     
     args = parser.parse_args()
@@ -75,7 +77,7 @@ def main():
         for model in models:
             for strategy in strategies:
                 for trial in range(args.trials):
-                   run_experiment(domain, model, strategy, args.user_model, "llm", trial)
+                   run_experiment(domain, model, strategy, args.user_model, "llm", trial, start_index=args.start_index)
 
 if __name__ == "__main__":
     main()
