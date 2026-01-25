@@ -11,7 +11,10 @@ from tau_bench.envs import get_env
 def get_existing_completed_tasks(output_path):
     completed_ids = set()
     # Check all json files in the directory
-    files = glob.glob(os.path.join(output_path, "*.json"))
+    search_pattern = os.path.join(output_path, "*.json")
+    print(f"Scanning for completed tasks in: {search_pattern}")
+    files = glob.glob(search_pattern)
+    print(f"Found {len(files)} log files.")
     for fpath in files:
         try:
             with open(fpath, "r") as f:
@@ -42,7 +45,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
     # Get total tasks count (lightweight init)
     # Note: We assume 'test' split as per default
     try:
-        temp_env = get_env(domain, user_strategy=user_strategy, user_model=user_model, task_split="test")
+        temp_env = get_env(domain, user_strategy=user_strategy, user_model=user_model, user_provider="openai", task_split="test")
         total_tasks = len(temp_env.tasks)
         print(f"Total tasks in dataset: {total_tasks}. Completed so far: {len(completed_ids)}")
     except Exception as e:
