@@ -117,6 +117,9 @@ def main():
     
     args = parser.parse_args()
     
+    # GLOBAL FIX: Set API Key for get_env calls (User/Task counting)
+    os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "EMPTY")
+    
     domains = ["retail", "airline"] if args.domain == "all" else [args.domain]
     strategies = ["react", "act", "fc"] if args.strategy == "all" else [args.strategy]
     models = [
