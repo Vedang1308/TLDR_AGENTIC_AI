@@ -10,6 +10,7 @@
 
 # Load modules (adjust based on Sol's specific modules, these are common defaults)
 module load mamba/latest 2>/dev/null || module load anaconda/2023.07 2>/dev/null
+module load cuda/12.1 2>/dev/null || module load cuda/11.8 2>/dev/null
 source ~/.bashrc 2>/dev/null
 
 # Activate Environment
