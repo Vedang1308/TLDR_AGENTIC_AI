@@ -49,7 +49,7 @@ CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
     --dtype float16 \
     --max-model-len 8192 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.58 &
+    --gpu-memory-utilization 0.50 &
 PID_USER=$!
 
 # ---------------------------------------------------------
@@ -65,7 +65,7 @@ CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
     --dtype float16 \
     --max-model-len 8192 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.37 &
+    --gpu-memory-utilization 0.30 &
 PID_AGENT=$!
 
 # ---------------------------------------------------------

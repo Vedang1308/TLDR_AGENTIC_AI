@@ -20,4 +20,4 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --dtype float16 \
     --max-model-len 8192 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.37
+    --gpu-memory-utilization 0.30
