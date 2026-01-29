@@ -48,7 +48,6 @@ CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
     --port $PORT_USER \
     --dtype float16 \
     --max-model-len 45000 \
-    --max-num-batched-tokens 45000 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.60 &
 PID_USER=$!
@@ -65,7 +64,6 @@ CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
     --port $PORT_AGENT \
     --dtype float16 \
     --max-model-len 45000 \
-    --max-num-batched-tokens 45000 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.35 &
 PID_AGENT=$!
