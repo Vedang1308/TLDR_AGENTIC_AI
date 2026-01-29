@@ -18,6 +18,7 @@ fi
 PYTHON_EXEC="python3"
 
 echo "Starting vLLM server for User Agent ($MODEL as $ALIAS) on port $PORT..."
+export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --model $MODEL \
     --served-model-name $ALIAS \

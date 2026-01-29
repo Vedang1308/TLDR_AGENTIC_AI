@@ -40,6 +40,7 @@ trap cleanup EXIT
 # Start User Model (Qwen3-32B) on GPU 0
 # ---------------------------------------------------------
 echo "Starting User Model (Qwen3-32B) on GPU 0..."
+export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3-32B \
     --served-model-name User-Qwen3-32B \
