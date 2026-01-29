@@ -12,12 +12,13 @@ fi
 PYTHON_EXEC="python3"
 
 echo "Starting vLLM server for Agent ($MODEL) on port $PORT..."
+export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --model $MODEL \
     --trust-remote-code \
     --port $PORT \
     --dtype float16 \
-    --max-model-len 40960 \
-    --max-num-batched-tokens 40960 \
+    --max-model-len 45000 \
+    --max-num-batched-tokens 45000 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.35
+    --gpu-memory-utilization 0.90
