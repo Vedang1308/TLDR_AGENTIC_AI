@@ -47,9 +47,9 @@ CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
     --trust-remote-code \
     --port $PORT_USER \
     --dtype float16 \
-    --max-model-len 45000 \
+    --max-model-len 8192 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.60 &
+    --gpu-memory-utilization 0.58 &
 PID_USER=$!
 
 # ---------------------------------------------------------
@@ -63,9 +63,9 @@ CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
     --trust-remote-code \
     --port $PORT_AGENT \
     --dtype float16 \
-    --max-model-len 45000 \
+    --max-model-len 8192 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.35 &
+    --gpu-memory-utilization 0.37 &
 PID_AGENT=$!
 
 # ---------------------------------------------------------
