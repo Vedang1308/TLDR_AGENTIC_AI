@@ -28,7 +28,7 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --max-model-len 45000 \
     --max-num-batched-tokens 45000 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.90 \
+    --gpu-memory-utilization 0.60 \
     --quantization bitsandbytes \
     --load-format bitsandbytes 
     # Note: reduced gpu utilization if running alongside another model, 

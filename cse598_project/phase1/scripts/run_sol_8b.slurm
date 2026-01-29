@@ -50,14 +50,16 @@ CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
     --max-model-len 45000 \
     --max-num-batched-tokens 45000 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.90 &
+    --gpu-memory-utilization 0.60 &
 PID_USER=$!
 
 # ---------------------------------------------------------
-# Start Agent Model (Qwen3-8B) on GPU 1
+# Start Agent Model (Qwen3-8B) on GPU 0 (Shared) or 1
 # ---------------------------------------------------------
-echo "Starting Agent Model (Qwen3-8B) on GPU 1..."
-CUDA_VISIBLE_DEVICES=1 python -m vllm.entrypoints.openai.api_server \
+echo "Starting Agent Model (Qwen3-8B)..."
+# Note: If using 1 GPU, we share it. If 2, we could use 1.
+# Assuming single A100-80GB scenario based on recent updates.
+CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3-8B \
     --trust-remote-code \
     --port $PORT_AGENT \
@@ -65,7 +67,7 @@ CUDA_VISIBLE_DEVICES=1 python -m vllm.entrypoints.openai.api_server \
     --max-model-len 45000 \
     --max-num-batched-tokens 45000 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.90 &
+    --gpu-memory-utilization 0.35 &
 PID_AGENT=$!
 
 # ---------------------------------------------------------
