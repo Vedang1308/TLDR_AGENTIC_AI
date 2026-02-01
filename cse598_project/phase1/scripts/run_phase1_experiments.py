@@ -98,7 +98,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
         "--user-model", user_model,
         "--user-model-provider", "openai",
         "--user-strategy", user_strategy,
-        "--max-concurrency", "1", # Sequential for local
+        "--max-concurrency", "10", # Parallelize tasks (vLLM handles batching)
         "--seed", str(trial),
         "--log-dir", output_path,
         "--task-ids"
