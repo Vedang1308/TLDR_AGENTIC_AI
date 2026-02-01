@@ -115,6 +115,6 @@ python scripts/run_phase1_experiments.py \
     --user-model User-Qwen3-32B \
     --domain all \
     --strategy all \
-    --trials 3
+    --trials 5
 
 echo "Experiments Completed!"
