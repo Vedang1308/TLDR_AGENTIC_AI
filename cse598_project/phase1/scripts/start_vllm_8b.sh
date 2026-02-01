@@ -11,6 +11,12 @@ fi
 # Use venv python relative to this script
 PYTHON_EXEC="python3"
 
+# Force cache to scratch to avoid Disk Full issues
+export HF_HOME=/scratch/$USER/huggingface_cache
+export XDG_CACHE_HOME=/scratch/$USER/xdg_cache
+mkdir -p $HF_HOME
+mkdir -p $XDG_CACHE_HOME
+
 echo "Starting vLLM server for Agent ($MODEL) on port $PORT..."
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
@@ -18,7 +24,8 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --trust-remote-code \
     --port $PORT \
     --dtype float16 \
-    --max-model-len 12288 \
+    --dtype float16 \
+    --max-model-len 16384 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.38 \
-    --swap-space 16
+    --swap-space 32

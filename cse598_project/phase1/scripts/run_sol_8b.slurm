@@ -25,6 +25,12 @@ echo "GPUs available: $CUDA_VISIBLE_DEVICES"
 BASE_DIR=$(pwd)
 SCRIPT_DIR="$BASE_DIR/scripts"
 
+# Force cache to scratch
+export HF_HOME=/scratch/$USER/huggingface_cache
+export XDG_CACHE_HOME=/scratch/$USER/xdg_cache
+mkdir -p $HF_HOME
+mkdir -p $XDG_CACHE_HOME
+
 # Define Ports (Must match run_phase1_experiments.py)
 PORT_USER=8001
 PORT_AGENT=8000
@@ -47,10 +53,10 @@ CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
     --trust-remote-code \
     --port $PORT_USER \
     --dtype float16 \
-    --max-model-len 12288 \
+    --max-model-len 16384 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.52 \
-    --swap-space 16 &
+    --swap-space 32 &
 PID_USER=$!
 
 # ---------------------------------------------------------
@@ -64,10 +70,10 @@ CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
     --trust-remote-code \
     --port $PORT_AGENT \
     --dtype float16 \
-    --max-model-len 12288 \
+    --max-model-len 16384 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.38 \
-    --swap-space 16 &
+    --swap-space 32 &
 PID_AGENT=$!
 
 # ---------------------------------------------------------
