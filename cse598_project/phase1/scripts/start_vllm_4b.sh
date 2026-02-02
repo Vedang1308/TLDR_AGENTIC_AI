@@ -3,8 +3,8 @@ MODEL="Qwen/Qwen3-4B"
 PORT=8000
 
 # Force cache to scratch
-export HF_HOME=/scratch/vavaghad/huggingface_cache
-export XDG_CACHE_HOME=/scratch/vavaghad/xdg_cache
+export HF_HOME=/scratch/vgaduput/huggingface_cache
+export XDG_CACHE_HOME=/scratch/vgaduput/xdg_cache
 mkdir -p $HF_HOME
 mkdir -p $XDG_CACHE_HOME
 

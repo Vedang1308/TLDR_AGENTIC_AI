@@ -2,6 +2,12 @@
 MODEL="Qwen/Qwen3-32B"
 PORT=8000
 
+# Force cache to scratch
+export HF_HOME=/scratch/vgaduput/huggingface_cache
+export XDG_CACHE_HOME=/scratch/vgaduput/xdg_cache
+mkdir -p $HF_HOME
+mkdir -p $XDG_CACHE_HOME
+
 # Check if port is in use
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
     echo "Port $PORT is already in use. Killing process..."

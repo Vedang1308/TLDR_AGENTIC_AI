@@ -6,7 +6,12 @@ import time
 import sys
 import json
 import glob
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from tau_bench.envs import get_env
+
+# SCRIPT_DIR = os.path.dirname(os.path.abspath(_file_))
+# PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+# sys.path.insert(0, PROJECT_ROOT)
 
 def get_existing_completed_tasks(output_path):
     completed_ids = set()
@@ -112,7 +117,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
 
 def main():
     parser = argparse.ArgumentParser(description="Run Phase 1 Experiments")
-    parser.add_argument("--domain", choices=["retail", "airline", "all"], default="all")
+    parser.add_argument("--domain", choices=["retail", "airline", "all"], default="airline")
     parser.add_argument("--strategy", choices=["react", "act", "fc", "all"], default="all")
     parser.add_argument("--model", type=str, help="Specific model to run (e.g., Qwen/Qwen3-4B-Instruct)")
     parser.add_argument("--user-model", type=str, default="User-Qwen3-32B", help="Fixed user model")
