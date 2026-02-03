@@ -28,6 +28,6 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --dtype float16 \
     --max-model-len 65536 \
     --max-num-batched-tokens 65536 \
-    --hf-overrides '{"rope_scaling": {"rope_type": "linear", "type": "linear", "factor": 2.0}}' \
+    --hf-overrides '{"rope_scaling": {"rope_type": "dynamic", "type": "dynamic", "factor": 2.0}}' \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.40
+    --gpu-memory-utilization 0.50
