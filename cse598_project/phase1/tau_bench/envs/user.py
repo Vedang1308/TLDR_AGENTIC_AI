@@ -61,7 +61,7 @@ class LLMUserSimulationEnv(BaseUserSimulationEnv):
         res = completion(
             model=self.model, 
             custom_llm_provider=self.provider, 
-            messages=messages,
+            messages=prune_messages(messages),
             api_base=get_model_api_base(self.model)
         )
         message = res.choices[0].message
@@ -135,7 +135,7 @@ User Response:
         res = completion(
             model=self.model, 
             custom_llm_provider=self.provider, 
-            messages=messages,
+            messages=prune_messages(messages),
             api_base=get_model_api_base(self.model)
         )
         message = res.choices[0].message
