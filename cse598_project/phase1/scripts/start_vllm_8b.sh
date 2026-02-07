@@ -25,7 +25,7 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --port $PORT \
     --dtype float16 \
     --dtype float16 \
-    --max-model-len 45000 \
+    --max-model-len 40960 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.38 \
     --swap-space 64
