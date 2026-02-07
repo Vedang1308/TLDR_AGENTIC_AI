@@ -95,7 +95,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
     
     # Pass explicit task_ids to run.py
     cmd = [
-        sys.executable, "run.py",
+        sys.executable, "scripts/custom_run.py",
         "--agent-strategy", "tool-calling" if strategy == "fc" else strategy,
         "--env", domain,
         "--model", model,
