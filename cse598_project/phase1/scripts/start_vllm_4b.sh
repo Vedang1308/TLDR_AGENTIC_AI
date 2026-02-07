@@ -8,9 +8,6 @@ export XDG_CACHE_HOME=/scratch/vgaduput/xdg_cache
 mkdir -p $HF_HOME
 mkdir -p $XDG_CACHE_HOME
 
-# Allow long model length for vLLM
-export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
-
 # Check if port is in use
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
     echo "Port $PORT is already in use. Killing process..."
@@ -25,9 +22,10 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --model $MODEL \
     --trust-remote-code \
     --port $PORT \
-    --dtype float16 \
-    --max-model-len 65536 \
-    --max-num-batched-tokens 65536 \
-    --hf-overrides '{"rope_scaling": {"rope_type": "dynamic", "type": "dynamic", "factor": 2.0}}' \
+    --dtype bfloat16 \
+    --max-model-len 40960 \
+    --max-num-batched-tokens 40960 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.50
+    --gpu-memory-utilization 0.30 \
+    --enable-prefix-caching \
+    --enforce-eager
