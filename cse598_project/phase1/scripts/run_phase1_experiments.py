@@ -8,6 +8,8 @@ import json
 import glob
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from tau_bench.envs import get_env
+from tau_bench.envs.airline.tasks_test import TASKS as airline_tasks
+from tau_bench.envs.retail.tasks_test import TASKS_TEST as retail_tasks
 
 # SCRIPT_DIR = os.path.dirname(os.path.abspath(_file_))
 # PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -66,13 +68,19 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
     
     # Get total tasks count (lightweight init)
     # Note: We assume 'test' split as per default
-    try:
-        temp_env = get_env(domain, user_strategy=user_strategy, user_model=user_model, user_provider="openai", task_split="test")
-        total_tasks = len(temp_env.tasks)
-        print(f"Total tasks in dataset: {total_tasks}. Completed so far: {len(completed_ids)}")
-    except Exception as e:
-        print(f"Warning: Could not determine total tasks ({e}). Falling back to simple start-index.")
-        total_tasks = 116 # Default fallback for retail-test
+    if domain == "airline":
+        total_tasks = len(airline_tasks)
+    elif domain == "retail":
+        total_tasks = len(retail_tasks)
+    else:
+        # Fallback to get_env if domain unknown (should not happen given args)
+        try:
+            temp_env = get_env(domain, user_strategy=user_strategy, user_model=user_model, user_provider="openai", task_split="test")
+            total_tasks = len(temp_env.tasks)
+            print(f"Total tasks in dataset: {total_tasks}. Completed so far: {len(completed_ids)}")
+        except Exception as e:
+            print(f"Warning: Could not determine total tasks ({e}). Falling back to simple start-index.")
+            total_tasks = 116 # Default fallback for retail-test
     
     # Calculate needed tasks
     # We want everything from 0 to total_tasks that is NOT in completed_ids
