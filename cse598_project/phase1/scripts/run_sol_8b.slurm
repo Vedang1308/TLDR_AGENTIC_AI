@@ -1,25 +1,23 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -n 4
-#SBATCH --gres=gpu:2
-#SBATCH --mem=64G
+#SBATCH --gres=hpu:2
+#SBATCH --mem=128G
 #SBATCH -t 4:00:00
-#SBATCH -p general
+#SBATCH -p gaudi_main
 #SBATCH -o slurm-%j.out
 #SBATCH --job-name=tau-8b-exp
 
-# Load modules (adjust based on Sol's specific modules, these are common defaults)
-module load mamba/latest 2>/dev/null || module load anaconda/2023.07 2>/dev/null
-module load cuda/12.1 2>/dev/null || module load cuda/11.8 2>/dev/null
-source ~/.bashrc 2>/dev/null
+# Load modules (adjust based on Sol's specific modules)
+# module load habanalabs 2>/dev/null 
 
 # Activate Environment
-# Users should create this env beforehand: 
-# mamba create -n tau-bench python=3.10 -y && mamba activate tau-bench && pip install -e . && pip install vllm
+# Users should create this env beforehand with Intel Gaudi vLLM
+source ~/.bashrc 2>/dev/null
 conda activate tau-bench
 
 echo "Starting Job on $(hostname)"
-echo "GPUs available: $CUDA_VISIBLE_DEVICES"
+echo "HPUs available: $HABANA_VISIBLE_DEVICES"
 
 # Set Paths
 BASE_DIR=$(pwd)
@@ -43,36 +41,39 @@ cleanup() {
 trap cleanup EXIT
 
 # ---------------------------------------------------------
-# Start User Model (Qwen3-32B) on GPU 0
+# Start User Model (Qwen3-32B) on HPU 0
 # ---------------------------------------------------------
-echo "Starting User Model (Qwen3-32B) on GPU 0..."
+echo "Starting User Model (Qwen3-32B) on HPU 0..."
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
-CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
+# Gaudi optimal block-size is 128
+export HABANA_VISIBLE_DEVICES=0
+python -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3-32B \
     --served-model-name User-Qwen3-32B \
     --trust-remote-code \
     --port $PORT_USER \
     --dtype float16 \
-    --max-model-len 45000 \
+    --max-model-len 40960 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.52 \
+    --block-size 128 \
+    --gpu-memory-utilization 0.9 \
     --swap-space 64 &
 PID_USER=$!
 
 # ---------------------------------------------------------
-# Start Agent Model (Qwen3-8B) on GPU 0 (Shared) or 1
+# Start Agent Model (Qwen3-8B) on HPU 1
 # ---------------------------------------------------------
-echo "Starting Agent Model (Qwen3-8B)..."
-# Note: If using 1 GPU, we share it. If 2, we could use 1.
-# Assuming single A100-80GB scenario based on recent updates.
-CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
+echo "Starting Agent Model (Qwen3-8B) on HPU 1..."
+export HABANA_VISIBLE_DEVICES=1
+python -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3-8B \
     --trust-remote-code \
     --port $PORT_AGENT \
     --dtype float16 \
-    --max-model-len 45000 \
+    --max-model-len 40960 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.38 \
+    --block-size 128 \
+    --gpu-memory-utilization 0.9 \
     --swap-space 64 &
 PID_AGENT=$!
 
