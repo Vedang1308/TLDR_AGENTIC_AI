@@ -23,12 +23,14 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --served-model-name $ALIAS \
     --trust-remote-code \
     --port $PORT \
-    --dtype float16 \
+    --dtype bfloat16 \
     --max-model-len 40960 \
     --max-num-batched-tokens 40960 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.50 \
     --quantization bitsandbytes \
-    --load-format bitsandbytes 
+    --load-format bitsandbytes \
+    --enable-prefix-caching \
+    --enforce-eager 
     # Note: reduced gpu utilization if running alongside another model, 
     # but practically we might need sequential execution if single GPU.
