@@ -20,6 +20,8 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --max-model-len 40960 \
     --max-num-batched-tokens 40960 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.15 \
+    --gpu-memory-utilization 0.45 \
+    --quantization bitsandbytes \
+    --load-format bitsandbytes \
     --enable-auto-tool-choice \
     --tool-call-parser hermes
