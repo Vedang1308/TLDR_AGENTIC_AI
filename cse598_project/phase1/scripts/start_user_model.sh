@@ -25,12 +25,8 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --trust-remote-code \
     --port $PORT \
     --dtype float16 \
-    --dtype float16 \
-    --max-model-len 45000 \
+    --max-model-len 40960 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.52 \
-    --swap-space 64 \
-    --quantization bitsandbytes \
-    --load-format bitsandbytes  
-    # Note: reduced gpu utilization if running alongside another model, 
-    # but practically we might need sequential execution if single GPU.
+    --block-size 128 \
+    --gpu-memory-utilization 0.9 \
+    --swap-space 64
