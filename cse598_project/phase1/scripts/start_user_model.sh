@@ -24,8 +24,8 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --trust-remote-code \
     --port $PORT \
     --dtype float16 \
-    --max-model-len 40960 \
-    --max-num-batched-tokens 40960 \
+    --max-model-len 30000 \
+    --max-num-batched-tokens 30000 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.50 \
     --quantization bitsandbytes \
