@@ -3,9 +3,9 @@ set -e
 
 echo "Starting vLLM installation for Intel Gaudi..."
 
-# Uninstall incompatible vLLM
-echo "Uninstalling incompatible vLLM..."
-pip uninstall -y vllm
+# Uninstall conflicting packages
+echo "Cleaning up existing PyTorch and vLLM installations..."
+pip uninstall -y vllm torch torchvision torchaudio intel-extension-for-pytorch
 
 # Directory for cloning
 BUILD_DIR="vllm-gaudi-build"
@@ -19,11 +19,15 @@ git clone --depth 1 -b habana_main https://github.com/HabanaAI/vLLM-fork.git $BU
 cd $BUILD_DIR
 
 echo "Installing build dependencies..."
-# Install HPU specific requirements if they exist, otherwise standard
+# Install HPU specific requirements 
 if [ -f "requirements-hpu.txt" ]; then
+    echo "Installing requirements from requirements-hpu.txt..."
     pip install -r requirements-hpu.txt
 else
+    echo "Warning: requirements-hpu.txt not found, falling back to requirements.txt"
     pip install -r requirements.txt
+    # Fallback usually needs explicit IPEX install if not in requirements.txt
+    pip install intel-extension-for-pytorch
 fi
 
 echo "Building vLLM for Gaudi (this may take a few minutes)..."
