@@ -3,8 +3,8 @@ MODEL="Qwen/Qwen3-4B"
 PORT=8000
 
 # Force cache to scratch
-export HF_HOME=/scratch/vavaghad/huggingface_cache
-export XDG_CACHE_HOME=/scratch/vavaghad/xdg_cache
+export HF_HOME=/scratch/vgaduput/huggingface_cache
+export XDG_CACHE_HOME=/scratch/vgaduput/xdg_cache
 mkdir -p $HF_HOME
 mkdir -p $XDG_CACHE_HOME
 
@@ -17,15 +17,29 @@ fi
 # Use venv python relative to this script
 PYTHON_EXEC="python3"
 
-echo "Starting vLLM server for Agent ($MODEL) on port $PORT..."
-$PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
-    --model $MODEL \
-    --trust-remote-code \
+# echo "Starting vLLM server for Agent ($MODEL) on port $PORT..."
+# $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+#     --model $MODEL \
+#     --trust-remote-code \
+#     --port $PORT \
+#     --dtype bfloat16 \
+#     --max-model-len 16384 \
+#     --max-num-batched-tokens 35248 \
+#     --enable-prefix-caching \
+#     --tensor-parallel-size 1 \
+#     --gpu-memory-utilization 0.30 \
+#     --enable-auto-tool-choice \
+#     --tool-call-parser hermes \
+#     --max-num-seqs 5 
+
+
+# Optimized Qwen3-4B Settings
+CUDA_VISIBLE_DEVICES=1 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+    --model "Qwen/Qwen3-4B" \
     --port $PORT \
-    --dtype float16 \
-    --max-model-len 40960 \
-    --max-num-batched-tokens 40960 \
-    --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.40 \
-    --enable-auto-tool-choice \
-    --tool-call-parser hermes
+    --dtype bfloat16 \
+    --max-model-len 32768 \
+    --max-num-batched-tokens 32768 \
+    --gpu-memory-utilization 0.85 \
+    --enable-prefix-caching \
+    --trust-remote-code
