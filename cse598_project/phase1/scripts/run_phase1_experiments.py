@@ -8,6 +8,7 @@ import concurrent.futures
 
 # Import tasks for resume logic
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 try:
     from tau_bench.envs.airline.tasks_test import TASKS as airline_tasks
     from tau_bench.envs.retail.tasks_test import TASKS_TEST as retail_tasks
@@ -39,7 +40,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
     
     completed_ids = get_existing_completed_tasks(output_path)
     total_tasks = len(airline_tasks) if domain == "airline" else len(retail_tasks)
-    if total_tasks == 0: total_tasks = 100 # Fallback
+    if total_tasks == 0: total_tasks = 114 # Fallback
 
     needed_ids = [str(i) for i in range(total_tasks) if i >= start_index and i not in completed_ids]
             
@@ -75,20 +76,20 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--domain", choices=["retail", "airline", "all"], default="airline")
+    parser.add_argument("--domain", choices=["retail", "airline", "all"], default="retail")
     parser.add_argument("--strategy", choices=["react", "act", "fc", "all"], default="all")
     parser.add_argument("--model", type=str, required=True)
     parser.add_argument("--user-model", type=str, default="User-Qwen3-32B")
     parser.add_argument("--start-index", type=int, default=0)
-    parser.add_argument("--trials", type=int, default=5) # Defaulting to 5 as you mentioned
-    parser.add_argument("--max-workers", type=int, default=3)
+    parser.add_argument("--trials", type=int, default=5) 
+    parser.add_argument("--max-workers", type=int, default=1)
     
     args = parser.parse_args()
     
     domains = ["retail", "airline"] if args.domain == "all" else [args.domain]
     strategies = ["react", "act", "fc"] if args.strategy == "all" else [args.strategy]
     
-    # --- FIX: BUILDING THE LIST CORRECTLY ---
+    # --- BUILDING THE LIST CORRECTLY ---
     experiment_list = []
     for d in domains:
         for s in strategies:

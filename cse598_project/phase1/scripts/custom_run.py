@@ -10,31 +10,30 @@ sys.path.insert(0, project_root)
 original_completion = litellm.completion
 
 def patched_completion(*args, **kwargs):
-    model_name = kwargs.get("model", "")
-    
     # 1. Routing logic
-    if "User-Qwen3-32B" in model_name:
+    original_model = kwargs.get("model", "")
+    if "User-Qwen3-32B" in original_model:
         kwargs["api_base"] = "http://localhost:8001/v1"
-        kwargs["custom_llm_provider"] = "openai"
-        model_limit = 32768 # Match your vLLM --max-model-len
+        # We use 'openai/' + the name you set in your --served-model-name
+        kwargs["model"] = "openai/User-Qwen3-32B"
     else:
         kwargs["api_base"] = "http://localhost:8000/v1"
-        kwargs["custom_llm_provider"] = "openai"
-        model_limit = 32768 # Match your vLLM --max-model-len
+        # Match the name you set in your vLLM bash script
+        kwargs["model"] = "openai/gpt-4-32k"
 
-    # 2. Dynamic max_tokens calculation
-    try:
-        # Estimate prompt length using LiteLLM's counter
-        prompt_tokens = litellm.token_counter(model="gpt-4o", messages=kwargs.get("messages", []))
-    except:
-        prompt_tokens = 13000 # Fallback estimate
-
-    # Leave a 512 token buffer for safety
-    available_for_completion = model_limit - prompt_tokens - 512
+    # 2. THE KEY: Tell LiteLLM this is a custom model with NO limits
+    # This prevents LiteLLM from checking context windows locally.
+    kwargs["custom_llm_provider"] = "openai"
+    kwargs["mock_response"] = None # Ensure it's not mocking
     
-    # Ensure max_tokens never pushes us over the limit
-    requested_max = kwargs.get("max_tokens", 4096)
-    kwargs["max_tokens"] = max(1, min(requested_max, available_for_completion))
+    # 3. STRIP MAX TOKENS
+    # This removes the context check entirely.
+    kwargs.pop("max_tokens", None)
+    kwargs.pop("max_completion_tokens", None)
+    
+    # 4. Silence local validation
+    kwargs["drop_params"] = True
+    litellm.suppress_debug_info = True
 
     return original_completion(*args, **kwargs)
     
