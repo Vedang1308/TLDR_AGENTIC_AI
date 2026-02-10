@@ -35,13 +35,36 @@ PYTHON_EXEC="python3"
 #     # but practically we might need sequential execution if single GPU.
 
 
+# CUDA_VISIBLE_DEVICES=0 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+#     --model "Qwen/Qwen3-32B" \
+#     --served-model-name "User-Qwen3-32B" \
+#     --port $PORT \
+#     --dtype bfloat16 \
+#     --max-model-len 32768 \
+#     --gpu-memory-utilization 0.90 \
+#     --enable-prefix-caching \
+#     --trust-remote-code
+
+# quicker
+# CUDA_VISIBLE_DEVICES=0 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+#     --model "Qwen/Qwen3-32B" \
+#     --served-model-name "User-Qwen3-32B" \
+#     --port 8001 \
+#     --dtype bfloat16 \
+#     --max-model-len 32768 \
+#     --gpu-memory-utilization 0.90 \
+#     --enable-prefix-caching \
+#     --trust-remote-code \
+#     --disable-log-requests
+
+
 CUDA_VISIBLE_DEVICES=0 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --model "Qwen/Qwen3-32B" \
     --served-model-name "User-Qwen3-32B" \
-    --port $PORT \
+    --port 8001 \
     --dtype bfloat16 \
     --max-model-len 32768 \
-    --max-num-batched-tokens 32768 \
-    --gpu-memory-utilization 0.90 \
+    --gpu-memory-utilization 0.9 \
     --enable-prefix-caching \
-    --trust-remote-code
+    --trust-remote-code \
+    --disable-log-requests
