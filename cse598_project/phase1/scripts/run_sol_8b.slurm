@@ -1,23 +1,22 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -n 4
-#SBATCH --gres=hpu:2
+#SBATCH --gres=gpu:2
 #SBATCH --mem=128G
 #SBATCH -t 4:00:00
-#SBATCH -p gaudi_main
+#SBATCH -p gpu
 #SBATCH -o slurm-%j.out
 #SBATCH --job-name=tau-8b-exp
 
 # Load modules (adjust based on Sol's specific modules)
-# module load habanalabs 2>/dev/null 
+module load cuda/12.1.1 2>/dev/null || module load cuda 2>/dev/null
 
 # Activate Environment
-# Users should create this env beforehand with Intel Gaudi vLLM
 source ~/.bashrc 2>/dev/null
 conda activate tau-bench
 
 echo "Starting Job on $(hostname)"
-echo "HPUs available: $HABANA_VISIBLE_DEVICES"
+echo "GPUs available: $CUDA_VISIBLE_DEVICES"
 
 # Set Paths
 BASE_DIR=$(pwd)
@@ -41,12 +40,11 @@ cleanup() {
 trap cleanup EXIT
 
 # ---------------------------------------------------------
-# Start User Model (Qwen3-32B) on HPU 0
+# Start User Model (Qwen3-32B) on GPU 0
 # ---------------------------------------------------------
-echo "Starting User Model (Qwen3-32B) on HPU 0..."
+echo "Starting User Model (Qwen3-32B) on GPU 0..."
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
-# Gaudi optimal block-size is 128
-export HABANA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=0
 python -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3-32B \
     --served-model-name User-Qwen3-32B \
@@ -55,16 +53,15 @@ python -m vllm.entrypoints.openai.api_server \
     --dtype float16 \
     --max-model-len 40960 \
     --tensor-parallel-size 1 \
-    --block-size 128 \
     --gpu-memory-utilization 0.9 \
-    --swap-space 64 &
+    --swap-space 16 &
 PID_USER=$!
 
 # ---------------------------------------------------------
-# Start Agent Model (Qwen3-8B) on HPU 1
+# Start Agent Model (Qwen3-8B) on GPU 1
 # ---------------------------------------------------------
-echo "Starting Agent Model (Qwen3-8B) on HPU 1..."
-export HABANA_VISIBLE_DEVICES=1
+echo "Starting Agent Model (Qwen3-8B) on GPU 1..."
+export CUDA_VISIBLE_DEVICES=1
 python -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3-8B \
     --trust-remote-code \
@@ -72,9 +69,8 @@ python -m vllm.entrypoints.openai.api_server \
     --dtype float16 \
     --max-model-len 40960 \
     --tensor-parallel-size 1 \
-    --block-size 128 \
     --gpu-memory-utilization 0.9 \
-    --swap-space 64 &
+    --swap-space 16 &
 PID_AGENT=$!
 
 # ---------------------------------------------------------
