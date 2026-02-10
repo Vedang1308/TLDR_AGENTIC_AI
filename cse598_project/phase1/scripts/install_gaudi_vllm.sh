@@ -7,6 +7,12 @@ echo "Starting vLLM installation for Intel Gaudi..."
 echo "Cleaning up existing PyTorch and vLLM installations..."
 pip uninstall -y vllm torch torchvision torchaudio intel-extension-for-pytorch
 
+# Uninstall conflicting packages
+echo "Cleaning up existing PyTorch, vLLM, and NVIDIA installations..."
+pip uninstall -y vllm torch torchvision torchaudio intel-extension-for-pytorch triton
+# Aggressively uninstall nvidia dependencies that cause conflicts
+pip list --format=freeze | grep "^nvidia-" | cut -d= -f1 | xargs -r pip uninstall -y
+
 # Directory for cloning
 BUILD_DIR="vllm-gaudi-build"
 rm -rf $BUILD_DIR
