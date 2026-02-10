@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -n 4
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --mem=128G
 #SBATCH -t 4:00:00
 #SBATCH -p gpu
@@ -22,9 +22,9 @@ echo "GPUs available: $CUDA_VISIBLE_DEVICES"
 BASE_DIR=$(pwd)
 SCRIPT_DIR="$BASE_DIR/scripts"
 
-# Force cache to scratch
-export HF_HOME=/scratch/$USER/huggingface_cache
-export XDG_CACHE_HOME=/scratch/$USER/xdg_cache
+# Force cache to scratch/svijay46
+export HF_HOME=/scratch/svijay46/huggingface_cache
+export XDG_CACHE_HOME=/scratch/svijay46/xdg_cache
 mkdir -p $HF_HOME
 mkdir -p $XDG_CACHE_HOME
 
@@ -40,7 +40,7 @@ cleanup() {
 trap cleanup EXIT
 
 # ---------------------------------------------------------
-# Start User Model (Qwen3-32B) on GPU 0
+# Start User Model (Qwen3-32B) on GPU 0 (Shared)
 # ---------------------------------------------------------
 echo "Starting User Model (Qwen3-32B) on GPU 0..."
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
@@ -51,25 +51,25 @@ python -m vllm.entrypoints.openai.api_server \
     --trust-remote-code \
     --port $PORT_USER \
     --dtype float16 \
-    --max-model-len 40960 \
+    --max-model-len 32768 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.9 \
+    --gpu-memory-utilization 0.75 \
     --swap-space 16 &
 PID_USER=$!
 
 # ---------------------------------------------------------
-# Start Agent Model (Qwen3-8B) on GPU 1
+# Start Agent Model (Qwen3-8B) on GPU 0 (Shared)
 # ---------------------------------------------------------
-echo "Starting Agent Model (Qwen3-8B) on GPU 1..."
-export CUDA_VISIBLE_DEVICES=1
+echo "Starting Agent Model (Qwen3-8B) on GPU 0..."
+export CUDA_VISIBLE_DEVICES=0
 python -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3-8B \
     --trust-remote-code \
     --port $PORT_AGENT \
     --dtype float16 \
-    --max-model-len 40960 \
+    --max-model-len 32768 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.9 \
+    --gpu-memory-utilization 0.20 \
     --swap-space 16 &
 PID_AGENT=$!
 
