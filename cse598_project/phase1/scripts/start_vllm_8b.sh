@@ -29,4 +29,4 @@ $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --max-model-len 32768 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.20 \
-    --swap-space 16
+    --swap-space 32
