@@ -72,7 +72,7 @@ python -m vllm.entrypoints.openai.api_server \
     --dtype float16 \
     --max-model-len 32768 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.25 \
+    --gpu-memory-utilization 0.28 \
     --swap-space 32 &
 PID_AGENT=$!
 
