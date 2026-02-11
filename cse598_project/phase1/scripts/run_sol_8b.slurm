@@ -54,6 +54,7 @@ python -m vllm.entrypoints.openai.api_server \
     --max-model-len 32768 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.75 \
+    --enforce-eager \
     --swap-space 16 &
 PID_USER=$!
 
