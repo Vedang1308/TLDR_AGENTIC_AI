@@ -1,0 +1,12 @@
+[
+  {
+    "task_id": 72,
+    "reward": 0.0,
+    "info": {
+      "error": "cannot schedule new futures after shutdown",
+      "traceback": "Traceback (most recent call last):\n  File \"/home/vgaduput/TLDR_AGENTIC_AI-1/cse598_project/phase1/tau_bench/run.py\", line 78, in _run\n    res = agent.solve(\n          ^^^^^^^^^^^^\n  File \"/home/vgaduput/TLDR_AGENTIC_AI-1/cse598_project/phase1/tau_bench/agents/chat_react_agent.py\", line 87, in solve\n    message, action, cost = self.generate_next_step(messages)\n                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/vgaduput/TLDR_AGENTIC_AI-1/cse598_project/phase1/tau_bench/agents/chat_react_agent.py\", line 53, in generate_next_step\n    res = completion(\n          ^^^^^^^^^^^\n  File \"/home/vgaduput/TLDR_AGENTIC_AI-1/cse598_project/phase1/scripts/custom_run.py\", line 38, in patched_completion\n    return original_completion(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/vgaduput/.conda/envs/py312/lib/python3.12/site-packages/litellm/utils.py\", line 1742, in wrapper\n    raise e\n  File \"/home/vgaduput/.conda/envs/py312/lib/python3.12/site-packages/litellm/utils.py\", line 1628, in wrapper\n    executor.submit(\n  File \"/home/vgaduput/.conda/envs/py312/lib/python3.12/concurrent/futures/thread.py\", line 171, in submit\n    raise RuntimeError('cannot schedule new futures after shutdown')\nRuntimeError: cannot schedule new futures after shutdown\n"
+    },
+    "traj": [],
+    "trial": 0
+  }
+]
