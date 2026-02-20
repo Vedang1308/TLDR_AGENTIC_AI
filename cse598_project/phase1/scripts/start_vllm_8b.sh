@@ -38,7 +38,7 @@ CUDA_VISIBLE_DEVICES=1 python3 -m vllm.entrypoints.openai.api_server \
     --quantization fp8 \
     --served-model-name "gpt-4-32k" \
     --max-model-len 16000 \
-    --max-num-seqs 5 \
+    --max-num-seqs 26 \
     --max-num-batched-tokens 4096 \
     --enable-chunked-prefill \
     --gpu-memory-utilization 0.90 \
