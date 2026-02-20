@@ -2,6 +2,8 @@ MODEL="Qwen/Qwen3-32B"
 ALIAS="User-Qwen3-32B"
 PORT=8001
 
+export HF_HUB_OFFLINE=1
+
 # Force cache to scratch to avoid Disk Full issues
 export HF_HOME=/scratch/vgaduput/huggingface_cache
 export XDG_CACHE_HOME=/scratch/vgaduput/xdg_cache
@@ -58,13 +60,27 @@ PYTHON_EXEC="python3"
 #     --disable-log-requests
 
 
-CUDA_VISIBLE_DEVICES=0 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+# CUDA_VISIBLE_DEVICES=0 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+#     --model "Qwen/Qwen3-32B" \
+#     --served-model-name "User-Qwen3-32B" \
+#     --port 8001 \
+#     --dtype bfloat16 \
+#     --max-model-len 16384 \
+#     --gpu-memory-utilization 0.9 \
+#     --enable-prefix-caching \
+#     --trust-remote-code \
+#     --disable-log-requests
+
+
+CUDA_VISIBLE_DEVICES=0 python3 -m vllm.entrypoints.openai.api_server \
     --model "Qwen/Qwen3-32B" \
-    --served-model-name "User-Qwen3-32B" \
     --port 8001 \
     --dtype bfloat16 \
-    --max-model-len 32768 \
-    --gpu-memory-utilization 0.9 \
+    --quantization fp8 \
+    --served-model-name "User-Qwen3-32B" \
+    --max-model-len 8192 \
+    --max-num-seqs 64 \
+    --gpu-memory-utilization 0.85 \
     --enable-prefix-caching \
     --trust-remote-code \
     --disable-log-requests

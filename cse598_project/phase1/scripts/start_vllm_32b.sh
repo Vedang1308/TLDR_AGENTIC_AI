@@ -18,17 +18,19 @@ fi
 PYTHON_EXEC="python3"
 
 echo "Starting vLLM server for Agent ($MODEL) on port $PORT..."
-CUDA_VISIBLE_DEVICES=1 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
-    --model $MODEL \
-    --trust-remote-code \
-    --port $PORT \
-    --dtype bfloat16 \
-    --served-model-name "gpt-4-32k" \
-    --max-model-len 32768 \
-    --gpu-memory-utilization 0.90 \
-    --enable-prefix-caching \
-    --trust-remote-code \
-    --max-num-seqs 16
+# Recommended changes for vllm_32b script:
+# CUDA_VISIBLE_DEVICES=1 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+#     --model $MODEL \
+#     --trust-remote-code \
+#     --port $PORT \
+#     --dtype bfloat16 \
+#     --served-model-name "gpt-4-32k" \
+#     --max-model-len 16384 \
+#     --gpu-memory-utilization 0.9 \
+#     --enable-prefix-caching \
+#     --enable-auto-tool-choice \
+#     --tool-call-parser hermes \
+#     --max-num-seqs 32
 
 
 # CUDA_VISIBLE_DEVICES=1 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
@@ -43,3 +45,37 @@ CUDA_VISIBLE_DEVICES=1 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
 #     --enable-prefix-caching \
 #     --async-scheduling \
 #     --disable-log-requests
+
+# Optimized for high-concurrency throughput
+# CUDA_VISIBLE_DEVICES=1 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+#     --model $MODEL \
+#     --port $PORT \
+#     --dtype bfloat16 \
+#     --max-model-len 16384 \
+#     --max-num-seqs 32 \
+#     --served-model-name "gpt-4-32k" \
+#     --max-num-batched-tokens 4096 \
+#     --enable-chunked-prefill \
+#     --gpu-memory-utilization 0.9 \
+#     --enable-prefix-caching \
+#     --disable-log-requests \
+#     --enable-auto-tool-choice \
+#     --tool-call-parser hermes \
+
+
+CUDA_VISIBLE_DEVICES=1 python3 -m vllm.entrypoints.openai.api_server \
+    --model "Qwen/Qwen3-32B" \
+    --port 8000 \
+    --dtype bfloat16 \
+    --quantization fp8 \
+    --served-model-name "gpt-4-32k" \
+    --max-model-len 32768 \
+    --max-num-seqs 5 \
+    --max-num-batched-tokens 4096 \
+    --enable-chunked-prefill \
+    --gpu-memory-utilization 0.95 \
+    --enable-prefix-caching \
+    --trust-remote-code \
+    --disable-log-requests \
+    --enable-auto-tool-choice \
+    --tool-call-parser hermes 

@@ -34,12 +34,52 @@ PYTHON_EXEC="python3"
 
 
 # Optimized Qwen3-4B Settings
+# CUDA_VISIBLE_DEVICES=1 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+#     --model "Qwen/Qwen3-4B" \
+#     --port $PORT \
+#     --dtype bfloat16 \
+#     --max-model-len 32768 \
+#     --max-num-batched-tokens 32768 \
+#     --gpu-memory-utilization 0.85 \
+#     --enable-prefix-caching \
+#     --trust-remote-code \
+#     --served-model-name gpt-4-32k
+
+
+# CUDA_VISIBLE_DEVICES=1 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+#     --model "Qwen/Qwen3-4B" \
+#     --port 8000 \
+#     --dtype bfloat16 \
+#     --max-model-len 32768 \
+#     --max-num-batched-tokens 32768 \
+#     --gpu-memory-utilization 0.85 \
+#     --served-model-name gpt-4-32k \
+#     --enable-auto-tool-choice \
+#     --tool-call-parser hermes
+
+#  quicker 
+# CUDA_VISIBLE_DEVICES=1 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+#     --model "Qwen/Qwen3-4B" \
+#     --port 8000 \
+#     --served-model-name "gpt-4-32k" \
+#     --dtype bfloat16 \
+#     --max-model-len 32768 \
+#     --max-num-batched-tokens 32768 \
+#     --gpu-memory-utilization 0.50 \
+#     --enable-prefix-caching \
+#     --enable-auto-tool-choice \
+#     --tool-call-parser hermes \
+#     --trust-remote-code
+
+
 CUDA_VISIBLE_DEVICES=1 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
     --model "Qwen/Qwen3-4B" \
-    --port $PORT \
+    --port 8000 \
+    --served-model-name "gpt-4-32k" \
     --dtype bfloat16 \
     --max-model-len 32768 \
-    --max-num-batched-tokens 32768 \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.80 \
     --enable-prefix-caching \
-    --trust-remote-code
+    --enable-auto-tool-choice \
+    --tool-call-parser hermes \
+    --trust-remote-code 

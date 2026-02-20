@@ -62,7 +62,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
         "--user-model", user_model,
         "--user-model-provider", "openai",
         "--user-strategy", user_strategy,
-        "--max-concurrency", "20", 
+        "--max-concurrency", "5", 
         "--seed", str(trial),
         "--log-dir", output_path,
         "--task-ids"
@@ -82,7 +82,7 @@ def main():
     parser.add_argument("--user-model", type=str, default="User-Qwen3-32B")
     parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--trials", type=int, default=5) 
-    parser.add_argument("--max-workers", type=int, default=1)
+    parser.add_argument("--max-workers", type=int, default=4)
     
     args = parser.parse_args()
     
