@@ -36,3 +36,6 @@ class PevState(BaseModel):
     # Logs for debugging
     node_logs: Annotated[List[Dict[str, Any]], append_to_list] = Field(default_factory=list)
 
+    # API schemas injected at strategy startup
+    tools_info: List[Dict[str, Any]] = Field(default_factory=list)
+

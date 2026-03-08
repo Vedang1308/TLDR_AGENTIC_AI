@@ -55,10 +55,15 @@ REJECTION FEEDBACK:
     sys_msg = SystemMessage(content=sys_prompt.format(memory_str=mem_str, feedback=feed_str))
     
     # Format user convo
-    # We only pass the last few turns to prevent context explosion
+    # Always include the system wiki (turn 0) which contains business logic!
     user_msgs = []
+    if state.user_conversation:
+        user_msgs.append(SystemMessage(content=state.user_conversation[0]['content']))
+        
+    # include only the most recent conversation to prevent context explosion
     for turn in state.user_conversation[-3:]: 
-        user_msgs.append(HumanMessage(content=f"{turn['role']}: {turn['content']}"))
+        if turn['role'] != 'system': # don't duplicate the wiki if it's in the last 3
+            user_msgs.append(HumanMessage(content=f"{turn['role']}: {turn['content']}"))
         
     response = llm.invoke([sys_msg] + user_msgs)
     plan = response.content.strip()
@@ -82,7 +87,9 @@ def executor_node(state: PevState) -> Dict:
     sys_prompt = f"""You are the EXECUTOR. 
 Your ONLY job is to output a raw JSON dictionary representing a function call based on the PLAN provided.
 Do NOT write explanations or think markers. Just output the JSON.
-Available tools exist in your schema (we assume standard tau-bench schemas are injected).
+Available tools:
+{json.dumps(state.tools_info, indent=2)}
+Additionally, you have access to `transfer_to_human_agents` with arguments {{"summary": "<str>"}} or {{"content": "<str>"}}.
 
 PLAN TO EXECUTE:
 {state.current_plan}

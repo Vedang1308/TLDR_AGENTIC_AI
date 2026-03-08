@@ -45,6 +45,9 @@ class MultiAgentStrategy(Agent):
         # Seed the initial user conversation turn
         state.user_conversation.append({"role": "system", "content": self.wiki})
         state.user_conversation.append({"role": "user", "content": obs})
+        
+        # Inject tool schemas
+        state.tools_info = self.tools_info
 
         messages_log = state.user_conversation.copy()
 
