@@ -53,6 +53,8 @@ STRATEGY GUIDE (use ACTUAL tool names as they appear in tools_info):
 - Need to modify/cancel? → call `get_reservation_details` then the appropriate action API
 - User confirmed booking details? → call `book_reservation` with all required params
 
+{strategy_specific_instructions}
+
 MEMORY KERNEL (ACTIONS ALREADY DONE - do not repeat these):
 {memory_str}
 
@@ -60,10 +62,28 @@ REJECTION FEEDBACK:
 {feedback}
 """
 
+    # Branch the prompt behavior based on the specific strategy variant
+    if state.strategy == "multi-agent-react":
+        strategy_instructions = (
+            "You MUST use the <think> tag to reason about your plan first, "
+            "then output your final plan after closing the </think> tag."
+        )
+    else:
+        # For 'act' and 'fc', we forbid reasoning.
+        strategy_instructions = (
+            "CRITICAL: DO NOT use <think> tags or write internal reasoning. "
+            "You MUST immediately output your final action plan and nothing else. "
+            "Think silently."
+        )
+
     mem_str = json.dumps(state.memory[-10:], indent=2) if state.memory else "No prior history."
     feed_str = f"Source: {state.rejection_source} | Message: {state.rejection_feedback}" if state.rejection_feedback else "None."
     
-    sys_msg = SystemMessage(content=sys_prompt.format(memory_str=mem_str, feedback=feed_str))
+    sys_msg = SystemMessage(content=sys_prompt.format(
+        memory_str=mem_str, 
+        feedback=feed_str,
+        strategy_specific_instructions=strategy_instructions
+    ))
     
     # Format user convo
     # Always include the system wiki (turn 0) which contains business logic!

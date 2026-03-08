@@ -20,9 +20,11 @@ class MultiAgentStrategy(Agent):
         model: str,
         provider: str,
         temperature: float = 0.0,
+        agent_strategy: str = "multi-agent-react",
     ):
         self.tools_info = tools_info
         self.wiki = wiki
+        self.agent_strategy = agent_strategy
         self.model = model
         self.provider = provider
         self.temperature = temperature
@@ -40,7 +42,7 @@ class MultiAgentStrategy(Agent):
         reward = 0.0
         
         # Initialize our PEV State for this specific conversation
-        state = PevState()
+        state = PevState(strategy=self.agent_strategy)
         
         # Seed the initial user conversation turn
         state.user_conversation.append({"role": "system", "content": self.wiki})
