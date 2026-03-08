@@ -124,84 +124,25 @@ def run(config: RunConfig) -> List[EnvRunResult]:
 def agent_factory(
     tools_info: List[Dict[str, Any]], wiki, config: RunConfig
 ) -> Agent:
-    if config.agent_strategy == "tool-calling":
-        # native tool calling
-        from tau_bench.agents.tool_calling_agent import ToolCallingAgent
-
-        return ToolCallingAgent(
-            tools_info=tools_info,
-            wiki=wiki,
-            model=config.model,
-            provider=config.model_provider,
-            temperature=config.temperature,
-        )
-    elif config.agent_strategy == "act":
-        # `act` from https://arxiv.org/abs/2210.03629
-        from tau_bench.agents.chat_react_agent import ChatReActAgent
-
-        return ChatReActAgent(
-            tools_info=tools_info,
-            wiki=wiki,
-            model=config.model,
-            provider=config.model_provider,
-            use_reasoning=False,
-            temperature=config.temperature,
-        )
-    elif config.agent_strategy == "react":
-        # `react` from https://arxiv.org/abs/2210.03629
-        from tau_bench.agents.chat_react_agent import ChatReActAgent
-
-        return ChatReActAgent(
-            tools_info=tools_info,
-            wiki=wiki,
-            model=config.model,
-            provider=config.model_provider,
-            use_reasoning=True,
-            temperature=config.temperature,
-        )
-    elif config.agent_strategy == "few-shot":
-        from tau_bench.agents.few_shot_agent import FewShotToolCallingAgent
-        assert config.few_shot_displays_path is not None, "Few shot displays path is required for few-shot agent strategy"
-        with open(config.few_shot_displays_path, "r") as f:
-            few_shot_displays = [json.loads(line)["messages_display"] for line in f]
-
-        return FewShotToolCallingAgent(
-            tools_info=tools_info,
-            wiki=wiki,
-            model=config.model,
-            provider=config.model_provider,
-            few_shot_displays=few_shot_displays,
-            temperature=config.temperature,
-        )
-    elif config.agent_strategy == "multi-agent":
-        # Our custom Phase 3 LangGraph Plan-Execute-Validate approach
-        import sys
-        import os
-        # Insert phase3 scripts into path if not already there so we can import our multi_agent package
-        phase3_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
-        if phase3_path not in sys.path:
-            sys.path.insert(0, phase3_path)
-            
-        from multi_agent.multi_agent_strategy import MultiAgentStrategy
+    # --- PHASE 3 OVERRIDE ---
+    # We intercept all baseline strategies and route them to our Multi-Agent system
+    # but pass the specific strategy flag so the Planner prompt is constrained
+    # to behave like react, act, or fc.
+    from scripts.multi_agent.multi_agent_strategy import MultiAgentStrategy
+    
+    # Map 'tool-calling' back to 'fc' for consistency in our planner logic
+    target_strategy = "multi-agent-fc" if config.agent_strategy == "tool-calling" else f"multi-agent-{config.agent_strategy}"
+    if config.agent_strategy == "multi-agent": 
+        target_strategy = "multi-agent-react" # Default
         
-        # We need to set env vars so the nodes know which base URL and model to use
-        # (This avoids passing config entirely down the graph state)
-        os.environ["AGENT_MODEL_NAME"] = config.model
-        if "TAUBENCH_PORT_MAP" in os.environ:
-            import json
-            port_map = json.loads(os.environ["TAUBENCH_PORT_MAP"])
-            port = port_map.get(config.model, 8000)
-            os.environ["AGENT_API_BASE"] = f"http://localhost:{port}/v1"
-            
-        return MultiAgentStrategy(
-            tools_info=tools_info,
-            wiki=wiki,
-            model=config.model,
-            provider=config.model_provider,
-            temperature=config.temperature,
-        )
-    else:
-        raise ValueError(f"Unknown agent strategy: {config.agent_strategy}")
+    return MultiAgentStrategy(
+        tools_info=tools_info,
+        wiki=wiki,
+        model=config.model,
+        provider=config.model_provider,
+        temperature=config.temperature,
+        agent_strategy=target_strategy
+    )
 
 
 def display_metrics(results: List[EnvRunResult]) -> None:

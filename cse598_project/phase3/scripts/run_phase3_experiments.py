@@ -118,9 +118,9 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
         print(f"Experiment failed with error: {e}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Phase 1 Experiments")
+    parser = argparse.ArgumentParser(description="Run Phase 3 Experiments")
     parser.add_argument("--domain", choices=["retail", "airline", "all"], default="all")
-    parser.add_argument("--strategy", choices=["react", "act", "fc", "multi-agent-react", "multi-agent-act", "multi-agent-fc", "all"], default="multi-agent-react")
+    parser.add_argument("--strategy", choices=["react", "act", "fc", "all"], default="all")
     parser.add_argument("--model", type=str, help="Specific model to run (e.g., Qwen/Qwen3-4B-Instruct)")
     parser.add_argument("--user-model", type=str, default="User-Qwen3-32B", help="Fixed user model")
     parser.add_argument("--start-index", type=int, default=0, help="Task index to start execution from")
@@ -132,13 +132,11 @@ def main():
     os.environ["OPENAI_API_KEY"] = "sk-1234"
     
     domains = ["retail", "airline"] if args.domain == "all" else [args.domain]
-    strategies = ["multi-agent-react", "multi-agent-act", "multi-agent-fc"] if args.strategy == "all" else [args.strategy]
-    models = [
-        "Qwen/Qwen3-4B",
-        "Qwen/Qwen3-8B",
-        "Qwen/Qwen3-14B",
-        "Qwen/Qwen3-32B"
-    ] if not args.model else [args.model]
+    strategies = ["react", "act", "fc"] if args.strategy == "all" else [args.strategy]
+    
+    # If no specific model is provided, it defaults to None and fails, 
+    # as the user should specify the model they are running servers for.
+    models = [args.model] if args.model else []
     
     for domain in domains:
         for model in models:
