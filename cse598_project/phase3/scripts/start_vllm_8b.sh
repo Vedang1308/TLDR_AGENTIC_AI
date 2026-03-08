@@ -1,13 +1,31 @@
 #!/bin/bash
-# Load CUDA driver for vLLM compilation if on SOL node
+MODEL="Qwen/Qwen3-8B"
+PORT=8000
+
+# Load CUDA compiler if on SOL
 module load cuda-12.4.1-gcc-12.1.0 2>/dev/null || true
 
-# Activate conda environment
+# Activate conda
 eval "$(conda shell.bash hook)"
 conda activate phase3_env
 
-# Navigate to project directory
-cd ~/AGENTIC_AI/TLDR_AGENTIC_AI/cse598_project/phase3 || exit
+# Force cache to scratch to prevent home directory quota limits
+export HF_HOME=/scratch/vavaghad/huggingface_cache
+export XDG_CACHE_HOME=/scratch/vavaghad/xdg_cache
+mkdir -p $HF_HOME
+mkdir -p $XDG_CACHE_HOME
 
-echo "Starting Agent Model (Qwen3-8B) on Port 8000..."
-vllm serve "Qwen/Qwen3-8B" --port 8000 --host 0.0.0.0
+# Check if port is in use and kill it
+if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
+    echo "Port $PORT is already in use. Killing process..."
+    kill -9 $(lsof -Pi :$PORT -sTCP:LISTEN -t)
+fi
+
+echo "Starting vLLM server for Agent ($MODEL) on port $PORT..."
+python3 -m vllm.entrypoints.openai.api_server \
+    --model $MODEL \
+    --trust-remote-code \
+    --port $PORT \
+    --dtype float16 \
+    --gpu-memory-utilization 0.95 \
+    --max-model-len 8192
