@@ -216,13 +216,15 @@ def validator_node(state: PevState) -> Dict:
     llm = get_llm()
     
     # Inject the domain business policy wiki (from the system turn) for informed validation
+    # Truncated to 2000 chars to keep validator prompt lean and fast
     wiki_context = ""
     if state.user_conversation and state.user_conversation[0].get('role') == 'system':
-        wiki_context = state.user_conversation[0]['content']
+        full_wiki = state.user_conversation[0]['content']
+        wiki_context = full_wiki[:2000] + ("..." if len(full_wiki) > 2000 else "")
     
     sys_prompt = f"""You are the VALIDATOR (Actor-Critic). Your role is to CRITIQUE the drafted tool call below.
 
-BUSINESS DOMAIN POLICIES (your primary reference):
+BUSINESS DOMAIN POLICIES (key rules only):
 {wiki_context}
 
 Your review criteria:
@@ -230,14 +232,15 @@ Your review criteria:
 2. BUSINESS LOGIC ERRORS: Does it violate a domain policy (e.g., refund to wrong payment type, exceed allowed coupons, cancel without insurance)? → REJECT
 3. PREMATURE TRANSFER: Is `transfer_to_human_agents` called when there are still API tools that could resolve the issue? → REJECT
 4. SAFE ACTION: Is the action logically sound, has all required preconditions met, and follows policy? → APPROVE
+5. READ/LOOKUP ACTIONS: Actions like `get_user_profile`, `search_direct_flight` etc. are ALWAYS safe to APPROVE.
 
 Respond with ONLY "APPROVE" or "REJECT: <specific reason>".
 
 DRAFTED TOOL:
 {json.dumps(state.drafted_tool_call, indent=2)}
 
-MEMORY (prior observations to validate preconditions):
-{json.dumps(state.memory, indent=2)}
+MEMORY (recent observations):
+{json.dumps(state.memory[-8:], indent=2)}
 """
 
     resp = llm.invoke([SystemMessage(content=sys_prompt)])
