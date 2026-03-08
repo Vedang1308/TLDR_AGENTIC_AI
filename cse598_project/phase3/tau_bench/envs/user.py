@@ -56,13 +56,18 @@ class LLMUserSimulationEnv(BaseUserSimulationEnv):
         self.reset()
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
+        import re
         res = completion(
-            model=self.model, custom_llm_provider=self.provider, messages=messages, api_base=get_model_api_base(self.model)
+            model=self.model, custom_llm_provider=self.provider, messages=messages,
+            api_base=get_model_api_base(self.model),
+            max_tokens=200,  # User sim messages are short; prevents Qwen3 reasoning model from spending 3 min on <think> chains
         )
         message = res.choices[0].message
         self.messages.append(message.model_dump())
         self.total_cost = res._hidden_params["response_cost"]
-        return message.content
+        # Strip Qwen3 reasoning tags from user simulator output
+        content = re.sub(r'<think>.*?</think>', '', message.content or '', flags=re.DOTALL).strip()
+        return content
 
     def build_system_prompt(self, instruction: Optional[str]) -> str:
         instruction_display = (
