@@ -91,9 +91,13 @@ def executor_node(state: PevState) -> Dict:
     sys_prompt = f"""You are the EXECUTOR. 
 Your ONLY job is to output a raw JSON dictionary representing a function call based on the PLAN provided.
 Do NOT write explanations or think markers. Just output the JSON.
+
+CRITICAL: The JSON must use ONLY tool names from the list below. Do NOT output a 'think' key or 'thought' key - those are not tools!
+For conversational replies to the user, use: {{"name": "respond", "arguments": {{"content": "<your message>"}}}}
+
 Available tools:
 {json.dumps(state.tools_info, indent=2)}
-Additionally, you have access to `transfer_to_human_agents` with arguments {{"summary": "<str>"}} or {{"content": "<str>"}}.
+Additionally, you have access to `transfer_to_human_agents` with arguments {{"summary": "<str>"}}.
 
 PLAN TO EXECUTE:
 {state.current_plan}
@@ -139,6 +143,15 @@ def syntax_monitor_node(state: PevState) -> Dict:
         
     if "name" not in tool_draft or "arguments" not in tool_draft:
         return {"rejection_feedback": "JSON missing 'name' or 'arguments' keys.", "rejection_source": "syntax_monitor"}
+    
+    # Block pseudo-tool names that Qwen3 hallucinates instead of real API calls
+    FAKE_TOOLS = {"think", "thought", "reasoning", "internal_thought", "chain_of_thought"}
+    if tool_draft["name"].lower() in FAKE_TOOLS:
+        valid_names = [t.get("name", "") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
+        return {
+            "rejection_feedback": f"'{tool_draft['name']}' is NOT a valid tool. You MUST pick a tool name from this list: {valid_names}. For conversational messages use 'respond'.",
+            "rejection_source": "syntax_monitor"
+        }
         
     # Check for repetitive loop (did we try this EXACT tool call and fail recently?)
     recent_failures = [m for m in state.memory[-5:] if m.get('type') == 'tool_error']
