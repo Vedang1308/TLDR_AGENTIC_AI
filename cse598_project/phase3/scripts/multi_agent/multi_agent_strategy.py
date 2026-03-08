@@ -58,15 +58,15 @@ class MultiAgentStrategy(Agent):
             # or the Planner determines the task is inherently complete.
             
             try:
-                # Compile returns a Runnable, we invoke it with our state
-                final_state = self.workflow.invoke(state, {"recursion_limit": 15})
+                # LangGraph requires state to be passed as a plain dict, not a Pydantic model.
+                # We re-hydrate the returned dict back into a PevState object after.
+                final_state_dict = self.workflow.invoke(state.model_dump(), {"recursion_limit": 25})
             except Exception as e:
                 print(f"Graph failed: {e}")
                 break
                 
-            # Update our state object with changes from the graph
-            for k, v in final_state.items():
-                setattr(state, k, v)
+            # Re-hydrate returned dict back into our PevState Pydantic model
+            state = PevState(**final_state_dict)
                 
             # Check if planner forced an exit
             if state.task_completed:
