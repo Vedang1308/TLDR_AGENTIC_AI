@@ -38,6 +38,7 @@ def planner_node(state: PevState) -> Dict:
 Your job is to read the user conversation and the memory kernel, then output a strict, 1-2 sentence PLAN for the Executor.
 DO NOT attempt to formulate JSON tool calls. 
 DO NOT converse with the user unless the task requires asking for clarification.
+CRITICAL TAU-BENCH RULE: Do NOT transfer to a human agent unless you have exhausted all other options or the user explicitly demands it. Transferring results in immediate failure. Try your best to solve the issue using the API tools first.
 If the task is complete, output exactly [TASK COMPLETED].
 If an action just failed (see Rejection Feedback), adjust the plan to bypass the error.
 
@@ -136,7 +137,8 @@ def validator_node(state: PevState) -> Dict:
     sys_prompt = f"""You are the VALIDATOR.
 Review the following drafted tool call for logic and preconditions.
 If it violates policy (e.g. refunding to wrong payment type, or acting without searching first), output "REJECT: <reason>".
-If it is safe, output "APPROVE".
+If the tool is `transfer_to_human_agents` but there are still viable APIs to try to solve the user's issue, output "REJECT: Attempt to solve the issue yourself before transferring."
+If it is safe and logically sound, output "APPROVE".
 
 DRAFTED TOOL:
 {json.dumps(state.drafted_tool_call, indent=2)}

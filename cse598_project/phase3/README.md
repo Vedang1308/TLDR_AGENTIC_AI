@@ -61,3 +61,8 @@ This will output `results/phase3_final_results_table.csv` and `results/phase3_me
 ### Troubleshooting
 - `Invalid agent strategy`: Ensure you are running `python3 scripts/run_phase3_experiments.py` from THIS `phase3` directory. It uses the `tau_bench` copy located in `phase3/tau_bench/run.py` which was modified to accept `--agent-strategy multi-agent`.
 - `Connection Error`: `vLLM` hasn't finished booting up yet or the port is in use. Check your parallel terminals.
+
+---
+## Phase 3 Trade-Off Notes (For Your Report)
+When writing your Phase 3 report, you may notice the **Total Token Cost** for the Multi-Agent architecture is strictly higher than the Phase 1 monolithic baselines. 
+This is expected behavior. The Plan-Execute-Validate Graph makes at least 3 distinct LLM calls (Planner -> Executor -> Validator) per single conversational turn to enforce logical safety, prevent hallucinations, and avoid premature `transfer_to_human` failures. We are explicitly trading raw token efficiency for higher `pass^k` task reliability.
