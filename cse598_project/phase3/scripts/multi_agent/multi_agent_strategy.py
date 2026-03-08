@@ -56,7 +56,7 @@ class MultiAgentStrategy(Agent):
             
             try:
                 # Compile returns a Runnable, we invoke it with our state
-                final_state = self.workflow.invoke(state)
+                final_state = self.workflow.invoke(state, {"recursion_limit": 15})
             except Exception as e:
                 print(f"Graph failed: {e}")
                 break

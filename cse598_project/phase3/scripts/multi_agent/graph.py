@@ -16,21 +16,21 @@ def orchestrator_router(state: PevState) -> str:
 def syntax_router(state: PevState) -> str:
     """
     Decides where to go after the Syntax Loop Monitor.
-    If rejected (malformed or looping), go back to Executor to redraw.
+    If rejected (malformed or looping), go back to Planner to re-assess.
     If approved, go to Validator.
     """
     if state.rejection_feedback and state.rejection_source == "syntax_monitor":
-        return "executor"
+        return "planner"
     return "validator"
 
 def validation_router(state: PevState) -> str:
     """
     Decides where to go after Validator Critic.
     If approved, the graph ends (the tool call is sent back to the Tau-Bench Env).
-    If rejected due to policy, back to Executor to re-plan action.
+    If rejected due to policy, back to Planner to re-plan action.
     """
     if state.rejection_feedback and state.rejection_source == "validator":
-        return "executor"
+        return "planner"
     # End of graph execution, return control to main env loop to execute the tool
     return END
 
@@ -62,7 +62,7 @@ def create_pev_graph():
         "syntax_monitor",
         syntax_router,
         {
-            "executor": "executor", # Retry drafting
+            "planner": "planner", # Retry planning
             "validator": "validator" # Move to logical validation
         }
     )
@@ -71,7 +71,7 @@ def create_pev_graph():
         "validator",
         validation_router,
         {
-            "executor": "executor", # Policy violation, try again
+            "planner": "planner", # Policy violation, try again
             END: END # Approved, return to Tau-Bench
         }
     )
