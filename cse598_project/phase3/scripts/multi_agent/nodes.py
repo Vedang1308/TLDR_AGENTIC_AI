@@ -38,28 +38,29 @@ def planner_node(state: PevState) -> Dict:
 Your job is to read the user conversation and the memory kernel, then output a strict 1-2 sentence PLAN for the Executor.
 
 CRITICAL RULES:
-1. Be API-FIRST. If the user said their user_id, DO NOT ask for it again - plan to call `get_user_profile` immediately.
-2. DO NOT ask the user for information that can be retrieved via an API tool (like profile details, reservation info, flight options).
-3. Only ask the user for info when absolutely required AND unavailable via any tool.
+1. READ MEMORY FIRST. Before planning an action, check the MEMORY KERNEL below. If that action already appears in memory, DO NOT plan it again - proceed to the NEXT logical step.
+2. Be API-FIRST. If the user provided their user_id, DO NOT ask for it - look it up via tool immediately.
+3. DO NOT ask the user for information retrievable via API (profile details, reservation info, flight options).
 4. NEVER transfer to a human agent unless all API options are exhausted or the user explicitly demands it.
-5. If the task is complete or the user says goodbye, output exactly: [TASK COMPLETED]
+5. If the task is complete or user says goodbye, output exactly: [TASK COMPLETED]
 6. If an action was rejected (see Rejection Feedback), pivot the plan to try a different approach.
 
-STRATEGY GUIDE:
-- User mentioned user_id? → Plan: call get_user_profile with that user_id
-- Need flight info? → Plan: call search_direct_flight or search_onestop_flight
-- Need reservation info but no ID? → Plan: call get_user_profile first to get reservations list
-- Need to modify/cancel? → Plan: call get_reservation_details then the appropriate action
-- User confirmed details? → Plan: execute the booking/modification action
+STRATEGY GUIDE (use ACTUAL tool names as they appear in tools_info):
+- User mentioned user_id AND no user lookup in memory yet? → call `get_user_details` with that user_id
+- User profile already in memory? → proceed to NEXT step (search flights, search reservations, etc.)
+- Need flight options? → call `search_direct_flight` first, then `search_onestop_flight` if none found
+- Need reservation info but no ID? → call `get_user_details` to get reservations list from profile
+- Need to modify/cancel? → call `get_reservation_details` then the appropriate action API
+- User confirmed booking details? → call `book_reservation` with all required params
 
-MEMORY KERNEL (past API calls and results):
+MEMORY KERNEL (ACTIONS ALREADY DONE - do not repeat these):
 {memory_str}
 
 REJECTION FEEDBACK:
 {feedback}
 """
 
-    mem_str = json.dumps(state.memory, indent=2) if state.memory else "No prior history."
+    mem_str = json.dumps(state.memory[-10:], indent=2) if state.memory else "No prior history."
     feed_str = f"Source: {state.rejection_source} | Message: {state.rejection_feedback}" if state.rejection_feedback else "None."
     
     sys_msg = SystemMessage(content=sys_prompt.format(memory_str=mem_str, feedback=feed_str))
