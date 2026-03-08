@@ -169,24 +169,31 @@ def syntax_monitor_node(state: PevState) -> Dict:
     
     # --- ToolGate Schema Validation ---
     # Find the matching tool schema from tools_info (PDF Section 4.1: validate against API schemas)
+    # Handles both flat format {name: ...} and nested OpenAI format {type: function, function: {name: ...}}
     allowed_no_schema = {"respond", "transfer_to_human_agents"}
     if tool_draft["name"] not in allowed_no_schema:
-        matching_schema = next((t for t in state.tools_info if t.get("name") == tool_draft["name"]), None)
+        def get_tool_name(t):
+            return t.get("name") or t.get("function", {}).get("name")
+        def get_tool_params(t):
+            return t.get("parameters") or t.get("function", {}).get("parameters", {})
+        
+        matching_schema = next((t for t in state.tools_info if get_tool_name(t) == tool_draft["name"]), None)
         if matching_schema is None:
-            valid_names = [t.get("name", "") for t in state.tools_info] + list(allowed_no_schema)
+            valid_names = [get_tool_name(t) for t in state.tools_info if get_tool_name(t)] + list(allowed_no_schema)
             return {
                 "rejection_feedback": f"Tool '{tool_draft['name']}' does not exist. Valid tools: {valid_names}",
                 "rejection_source": "syntax_monitor"
             }
-        # Check required parameters are present
-        if "parameters" in matching_schema:
-            schema_params = matching_schema["parameters"].get("properties", {})
-            required = matching_schema["parameters"].get("required", [])
+        # Check required parameters are present (only if schema has parameters defined)
+        params_schema = get_tool_params(matching_schema)
+        if params_schema:
+            required = params_schema.get("required", [])
+            schema_props = params_schema.get("properties", {})
             args = tool_draft.get("arguments", {})
             missing = [r for r in required if r not in args]
             if missing:
                 return {
-                    "rejection_feedback": f"Tool '{tool_draft['name']}' is missing required parameters: {missing}. Expected parameters: {list(schema_params.keys())}",
+                    "rejection_feedback": f"Tool '{tool_draft['name']}' is missing required parameters: {missing}. Full parameter list: {list(schema_props.keys())}",
                     "rejection_source": "syntax_monitor"
                 }
     
