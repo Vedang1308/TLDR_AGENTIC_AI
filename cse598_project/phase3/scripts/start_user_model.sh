@@ -3,8 +3,8 @@ ALIAS="User-Qwen3-32B"
 PORT=8001
 
 # Force cache to scratch to avoid Disk Full issues
-export HF_HOME=/scratch/vavaghad/huggingface_cache
-export XDG_CACHE_HOME=/scratch/vavaghad/xdg_cache
+export HF_HOME=/scratch/vgaduput/huggingface_cache
+export XDG_CACHE_HOME=/scratch/vgaduput/xdg_cache
 mkdir -p $HF_HOME
 mkdir -p $XDG_CACHE_HOME
 
@@ -18,17 +18,26 @@ fi
 PYTHON_EXEC="python3"
 
 echo "Starting vLLM server for User Agent ($MODEL as $ALIAS) on port $PORT..."
-$PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
-    --model $MODEL \
-    --served-model-name $ALIAS \
-    --trust-remote-code \
-    --port $PORT \
-    --dtype float16 \
-    --max-model-len 30000 \
-    --max-num-batched-tokens 30000 \
-    --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.50 \
-    --quantization bitsandbytes \
-    --load-format bitsandbytes 
-    # Note: reduced gpu utilization if running alongside another model, 
-    # but practically we might need sequential execution if single GPU.
+# $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+#     --model $MODEL \
+#     --served-model-name $ALIAS \
+#     --trust-remote-code \
+#     --port $PORT \
+#     --dtype float16 \
+#     --max-model-len 30000 \
+#     --max-num-batched-tokens 30000 \
+#     --tensor-parallel-size 1 \
+#     --gpu-memory-utilization 0.50 \
+#     --quantization bitsandbytes \
+#     --load-format bitsandbytes 
+#     # Note: reduced gpu utilization if running alongside another model, 
+#     # but practically we might need sequential execution if single GPU.
+
+# Optimized User Model (GPU 0)
+CUDA_VISIBLE_DEVICES=0 python3 -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3-32B \
+    --served-model-name User-Qwen3-32B \
+    --port 8001 \
+    --dtype bfloat16 \
+    --gpu-memory-utilization 0.90 \
+    --max-model-len 30000 

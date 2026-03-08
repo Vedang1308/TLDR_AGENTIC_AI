@@ -47,7 +47,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
     model_safe_name = model.replace("/", "_")
     output_path = os.path.join(results_dir, domain, model_safe_name, strategy, f"trial_{trial}")
     os.makedirs(output_path, exist_ok=True)
-    
+
     # Local vLLM Port Map
     port_map = {
         "Qwen/Qwen3-4B": 8000,
@@ -96,7 +96,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
         "--user-model", user_model,
         "--user-model-provider", "openai",
         "--user-strategy", user_strategy,
-        "--max-concurrency", "1", # Update this if you want to run multiple tasks concurrently within the same trial and have the required resources
+        "--max-concurrency", "4", # Update this if you want to run multiple tasks concurrently within the same trial and have the required resources
         "--seed", str(trial),
         "--log-dir", output_path,
         "--task-ids"
@@ -116,7 +116,7 @@ def main():
     parser.add_argument("--user-model", type=str, default="User-Qwen3-32B")
     parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--trials", type=int, default=5) 
-    parser.add_argument("--max-workers", type=int, default=2, help="Number of parallel trials")
+    parser.add_argument("--max-workers", type=int, default=4, help="Number of parallel trials")
     parser.add_argument("--results-dir", type=str, default="results/phase3")
     
     args = parser.parse_args()
