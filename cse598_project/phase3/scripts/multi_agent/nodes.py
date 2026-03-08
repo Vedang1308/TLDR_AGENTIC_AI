@@ -217,6 +217,18 @@ def validator_node(state: PevState) -> Dict:
     Directly addresses: Business Logic Errors & Missing Preconditions (PDF Sections 4.2, 4.5)
     """
     import re
+    
+    # Fast-path: auto-approve read-only tools without LLM call (~60% of actions)
+    # These are pure lookups with no business logic risk
+    READ_ONLY_TOOLS = {
+        "get_user_details", "get_user_profile", "search_direct_flight",
+        "search_onestop_flight", "get_reservation_details", "list_all_airports",
+        "respond", "transfer_to_human_agents",
+    }
+    tool_name = state.drafted_tool_call.get("name", "") if state.drafted_tool_call else ""
+    if tool_name in READ_ONLY_TOOLS or tool_name.startswith("search_") or tool_name.startswith("get_") or tool_name.startswith("list_"):
+        return {"node_logs": [{"node": "validator", "status": "approved (fast-path)"}]}
+    
     llm = get_llm()
     
     # Inject the domain business policy wiki (from the system turn) for informed validation
