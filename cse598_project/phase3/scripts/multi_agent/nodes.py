@@ -22,7 +22,7 @@ def get_llm(context="agent"):
         api_key="EMPTY",
         model=model_name,
         temperature=0.0,
-        max_tokens=512,
+        max_tokens=900,  # Increased from 512: planner needs to complete <think> chain before emitting plan
         stop=["Observation:", "OBSERVATION:"]
     )
 
@@ -80,8 +80,17 @@ REJECTION FEEDBACK:
     
     import re
     plan = response.content.strip()
-    # Remove Qwen reasoning tags if present
-    plan = re.sub(r'<think>.*?</think>', '', plan, flags=re.DOTALL).strip()
+    # Robust Qwen3 think-tag stripping:
+    # 1. Strip properly closed <think>...</think> blocks
+    plan = re.sub(r'<think>.*?</think>', '', plan, flags=re.DOTALL)
+    # 2. Strip unclosed <think>... blocks (happen when max_tokens cuts off before </think>)
+    plan = re.sub(r'<think>.*', '', plan, flags=re.DOTALL)
+    plan = plan.strip()
+    
+    # If plan ended up empty (all think, no plan text), use the last non-empty raw line as fallback
+    if not plan:
+        raw_lines = [l.strip() for l in response.content.split('\n') if l.strip() and not l.strip().startswith('<')]
+        plan = raw_lines[-1] if raw_lines else "Proceed with the next logical API action based on the conversation."
     
     if "[TASK COMPLETED]" in plan:
         return {"task_completed": True, "node_logs": [{"node": "planner", "plan": plan}]}
@@ -99,46 +108,40 @@ def executor_node(state: PevState) -> Dict:
     """
     llm = get_llm()
     
-    sys_prompt = f"""You are the EXECUTOR. 
-Your ONLY job is to output a raw JSON dictionary representing a function call based on the PLAN provided.
-Do NOT write explanations or think markers. Just output the JSON.
+    sys_prompt = f"""You are the EXECUTOR. Your ONLY job is to output a JSON tool call based on the PLAN below.
 
-CRITICAL: The JSON must use ONLY tool names from the list below. Do NOT output a 'think' key or 'thought' key - those are not tools!
-For conversational replies to the user, use: {{"name": "respond", "arguments": {{"content": "<your message>"}}}}
-
-Available tools:
-{json.dumps(state.tools_info, indent=2)}
-Additionally, you have access to `transfer_to_human_agents` with arguments {{"summary": "<str>"}}.
-
-PLAN TO EXECUTE:
+== PLAN TO EXECUTE (MANDATORY - follow this EXACTLY) ==
 {state.current_plan}
 
-MEMORY CONTEXT:
-{json.dumps([m for m in state.memory if m.get('type') == 'tool_call'], indent=2)}
-"""
+Available tools (use ONLY these exact names):
+{json.dumps([t.get('name') or t.get('function', {}).get('name') for t in state.tools_info], indent=2)}
+Additional: "respond" (for user messages), "transfer_to_human_agents" (only as last resort)
+
+Rules:
+- Output ONLY a raw JSON object, nothing else: {{"name": "<tool_name>", "arguments": {{...}}}}
+- Use EXACT tool names from the list above
+- DO NOT output 'think', 'thought', or any non-tool name
+- For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}
+- Follow the PLAN above exactly - do not substitute a different tool"""
 
     resp = llm.invoke([SystemMessage(content=sys_prompt)])
     content = resp.content.strip()
     
-    content = resp.content.strip()
-    
     import re
-    # Remove Qwen reasoning tags if present
-    content_no_think = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+    # Robust think-tag stripping (handles both closed and unclosed tags)
+    content_no_think = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+    content_no_think = re.sub(r'<think>.*', '', content_no_think, flags=re.DOTALL).strip()
     
-    # Try to find JSON block
-    # Match everything between first { and last }
+    # Try to find JSON block between first { and last }
     json_match = re.search(r'\{.*\}', content_no_think, re.DOTALL)
     
     drafted_tool = None
     if json_match:
         json_str = json_match.group(0)
-        # Some models aggressively wrap JSON in markdown even inside re.search captures if formatting is weird
         json_str = json_str.replace("```json", "").replace("```", "").strip()
         try:
             drafted_tool = json.loads(json_str)
         except json.JSONDecodeError as e:
-            # We log decoding errors so syntax_monitor picks it up and planner sees why it failed
             print(f"JSON Parse Error: {e} | Raw string: {json_str}")
             
     return {"drafted_tool_call": drafted_tool, "node_logs": [{"node": "executor", "raw_output": content}]}
