@@ -24,8 +24,13 @@ fi
 echo "Starting vLLM server for User Simulator ($MODEL) on port $PORT..."
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL \
+    --served-model-name "User-Qwen3-32B" \
     --trust-remote-code \
     --port $PORT \
     --dtype float16 \
-    --gpu-memory-utilization 0.95 \
-    --max-model-len 8192
+    --max-model-len 30000 \
+    --max-num-batched-tokens 30000 \
+    --tensor-parallel-size 1 \
+    --gpu-memory-utilization 0.50 \
+    --quantization bitsandbytes \
+    --load-format bitsandbytes
