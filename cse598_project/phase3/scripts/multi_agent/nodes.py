@@ -66,7 +66,11 @@ REJECTION FEEDBACK:
             user_msgs.append(HumanMessage(content=f"{turn['role']}: {turn['content']}"))
         
     response = llm.invoke([sys_msg] + user_msgs)
+    
+    import re
     plan = response.content.strip()
+    # Remove Qwen reasoning tags if present
+    plan = re.sub(r'<think>.*?</think>', '', plan, flags=re.DOTALL).strip()
     
     if "[TASK COMPLETED]" in plan:
         return {"task_completed": True, "node_logs": [{"node": "planner", "plan": plan}]}
@@ -101,16 +105,26 @@ MEMORY CONTEXT:
     resp = llm.invoke([SystemMessage(content=sys_prompt)])
     content = resp.content.strip()
     
-    # Very naive extraction, we will refine this
+    content = resp.content.strip()
+    
     import re
-    json_match = re.search(r'\{.*\}', content, re.DOTALL)
+    # Remove Qwen reasoning tags if present
+    content_no_think = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+    
+    # Try to find JSON block
+    # Match everything between first { and last }
+    json_match = re.search(r'\{.*\}', content_no_think, re.DOTALL)
     
     drafted_tool = None
     if json_match:
+        json_str = json_match.group(0)
+        # Some models aggressively wrap JSON in markdown even inside re.search captures if formatting is weird
+        json_str = json_str.replace("```json", "").replace("```", "").strip()
         try:
-            drafted_tool = json.loads(json_match.group(0))
-        except json.JSONDecodeError:
-            pass
+            drafted_tool = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            # We log decoding errors so syntax_monitor picks it up and planner sees why it failed
+            print(f"JSON Parse Error: {e} | Raw string: {json_str}")
             
     return {"drafted_tool_call": drafted_tool, "node_logs": [{"node": "executor", "raw_output": content}]}
 
