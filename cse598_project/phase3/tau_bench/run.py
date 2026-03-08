@@ -135,6 +135,14 @@ def agent_factory(
     if config.agent_strategy == "multi-agent": 
         target_strategy = "multi-agent-react" # Default
         
+    # We need to set env vars so the nodes know which base URL and model to use
+    os.environ["AGENT_MODEL_NAME"] = config.model
+    os.environ["AGENT_API_BASE"] = "http://localhost:8000/v1"
+
+    # User Simulator is hardcoded to 8001 in our architecture
+    os.environ["USER_MODEL_NAME"] = config.user_model
+    os.environ["USER_API_BASE"] = "http://localhost:8001/v1"
+
     return MultiAgentStrategy(
         tools_info=tools_info,
         wiki=wiki,
