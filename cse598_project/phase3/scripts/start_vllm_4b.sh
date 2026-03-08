@@ -18,25 +18,14 @@ fi
 PYTHON_EXEC="python3"
 
 echo "Starting vLLM server for Agent ($MODEL) on port $PORT..."
-# $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
-#     --model $MODEL \
-#     --trust-remote-code \
-#     --port $PORT \
-#     --dtype float16 \
-#     --max-model-len 40960 \
-#     --max-num-batched-tokens 40960 \
-#     --tensor-parallel-size 1 \
-#     --gpu-memory-utilization 0.40 \
-#     --enable-auto-tool-choice \
-#     --tool-call-parser hermes
-
-# Optimized Agent Model (GPU 1)
-CUDA_VISIBLE_DEVICES=1 python3 -m vllm.entrypoints.openai.api_server \
-    --model Qwen/Qwen3-4B \
-    --served-model-name Qwen/Qwen3-4B \
-    --port 8000 \
+CUDA_VISIBLE_DEVICES=0 $PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
+    --model $MODEL \
+    --trust-remote-code \
+    --port $PORT \
     --dtype bfloat16 \
-    --gpu-memory-utilization 0.90 \
     --max-model-len 40960 \
+    --max-num-batched-tokens 40960 \
+    --tensor-parallel-size 1 \
+    --gpu-memory-utilization 0.90 \
     --enable-auto-tool-choice \
-    --tool-call-parser hermes 
+    --tool-call-parser hermes
