@@ -2,7 +2,7 @@ import os
 import json
 from typing import Dict, Any, List
 from langchain_community.chat_models import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from .state import PevState
 
 # The port map determines which model to call locally:
