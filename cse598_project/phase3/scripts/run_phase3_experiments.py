@@ -4,6 +4,13 @@ import subprocess
 import os
 import time
 import sys
+import os
+
+# Ensure the parent phase3 directory is in Python's path so we can resolve the local tau_bench copy
+phase3_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if phase3_root not in sys.path:
+    sys.path.insert(0, phase3_root)
+
 import json
 import glob
 from tau_bench.envs import get_env
