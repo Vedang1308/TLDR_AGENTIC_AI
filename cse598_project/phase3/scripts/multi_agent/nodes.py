@@ -87,7 +87,16 @@ REJECTION FEEDBACK:
     plan = re.sub(r'<think>.*', '', plan, flags=re.DOTALL)
     plan = plan.strip()
     
-    # If plan ended up empty (all think, no plan text), use the last non-empty raw line as fallback
+    # Truncate circular post-think rambling to first 3 meaningful lines
+    # ('Wait, but...' chains appear after the think block in plain text)
+    lines = [l.strip() for l in plan.split('\n') if l.strip()]
+    # Skip lines that are clearly just reasoning noise
+    noise_starters = ('wait,', 'however,', 'but wait,', 'hmm,', 'actually,')
+    clean_lines = [l for l in lines if not l.lower().startswith(noise_starters)]
+    plan = ' '.join(clean_lines[:3]) if clean_lines else ' '.join(lines[:3])
+    plan = plan.strip()
+    
+    # If plan ended up empty (all think, no plan text), use fallback
     if not plan:
         raw_lines = [l.strip() for l in response.content.split('\n') if l.strip() and not l.strip().startswith('<')]
         plan = raw_lines[-1] if raw_lines else "Proceed with the next logical API action based on the conversation."
@@ -117,12 +126,13 @@ Available tools (use ONLY these exact names):
 {json.dumps([t.get('name') or t.get('function', {}).get('name') for t in state.tools_info], indent=2)}
 Additional: "respond" (for user messages), "transfer_to_human_agents" (only as last resort)
 
-Rules:
-- Output ONLY a raw JSON object, nothing else: {{"name": "<tool_name>", "arguments": {{...}}}}
-- Use EXACT tool names from the list above
-- DO NOT output 'think', 'thought', or any non-tool name
-- For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}
-- Follow the PLAN above exactly - do not substitute a different tool"""
+CRITICAL RULES:
+1. Output ONLY a raw JSON object: {{"name": "<tool_name>", "arguments": {{...}}}}
+2. Use EXACT tool names from the list above. Never invent tool names.
+3. Airport codes: ALWAYS use 3-letter IATA codes (JFK not 'New York', SEA not 'Seattle', LAX not 'Los Angeles').
+4. NEVER invent parameter values. Only use values explicitly confirmed in the user conversation or memory.
+5. If you are unsure of any booking parameter (passenger DOB, flight number, payment ID), use 'respond' to ask the user instead of guessing.
+6. For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}"""
 
     resp = llm.invoke([SystemMessage(content=sys_prompt)])
     content = resp.content.strip()
