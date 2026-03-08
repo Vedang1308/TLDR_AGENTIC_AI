@@ -144,8 +144,10 @@ MEMORY CONTEXT:
 
 def syntax_monitor_node(state: PevState) -> Dict:
     """
-    Code Monitor: Deterministically checks syntax and repetition.
+    Code Monitor / ToolGate: Deterministically validates syntax, schema, and repetition.
+    Directly addresses: Tool Parameter Errors & Repetitive Stuck Loops (PDF Section 4.1, 4.6)
     """
+    import re
     tool_draft = state.drafted_tool_call
     
     if not tool_draft:
@@ -154,48 +156,88 @@ def syntax_monitor_node(state: PevState) -> Dict:
     if "name" not in tool_draft or "arguments" not in tool_draft:
         return {"rejection_feedback": "JSON missing 'name' or 'arguments' keys.", "rejection_source": "syntax_monitor"}
     
+    tool_name = tool_draft["name"].lower()
+    
     # Block pseudo-tool names that Qwen3 hallucinates instead of real API calls
     FAKE_TOOLS = {"think", "thought", "reasoning", "internal_thought", "chain_of_thought"}
-    if tool_draft["name"].lower() in FAKE_TOOLS:
+    if tool_name in FAKE_TOOLS:
         valid_names = [t.get("name", "") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
         return {
             "rejection_feedback": f"'{tool_draft['name']}' is NOT a valid tool. You MUST pick a tool name from this list: {valid_names}. For conversational messages use 'respond'.",
             "rejection_source": "syntax_monitor"
         }
-        
-    # Check for repetitive loop (did we try this EXACT tool call and fail recently?)
+    
+    # --- ToolGate Schema Validation ---
+    # Find the matching tool schema from tools_info (PDF Section 4.1: validate against API schemas)
+    allowed_no_schema = {"respond", "transfer_to_human_agents"}
+    if tool_draft["name"] not in allowed_no_schema:
+        matching_schema = next((t for t in state.tools_info if t.get("name") == tool_draft["name"]), None)
+        if matching_schema is None:
+            valid_names = [t.get("name", "") for t in state.tools_info] + list(allowed_no_schema)
+            return {
+                "rejection_feedback": f"Tool '{tool_draft['name']}' does not exist. Valid tools: {valid_names}",
+                "rejection_source": "syntax_monitor"
+            }
+        # Check required parameters are present
+        if "parameters" in matching_schema:
+            schema_params = matching_schema["parameters"].get("properties", {})
+            required = matching_schema["parameters"].get("required", [])
+            args = tool_draft.get("arguments", {})
+            missing = [r for r in required if r not in args]
+            if missing:
+                return {
+                    "rejection_feedback": f"Tool '{tool_draft['name']}' is missing required parameters: {missing}. Expected parameters: {list(schema_params.keys())}",
+                    "rejection_source": "syntax_monitor"
+                }
+    
+    # Check for repetitive loop: did we try this EXACT tool call recently and fail?
+    # (PDF Section 4.6: Repetitive Stuck Loops)
     recent_failures = [m for m in state.memory[-5:] if m.get('type') == 'tool_error']
     for rf in recent_failures:
         if rf.get('tool_call') == tool_draft:
             return {"rejection_feedback": "You already tried this exact action and it failed. Formulate a NEW strategy.", "rejection_source": "syntax_monitor"}
 
-    # Passed
+    # Passed all checks
     return {"node_logs": [{"node": "syntax_monitor", "status": "passed"}]}
 
 def validator_node(state: PevState) -> Dict:
     """
-    Critic Node: Evaluates drafted tool against business logic.
+    Actor-Critic Validator: Evaluates drafted tool against domain business policies.
+    Directly addresses: Business Logic Errors & Missing Preconditions (PDF Sections 4.2, 4.5)
     """
+    import re
     llm = get_llm()
     
-    sys_prompt = f"""You are the VALIDATOR.
-Review the following drafted tool call for logic and preconditions.
-If it violates policy (e.g. refunding to wrong payment type, or acting without searching first), output "REJECT: <reason>".
-If the tool is `transfer_to_human_agents` but there are still viable APIs to try to solve the user's issue, output "REJECT: Attempt to solve the issue yourself before transferring."
-If it is safe and logically sound, output "APPROVE".
+    # Inject the domain business policy wiki (from the system turn) for informed validation
+    wiki_context = ""
+    if state.user_conversation and state.user_conversation[0].get('role') == 'system':
+        wiki_context = state.user_conversation[0]['content']
+    
+    sys_prompt = f"""You are the VALIDATOR (Actor-Critic). Your role is to CRITIQUE the drafted tool call below.
+
+BUSINESS DOMAIN POLICIES (your primary reference):
+{wiki_context}
+
+Your review criteria:
+1. MISSING PRECONDITIONS: Does the tool require prior observations (e.g., searching before booking, fetching before modifying) that are NOT in memory? → REJECT
+2. BUSINESS LOGIC ERRORS: Does it violate a domain policy (e.g., refund to wrong payment type, exceed allowed coupons, cancel without insurance)? → REJECT
+3. PREMATURE TRANSFER: Is `transfer_to_human_agents` called when there are still API tools that could resolve the issue? → REJECT
+4. SAFE ACTION: Is the action logically sound, has all required preconditions met, and follows policy? → APPROVE
+
+Respond with ONLY "APPROVE" or "REJECT: <specific reason>".
 
 DRAFTED TOOL:
 {json.dumps(state.drafted_tool_call, indent=2)}
 
-PRIOR MEMORY (to check preconditions):
+MEMORY (prior observations to validate preconditions):
 {json.dumps(state.memory, indent=2)}
 """
 
     resp = llm.invoke([SystemMessage(content=sys_prompt)])
-    decision = resp.content.strip()
+    decision = re.sub(r'<think>.*?</think>', '', resp.content, flags=re.DOTALL).strip()
     
     if decision.startswith("REJECT"):
         return {"rejection_feedback": decision, "rejection_source": "validator"}
         
-    # If approved, we don't execute it here. We just mark it approved for the orchestrator to pass to Tau-Bench.
+    # If approved, the tool call is returned to multi_agent_strategy.py to execute via env.step()
     return {"node_logs": [{"node": "validator", "status": "approved"}]}
