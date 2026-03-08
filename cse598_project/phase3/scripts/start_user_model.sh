@@ -1,34 +1,13 @@
-MODEL="Qwen/Qwen3-32B"
-ALIAS="User-Qwen3-32B"
-PORT=8001
+#!/bin/bash
+# Load CUDA driver for vLLM compilation if on SOL node
+module load cuda-12.4.1-gcc-12.1.0 2>/dev/null || true
 
-# Force cache to scratch to avoid Disk Full issues
-export HF_HOME=/scratch/vavaghad/huggingface_cache
-export XDG_CACHE_HOME=/scratch/vavaghad/xdg_cache
-mkdir -p $HF_HOME
-mkdir -p $XDG_CACHE_HOME
+# Activate conda environment
+eval "$(conda shell.bash hook)"
+conda activate phase3_env
 
-# Check if port is in use
-if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
-    echo "Port $PORT is already in use. Killing process..."
-    kill -9 $(lsof -Pi :$PORT -sTCP:LISTEN -t)
-fi
+# Navigate to project directory
+cd ~/AGENTIC_AI/TLDR_AGENTIC_AI/cse598_project/phase3 || exit
 
-# Use venv python relative to this script
-PYTHON_EXEC="python3"
-
-echo "Starting vLLM server for User Agent ($MODEL as $ALIAS) on port $PORT..."
-$PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
-    --model $MODEL \
-    --served-model-name $ALIAS \
-    --trust-remote-code \
-    --port $PORT \
-    --dtype float16 \
-    --max-model-len 30000 \
-    --max-num-batched-tokens 30000 \
-    --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.50 \
-    --quantization bitsandbytes \
-    --load-format bitsandbytes 
-    # Note: reduced gpu utilization if running alongside another model, 
-    # but practically we might need sequential execution if single GPU.
+echo "Starting User Simulator (Qwen3-32B) on Port 8001..."
+vllm serve "Qwen/Qwen3-32B" --port 8001 --host 0.0.0.0

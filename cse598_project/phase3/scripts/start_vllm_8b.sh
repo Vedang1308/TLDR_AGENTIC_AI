@@ -1,25 +1,13 @@
 #!/bin/bash
-MODEL="Qwen/Qwen3-8B"
-PORT=8000
+# Load CUDA driver for vLLM compilation if on SOL node
+module load cuda-12.4.1-gcc-12.1.0 2>/dev/null || true
 
-# Check if port is in use
-if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
-    echo "Port $PORT is already in use. Killing process..."
-    kill -9 $(lsof -Pi :$PORT -sTCP:LISTEN -t)
-fi
+# Activate conda environment
+eval "$(conda shell.bash hook)"
+conda activate phase3_env
 
-# Use venv python relative to this script
-PYTHON_EXEC="python3"
+# Navigate to project directory
+cd ~/AGENTIC_AI/TLDR_AGENTIC_AI/cse598_project/phase3 || exit
 
-echo "Starting vLLM server for Agent ($MODEL) on port $PORT..."
-$PYTHON_EXEC -m vllm.entrypoints.openai.api_server \
-    --model $MODEL \
-    --trust-remote-code \
-    --port $PORT \
-    --dtype float16 \
-    --max-model-len 40960 \
-    --max-num-batched-tokens 40960 \
-    --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.35 \
-    --enable-auto-tool-choice \
-    --tool-call-parser hermes
+echo "Starting Agent Model (Qwen3-8B) on Port 8000..."
+vllm serve "Qwen/Qwen3-8B" --port 8000 --host 0.0.0.0
