@@ -18,12 +18,12 @@ def get_llm(context="agent"):
     model_name = os.environ.get("AGENT_MODEL_NAME", "Qwen/Qwen3-4B")
     
     return ChatOpenAI(
-        openai_api_base=api_base,
-        openai_api_key="EMPTY",
-        model_name=model_name,
+        base_url=api_base,
+        api_key="EMPTY",
+        model=model_name,
         temperature=0.0,
         max_tokens=512,
-        model_kwargs={"stop": ["Observation:", "OBSERVATION:"]}
+        stop=["Observation:", "OBSERVATION:"]
     )
 
 def planner_node(state: PevState) -> Dict:
@@ -60,7 +60,7 @@ REJECTION FEEDBACK:
     for turn in state.user_conversation[-3:]: 
         user_msgs.append(HumanMessage(content=f"{turn['role']}: {turn['content']}"))
         
-    response = llm([sys_msg] + user_msgs)
+    response = llm.invoke([sys_msg] + user_msgs)
     plan = response.content.strip()
     
     if "[TASK COMPLETED]" in plan:
@@ -91,7 +91,7 @@ MEMORY CONTEXT:
 {json.dumps([m for m in state.memory if m.get('type') == 'tool_call'], indent=2)}
 """
 
-    resp = llm([SystemMessage(content=sys_prompt)])
+    resp = llm.invoke([SystemMessage(content=sys_prompt)])
     content = resp.content.strip()
     
     # Very naive extraction, we will refine this
@@ -147,7 +147,7 @@ PRIOR MEMORY (to check preconditions):
 {json.dumps(state.memory, indent=2)}
 """
 
-    resp = llm([SystemMessage(content=sys_prompt)])
+    resp = llm.invoke([SystemMessage(content=sys_prompt)])
     decision = resp.content.strip()
     
     if decision.startswith("REJECT"):
