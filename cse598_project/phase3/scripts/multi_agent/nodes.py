@@ -1,7 +1,7 @@
 import os
 import json
 from typing import Dict, Any, List
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from .state import PevState
 
