@@ -326,11 +326,13 @@ BUSINESS DOMAIN POLICIES (key rules only):
 {wiki_context}
 
 Your review criteria:
-1. MISSING PRECONDITIONS: Does the tool require prior observations (e.g., searching before booking, fetching before modifying) that are NOT in memory? → REJECT
+1. MISSING PRECONDITIONS: Does the tool require prior observations (e.g., searching before booking) that are NOT in memory? → REJECT
+   - *Note: Look closely at memory for `user_interaction` blocks where the user said 'yes' before rejecting bookings!*
 2. BUSINESS LOGIC ERRORS: Does it violate a domain policy (e.g., refund to wrong payment type, exceed allowed coupons, cancel without insurance)? → REJECT
 3. PREMATURE TRANSFER: Is `transfer_to_human_agents` called when there are still API tools that could resolve the issue? → REJECT
-4. SAFE ACTION: Is the action logically sound, has all required preconditions met, and follows policy? → APPROVE
-5. READ/LOOKUP ACTIONS: Actions like `get_user_profile`, `search_direct_flight` etc. are ALWAYS safe to APPROVE.
+4. JSON SCHEMA IS NOT YOUR JOB: DO NOT REJECT based on exact JSON parameter formatting (e.g., complaining that `payment_methods` contains amounts, or `flights` is missing an origin). The Syntax Monitor already approved the formatting!
+5. SAFE ACTION: Is the action logically sound, has all required preconditions met, and follows policy? → APPROVE
+6. READ/LOOKUP ACTIONS: Actions like `get_user_profile`, `search_direct_flight` etc. are ALWAYS safe to APPROVE.
 
 Respond with ONLY "APPROVE" or "REJECT: <specific reason>".
 

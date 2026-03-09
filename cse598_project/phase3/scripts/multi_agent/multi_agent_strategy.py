@@ -135,6 +135,14 @@ class MultiAgentStrategy(Agent):
                 messages_log.append(user_resp_msg)
                 state.user_conversation.append(user_resp_msg)
                 
+                # Push conversational response to Memory Kernel so Planner and Validator know user confirmed
+                state.memory.append({
+                    "type": "user_interaction",
+                    "action_taken": action.name,
+                    "agent_said": action.kwargs.get("content", ""),
+                    "user_replied": env_response.observation
+                })
+                
             # Clear drafted tool for next loop
             state.drafted_tool_call = None
             
