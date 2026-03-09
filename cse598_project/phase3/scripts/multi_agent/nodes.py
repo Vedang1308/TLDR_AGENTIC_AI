@@ -101,8 +101,12 @@ End your internal <think> reasoning and output your final action plan starting e
             user_msgs.append(HumanMessage(content=f"{turn['role']}: {turn['content']}"))
         
     response = llm.invoke([sys_msg] + user_msgs)
+    
+    raw_content = response.content.strip()
+    print(f"      ↳ [Planner RAW Output] {raw_content[:500]}..." if len(raw_content) > 500 else f"      ↳ [Planner RAW Output] {raw_content}")
+    
     import re
-    plan = response.content.strip()
+    plan = raw_content
     # Robust Qwen3 think-tag stripping
     plan = re.sub(r'<think>.*?</think>', '', plan, flags=re.DOTALL)
     plan = re.sub(r'<think>.*', '', plan, flags=re.DOTALL)
@@ -196,10 +200,14 @@ def syntax_monitor_node(state: PevState) -> Dict:
     tool_draft = state.drafted_tool_call
     
     if not tool_draft:
-        return {"rejection_feedback": "Executor failed to output valid JSON. Try again.", "rejection_source": "syntax_monitor"}
+        reason = "Executor failed to output valid JSON. Try again."
+        print(f"         [Syntax Monitor REJECTED] {reason}")
+        return {"rejection_feedback": reason, "rejection_source": "syntax_monitor"}
         
     if "name" not in tool_draft or "arguments" not in tool_draft:
-        return {"rejection_feedback": "JSON missing 'name' or 'arguments' keys.", "rejection_source": "syntax_monitor"}
+        reason = "JSON missing 'name' or 'arguments' keys."
+        print(f"         [Syntax Monitor REJECTED] {reason} | Draft: {tool_draft}")
+        return {"rejection_feedback": reason, "rejection_source": "syntax_monitor"}
     
     tool_name = tool_draft["name"].lower()
     
@@ -207,8 +215,10 @@ def syntax_monitor_node(state: PevState) -> Dict:
     FAKE_TOOLS = {"think", "thought", "reasoning", "internal_thought", "chain_of_thought"}
     if tool_name in FAKE_TOOLS:
         valid_names = [t.get("name", "") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
+        reason = f"'{tool_draft['name']}' is NOT a valid tool. You MUST pick a tool name from this list: {valid_names}. For conversational messages use 'respond'."
+        print(f"         [Syntax Monitor REJECTED] {reason}")
         return {
-            "rejection_feedback": f"'{tool_draft['name']}' is NOT a valid tool. You MUST pick a tool name from this list: {valid_names}. For conversational messages use 'respond'.",
+            "rejection_feedback": reason,
             "rejection_source": "syntax_monitor"
         }
     
@@ -225,8 +235,10 @@ def syntax_monitor_node(state: PevState) -> Dict:
         matching_schema = next((t for t in state.tools_info if get_tool_name(t) == tool_draft["name"]), None)
         if matching_schema is None:
             valid_names = [get_tool_name(t) for t in state.tools_info if get_tool_name(t)] + list(allowed_no_schema)
+            reason = f"Tool '{tool_draft['name']}' does not exist. Valid tools: {valid_names}"
+            print(f"         [Syntax Monitor REJECTED] {reason}")
             return {
-                "rejection_feedback": f"Tool '{tool_draft['name']}' does not exist. Valid tools: {valid_names}",
+                "rejection_feedback": reason,
                 "rejection_source": "syntax_monitor"
             }
         # Check required parameters are present (only if schema has parameters defined)
@@ -246,15 +258,19 @@ def syntax_monitor_node(state: PevState) -> Dict:
                 
             missing = [r for r in required if r not in args]
             if missing:
+                reason = f"Tool '{tool_draft['name']}' is missing required parameters: {missing}. Full parameter list: {list(schema_props.keys())}. YOU MUST PROVIDE EXACT ARGUMENTS."
+                print(f"         [Syntax Monitor REJECTED] {reason}")
                 return {
-                    "rejection_feedback": f"Tool '{tool_draft['name']}' is missing required parameters: {missing}. Full parameter list: {list(schema_props.keys())}. YOU MUST PROVIDE EXACT ARGUMENTS.",
+                    "rejection_feedback": reason,
                     "rejection_source": "syntax_monitor"
                 }
     # (PDF Section 4.6: Repetitive Stuck Loops)
     recent_failures = [m for m in state.memory[-5:] if m.get('type') == 'tool_error']
     for rf in recent_failures:
         if rf.get('tool_call') == tool_draft:
-            return {"rejection_feedback": "You already tried this exact action and it failed. Formulate a NEW strategy.", "rejection_source": "syntax_monitor"}
+            reason = "You already tried this exact action and it failed. Formulate a NEW strategy."
+            print(f"         [Syntax Monitor REJECTED] {reason}")
+            return {"rejection_feedback": reason, "rejection_source": "syntax_monitor"}
 
     # Passed all checks
     return {"node_logs": [{"node": "syntax_monitor", "status": "passed"}]}
