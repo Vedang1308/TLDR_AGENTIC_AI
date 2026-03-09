@@ -63,8 +63,8 @@ class MultiAgentStrategy(Agent):
             try:
                 # LangGraph requires state to be passed as a plain dict, not a Pydantic model.
                 # We re-hydrate the returned dict back into a PevState object after.
-                # Lowered recursion limit to 8: 25 loops * 3 LLM calls takes too long to timeout safely.
-                final_state_dict = self.workflow.invoke(state.model_dump(), {"recursion_limit": 8})
+                # Increased recursion limit to 40 (4 nodes per cycle = 10 full retry loops allowed)
+                final_state_dict = self.workflow.invoke(state.model_dump(), {"recursion_limit": 40})
             except Exception as e:
                 print(f"      ↳ [Orchestrator] Graph recursion limit reached or failed: {e}")
                 break
