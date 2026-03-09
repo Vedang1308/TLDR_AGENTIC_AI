@@ -55,7 +55,10 @@ STRATEGY GUIDE (use ACTUAL tool names as they appear in tools_info):
 
 {strategy_specific_instructions}
 
-MEMORY KERNEL (ACTIONS ALREADY DONE - do not repeat these):
+LATEST API RESULT (Did your last action succeed or fail? Read this!):
+{latest_api}
+
+MEMORY KERNEL (Past actions and data):
 {memory_str}
 
 REJECTION FEEDBACK:
@@ -82,7 +85,13 @@ End your internal <think> reasoning and output your final action plan starting e
     mem_str = json.dumps(state.memory[-10:], indent=2) if state.memory else "No prior history."
     feed_str = f"Source: {state.rejection_source} | Message: {state.rejection_feedback}" if state.rejection_feedback else "None."
     
+    # Extract the absolute latest API observation to prevent "lost in the middle" blindness
+    latest_api = "None yet."
+    if state.memory and state.memory[-1].get("type") == "tool_result":
+        latest_api = f"Action: {state.memory[-1].get('action_taken')}\nObservation: {state.memory[-1].get('api_observation')}"
+    
     sys_msg = SystemMessage(content=sys_prompt.format(
+        latest_api=latest_api,
         memory_str=mem_str, 
         feedback=feed_str,
         strategy_specific_instructions=strategy_instructions
@@ -163,7 +172,8 @@ CRITICAL RULES:
 2. Use EXACT tool names and EXACT parameter keys from the schemas above.
 3. NEVER invent parameter values. Only use values explicitly confirmed in the Context Memory or User Instructions.
 4. Airport codes: ALWAYS use 3-letter IATA codes (JFK not 'New York', SEA not 'Seattle').
-5. For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}"""
+5. POPULATE ARRAYS: If a parameter is an array (like `flights` or `passengers`), you MUST fully populate it with the detailed objects found in memory. DO NOT output empty arrays `[]` if the data exists.
+6. For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}"""
 
     resp = llm.invoke([SystemMessage(content=sys_prompt)])
     content = resp.content.strip()
