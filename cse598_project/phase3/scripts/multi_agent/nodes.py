@@ -48,7 +48,8 @@ CRITICAL RULES:
 STRATEGY GUIDE (use ACTUAL tool names as they appear in tools_info):
 - User mentioned user_id AND no user lookup in memory yet? → call `get_user_details` with that user_id
 - User profile already in memory? → proceed to NEXT step (search flights, search reservations, etc.)
-- Need flight options? → call `search_direct_flight` first, then `search_onestop_flight` if none found
+- Need flight options? → call `search_direct_flight` first. 
+- ANTI-LOOP CIRCUIT BREAKER: If `search_direct_flight` returns `[]` or no results, DO NOT try `search_direct_flight` again! Pivot IMMEDIATELY to `search_onestop_flight`!
 - Need reservation info but no ID? → call `get_user_details` to get reservations list from profile
 - Need to modify/cancel? → call `get_reservation_details` then the appropriate action API
 - User confirmed booking details? → call `book_reservation` with all required params
