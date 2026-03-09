@@ -203,6 +203,8 @@ CRITICAL RULES:
         print(f"      ↳ [Executor] No JSON braces found in output: {content_no_think}")
         drafted_tool = {"name": "respond", "arguments": {"content": "I encountered an error processing my plan. Could you please hold on a moment?"}}
             
+    print(f"         [Executor JSON Output] {json.dumps(drafted_tool)}")
+        
     return {"drafted_tool_call": drafted_tool, "node_logs": [{"node": "executor", "raw_output": content}]}
 
 def syntax_monitor_node(state: PevState) -> Dict:
@@ -343,6 +345,7 @@ MEMORY (recent observations):
     decision = re.sub(r'<think>.*?</think>', '', resp.content, flags=re.DOTALL).strip()
     
     if decision.startswith("REJECT"):
+        print(f"         [Validator REJECTED] {decision}")
         return {"rejection_feedback": decision, "rejection_source": "validator"}
         
     # If approved, the tool call is returned to multi_agent_strategy.py to execute via env.step()
