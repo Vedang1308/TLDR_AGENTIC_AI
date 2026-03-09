@@ -138,6 +138,12 @@ class MultiAgentStrategy(Agent):
             # Clear drafted tool for next loop
             state.drafted_tool_call = None
             
+            # CRITICAL: Clear rejection flags! Otherwise, next turn's graph router 
+            # will see stale rejection data from 10 turns ago and immediately 
+            # jump from Planner -> Rejected -> Planner in an infinite loop!
+            state.rejection_feedback = None
+            state.rejection_source = None
+            
             if env_response.done:
                 break
                 
