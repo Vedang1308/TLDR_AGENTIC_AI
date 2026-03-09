@@ -143,22 +143,27 @@ def executor_node(state: PevState) -> Dict:
     print(f"      ↳ [Executor] Drafting JSON tool call from plan...")
     llm = get_llm().bind(response_format={"type": "json_object"})
     
+    tool_schemas = json.dumps(state.tools_info, indent=2)
+    memory_dump = json.dumps(state.memory[-10:], indent=2) 
+    
     sys_prompt = f"""You are the EXECUTOR. Your ONLY job is to output a JSON tool call based on the PLAN below.
 
 == PLAN TO EXECUTE (MANDATORY - follow this EXACTLY) ==
 {state.current_plan}
 
-Available tools (use ONLY these exact names):
-{json.dumps([t.get('name') or t.get('function', {}).get('name') for t in state.tools_info], indent=2)}
-Additional: "respond" (for user messages), "transfer_to_human_agents" (only as last resort)
+== AVAILABLE TOOL SCHEMAS ==
+{tool_schemas}
+Additional tools allowed without schema: "respond", "transfer_to_human_agents"
+
+== CONTEXT MEMORY (Use this to fill in exact parameter values) ==
+{memory_dump}
 
 CRITICAL RULES:
 1. Output ONLY a raw JSON object: {{"name": "<tool_name>", "arguments": {{...}}}}
-2. Use EXACT tool names from the list above. Never invent tool names.
-3. Airport codes: ALWAYS use 3-letter IATA codes (JFK not 'New York', SEA not 'Seattle', LAX not 'Los Angeles').
-4. NEVER invent parameter values. Only use values explicitly confirmed in the user conversation or memory.
-5. If you are unsure of any booking parameter (passenger DOB, flight number, payment ID), use 'respond' to ask the user instead of guessing.
-6. For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}"""
+2. Use EXACT tool names and EXACT parameter keys from the schemas above.
+3. NEVER invent parameter values. Only use values explicitly confirmed in the Context Memory or User Instructions.
+4. Airport codes: ALWAYS use 3-letter IATA codes (JFK not 'New York', SEA not 'Seattle').
+5. For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}"""
 
     resp = llm.invoke([SystemMessage(content=sys_prompt)])
     content = resp.content.strip()
