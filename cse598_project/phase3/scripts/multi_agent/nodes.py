@@ -31,6 +31,7 @@ def planner_node(state: PevState) -> Dict:
     Supervisor Node: Analyzes conversation, checks memory, sets next objective.
     Does NOT output JSON tool calls. Outputs natural language plan.
     """
+    print(f"      ↳ [Planner] Analyzing memory and setting objective...")
     llm = get_llm()
     
     # 1. Build context
@@ -135,7 +136,8 @@ def executor_node(state: PevState) -> Dict:
     """
     Actor Node: Receives the specific plan and drafts the exact JSON tool call.
     """
-    llm = get_llm()
+    print(f"      ↳ [Executor] Drafting JSON tool call from plan...")
+    llm = get_llm().bind(response_format={"type": "json_object"})
     
     sys_prompt = f"""You are the EXECUTOR. Your ONLY job is to output a JSON tool call based on the PLAN below.
 
@@ -181,6 +183,7 @@ def syntax_monitor_node(state: PevState) -> Dict:
     Code Monitor / ToolGate: Deterministically validates syntax, schema, and repetition.
     Directly addresses: Tool Parameter Errors & Repetitive Stuck Loops (PDF Section 4.1, 4.6)
     """
+    print(f"      ↳ [Syntax Monitor] Validating JSON schema structure...")
     import re
     tool_draft = state.drafted_tool_call
     
@@ -246,6 +249,7 @@ def validator_node(state: PevState) -> Dict:
     Actor-Critic Validator: Evaluates drafted tool against domain business policies.
     Directly addresses: Business Logic Errors & Missing Preconditions (PDF Sections 4.2, 4.5)
     """
+    print(f"      ↳ [Validator] Checking drafted tool against business logic policies...")
     import re
     
     # Fast-path: auto-approve read-only tools without LLM call (~60% of actions)

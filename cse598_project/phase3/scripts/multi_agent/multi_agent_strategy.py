@@ -53,7 +53,8 @@ class MultiAgentStrategy(Agent):
 
         messages_log = state.user_conversation.copy()
 
-        for _ in range(max_num_steps):
+        for step_idx in range(max_num_steps):
+            print(f"  ▶ Turn {step_idx+1}/{max_num_steps} (Action Cycle)")
             # Run the graph orchestrator
             # This invokes Planner -> Executor -> Monitor -> Validator
             # The graph returns when either the Validator approves an action, 
@@ -62,9 +63,10 @@ class MultiAgentStrategy(Agent):
             try:
                 # LangGraph requires state to be passed as a plain dict, not a Pydantic model.
                 # We re-hydrate the returned dict back into a PevState object after.
-                final_state_dict = self.workflow.invoke(state.model_dump(), {"recursion_limit": 25})
+                # Lowered recursion limit to 8: 25 loops * 3 LLM calls takes too long to timeout safely.
+                final_state_dict = self.workflow.invoke(state.model_dump(), {"recursion_limit": 8})
             except Exception as e:
-                print(f"Graph failed: {e}")
+                print(f"      ↳ [Orchestrator] Graph recursion limit reached or failed: {e}")
                 break
                 
             # Re-hydrate returned dict back into our PevState Pydantic model
