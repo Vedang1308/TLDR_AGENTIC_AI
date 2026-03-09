@@ -165,16 +165,24 @@ CRITICAL RULES:
     content_no_think = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
     content_no_think = re.sub(r'<think>.*', '', content_no_think, flags=re.DOTALL).strip()
     
-    # Try to find JSON block
-    match = re.search(r'\{.*\}', content_no_think, re.DOTALL)
-    json_str = match.group(0) if match else content_no_think
+    # Aggressive JSON extraction: find first { and last }
+    first_brace = content_no_think.find('{')
+    last_brace = content_no_think.rfind('}')
     
     drafted_tool = None
-    json_str = json_str.replace("```json", "").replace("```", "").strip()
-    try:
-        drafted_tool = json.loads(json_str)
-    except json.JSONDecodeError as e:
-        print(f"JSON Parse Error: {e} | Raw string: {json_str}")
+    if first_brace != -1 and last_brace != -1 and last_brace >= first_brace:
+        json_str = content_no_think[first_brace:last_brace+1]
+        # Clean up any leftover markdown codeblock markers if they snuck inside the braces
+        json_str = json_str.replace("```json", "").replace("```", "").strip()
+        try:
+            drafted_tool = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            print(f"      ↳ [Executor] JSON Parse Error: {e} | Raw string: {json_str}")
+            # Fallback for completely trashed JSON: force a harmless conversational turn
+            drafted_tool = {"name": "respond", "arguments": {"content": "I encountered an error planning my next step. Could you please hold on a moment?"}}
+    else:
+        print(f"      ↳ [Executor] No JSON braces found in output: {content_no_think}")
+        drafted_tool = {"name": "respond", "arguments": {"content": "I encountered an error processing my plan. Could you please hold on a moment?"}}
             
     return {"drafted_tool_call": drafted_tool, "node_logs": [{"node": "executor", "raw_output": content}]}
 
@@ -227,14 +235,21 @@ def syntax_monitor_node(state: PevState) -> Dict:
             required = params_schema.get("required", [])
             schema_props = params_schema.get("properties", {})
             args = tool_draft.get("arguments", {})
+            
+            # --- Auto-Repair Common Qwen3 Hallucinations ---
+            # 1. Hallucinating 'time' instead of 'departure_time' (seen in search_direct_flight logs)
+            if "time" in args and "departure_time" not in args and "departure_time" in schema_props:
+                args["departure_time"] = args.pop("time")
+            # 2. Hallucinating raw 'date' string instead of copying memory
+            if args.get("user_id") == "user_id":
+                args["user_id"] = "required_but_missing" # Force a real rejection reason instead of echoing string
+                
             missing = [r for r in required if r not in args]
             if missing:
                 return {
-                    "rejection_feedback": f"Tool '{tool_draft['name']}' is missing required parameters: {missing}. Full parameter list: {list(schema_props.keys())}",
+                    "rejection_feedback": f"Tool '{tool_draft['name']}' is missing required parameters: {missing}. Full parameter list: {list(schema_props.keys())}. YOU MUST PROVIDE EXACT ARGUMENTS.",
                     "rejection_source": "syntax_monitor"
                 }
-    
-    # Check for repetitive loop: did we try this EXACT tool call recently and fail?
     # (PDF Section 4.6: Repetitive Stuck Loops)
     recent_failures = [m for m in state.memory[-5:] if m.get('type') == 'tool_error']
     for rf in recent_failures:
