@@ -22,7 +22,7 @@ def get_llm(context="agent"):
         api_key="EMPTY",
         model=model_name,
         temperature=0.0,
-        max_tokens=900,  # Increased from 512: planner needs to complete <think> chain before emitting plan
+        max_tokens=3000,  # Massively increased: Qwen3 evaluates list returns (like flights) extremely thoroughly in <think> tags. 900 was cutting it off.
         stop=["Observation:", "OBSERVATION:"]
     )
 
