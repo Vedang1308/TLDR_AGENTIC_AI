@@ -23,7 +23,6 @@ def get_llm(context="agent"):
         model=model_name,
         temperature=0.0,
         max_tokens=3000,  # Massively increased: Qwen3 evaluates list returns (like flights) extremely thoroughly in <think> tags. 900 was cutting it off.
-        stop=["Observation:", "OBSERVATION:"]
     )
 
 def planner_node(state: PevState) -> Dict:
