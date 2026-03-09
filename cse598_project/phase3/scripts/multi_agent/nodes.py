@@ -62,8 +62,8 @@ MEMORY KERNEL (ACTIONS ALREADY DONE - do not repeat these):
 REJECTION FEEDBACK:
 {feedback}
 
-CRITICAL FORMATTING:
-You MUST start your final action plan with the exact prefix `[PLAN]`, followed by 1-2 sentences of what the Executor should do. Do not write anything after the plan.
+CRITICAL FORMATTING INSTRUCTION:
+End your internal <think> reasoning and output your final action plan starting exactly with `[PLAN]`.
 """
 
     # Branch the prompt behavior based on the specific strategy variant
@@ -119,9 +119,9 @@ You MUST start your final action plan with the exact prefix `[PLAN]`, followed b
         plan = ' '.join(clean_lines[:3]) if clean_lines else ' '.join(lines[:3])
         plan = plan.strip()
     
-    # If plan ended up empty, use fallback
+    # If plan ended up empty, use a highly explicit fallback instead of a generic one
     if not plan:
-        plan = "Proceed with the next logical API action based on the conversation."
+        plan = "Ask the user how you can help them further based on the current context."
     
     if "[TASK COMPLETED]" in plan:
         return {"task_completed": True, "node_logs": [{"node": "planner", "plan": plan}]}
