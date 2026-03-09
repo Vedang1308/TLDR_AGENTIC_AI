@@ -61,6 +61,9 @@ MEMORY KERNEL (ACTIONS ALREADY DONE - do not repeat these):
 
 REJECTION FEEDBACK:
 {feedback}
+
+CRITICAL FORMATTING:
+You MUST start your final action plan with the exact prefix `[PLAN]`, followed by 1-2 sentences of what the Executor should do. Do not write anything after the plan.
 """
 
     # Branch the prompt behavior based on the specific strategy variant
@@ -98,29 +101,27 @@ REJECTION FEEDBACK:
             user_msgs.append(HumanMessage(content=f"{turn['role']}: {turn['content']}"))
         
     response = llm.invoke([sys_msg] + user_msgs)
-    
     import re
     plan = response.content.strip()
-    # Robust Qwen3 think-tag stripping:
-    # 1. Strip properly closed <think>...</think> blocks
+    # Robust Qwen3 think-tag stripping
     plan = re.sub(r'<think>.*?</think>', '', plan, flags=re.DOTALL)
-    # 2. Strip unclosed <think>... blocks (happen when max_tokens cuts off before </think>)
     plan = re.sub(r'<think>.*', '', plan, flags=re.DOTALL)
     plan = plan.strip()
     
-    # Truncate circular post-think rambling to first 3 meaningful lines
-    # ('Wait, but...' chains appear after the think block in plain text)
-    lines = [l.strip() for l in plan.split('\n') if l.strip()]
-    # Skip lines that are clearly just reasoning noise
-    noise_starters = ('wait,', 'however,', 'but wait,', 'hmm,', 'actually,')
-    clean_lines = [l for l in lines if not l.lower().startswith(noise_starters)]
-    plan = ' '.join(clean_lines[:3]) if clean_lines else ' '.join(lines[:3])
-    plan = plan.strip()
+    # Extract only the text after [PLAN]
+    if "[PLAN]" in plan:
+        plan = plan.split("[PLAN]")[-1].strip()
+    else:
+        # Truncate circular post-think rambling to first 3 meaningful lines
+        lines = [l.strip() for l in plan.split('\n') if l.strip()]
+        noise_starters = ('wait,', 'however,', 'but wait,', 'hmm,', 'actually,')
+        clean_lines = [l for l in lines if not l.lower().startswith(noise_starters)]
+        plan = ' '.join(clean_lines[:3]) if clean_lines else ' '.join(lines[:3])
+        plan = plan.strip()
     
-    # If plan ended up empty (all think, no plan text), use fallback
+    # If plan ended up empty, use fallback
     if not plan:
-        raw_lines = [l.strip() for l in response.content.split('\n') if l.strip() and not l.strip().startswith('<')]
-        plan = raw_lines[-1] if raw_lines else "Proceed with the next logical API action based on the conversation."
+        plan = "Proceed with the next logical API action based on the conversation."
     
     if "[TASK COMPLETED]" in plan:
         return {"task_completed": True, "node_logs": [{"node": "planner", "plan": plan}]}
@@ -160,21 +161,20 @@ CRITICAL RULES:
     content = resp.content.strip()
     
     import re
-    # Robust think-tag stripping (handles both closed and unclosed tags)
+    # Robust think-tag stripping
     content_no_think = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
     content_no_think = re.sub(r'<think>.*', '', content_no_think, flags=re.DOTALL).strip()
     
-    # Try to find JSON block between first { and last }
-    json_match = re.search(r'\{.*\}', content_no_think, re.DOTALL)
+    # Try to find JSON block
+    match = re.search(r'\{.*\}', content_no_think, re.DOTALL)
+    json_str = match.group(0) if match else content_no_think
     
     drafted_tool = None
-    if json_match:
-        json_str = json_match.group(0)
-        json_str = json_str.replace("```json", "").replace("```", "").strip()
-        try:
-            drafted_tool = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            print(f"JSON Parse Error: {e} | Raw string: {json_str}")
+    json_str = json_str.replace("```json", "").replace("```", "").strip()
+    try:
+        drafted_tool = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        print(f"JSON Parse Error: {e} | Raw string: {json_str}")
             
     return {"drafted_tool_call": drafted_tool, "node_logs": [{"node": "executor", "raw_output": content}]}
 
