@@ -22,6 +22,7 @@ class MultiAgentStrategy(Agent):
         model: str,
         provider: str,
         temperature: float = 0.0,
+        agent_strategy: str = None,  # Accepted for tau_bench compat; reasoning mode set via AGENT_REASONING_MODE env var
     ):
         self.tools_info = tools_info
         self.wiki = wiki
