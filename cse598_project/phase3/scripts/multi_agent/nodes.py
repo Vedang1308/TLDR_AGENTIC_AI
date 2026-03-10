@@ -42,7 +42,7 @@ CRITICAL RULES:
 2. Be API-FIRST. If the user provided their user_id, DO NOT ask for it - look it up via tool immediately.
 3. DO NOT ask the user for information retrievable via API (profile details, reservation info, flight options).
 4. NEVER transfer to a human agent. In this environment, transferring to a human immediately fails the task (0.0 reward). You MUST solve the problem yourself using available tools, no matter how complex.
-5. If the task is complete or user says goodbye, output exactly: [TASK COMPLETED]
+5. EXPLICIT TERMINATION: NEVER output [TASK COMPLETED] unless the user explicitly ends the conversation (e.g. 'thank you, bye') or you have successfully executed the final required action (e.g. `book_reservation` was successful) and the user needs nothing else. If you are stuck or an API fails, DO NOT output [TASK COMPLETED] - instead, `respond` to the user and explain!
 6. If an action was rejected (see Rejection Feedback), pivot the plan to try a different approach.
 
 STRATEGY GUIDE (use ACTUAL tool names as they appear in tools_info):
