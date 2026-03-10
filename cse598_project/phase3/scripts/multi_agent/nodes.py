@@ -50,6 +50,7 @@ STRATEGY GUIDE (use ACTUAL tool names as they appear in tools_info):
 - User profile already in memory? → proceed to NEXT step (search flights, search reservations, etc.)
 - Need flight options? → call `search_direct_flight` first. 
 - ANTI-LOOP CIRCUIT BREAKER: If `search_direct_flight` returns `[]` or no results, DO NOT try `search_direct_flight` again! Pivot IMMEDIATELY to `search_onestop_flight`!
+- PRICING AWARENESS: Before calling `book_reservation`, check the number of passengers! Total Price = (Flight Price * Number of Passengers). Use the `calculate` tool if necessary!
 - Need reservation info but no ID? → call `get_user_details` to get reservations list from profile
 - Need to modify/cancel? → call `get_reservation_details` then the appropriate action API
 - User confirmed booking details? → call `book_reservation` with all required params
@@ -174,7 +175,8 @@ CRITICAL RULES:
 3. NEVER invent parameter values. Only use values explicitly confirmed in the Context Memory or User Instructions.
 4. Airport codes: ALWAYS use 3-letter IATA codes (JFK not 'New York', SEA not 'Seattle').
 5. POPULATE ARRAYS: If a parameter is an array (like `flights` or `passengers`), you MUST fully populate it with the detailed objects found in memory. DO NOT output empty arrays `[]` if the data exists.
-6. For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}"""
+7. PRICING AWARENESS: If booking for MULTIPLE passengers, you MUST multiply the ticket price by the number of passengers when calculating the `payment_methods` amounts! (e.g. 2 passengers * $255 = $510 total).
+8. For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}"""
 
     resp = llm.invoke([SystemMessage(content=sys_prompt)])
     content = resp.content.strip()
