@@ -47,14 +47,14 @@ After the completion of a JSON evaluation file, run this to scrape the unique `p
 
 ```bash
 python3 scripts/generate_trajectory_highlights.py \
-    --results-dir "results/phase3" \
+    --results-dir "results/phase3_v2" \
     --output "trajectory_highlights.md"
 ```
 
 ### 4. Generate Final Results Table & Plots
 To fulfill Phase 3 Requirement #2 (Results Table & Plots vs Baselines):
 ```bash
-python3 scripts/generate_final_results.py --results-dir "results/phase3"
+python3 scripts/generate_final_results.py --results-dir "results/phase3_v2"
 ```
 This will output `results/phase3_final_results_table.csv` and `results/phase3_method_vs_baseline_plot.png` for you to include in your report.
 
