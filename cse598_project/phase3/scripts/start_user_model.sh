@@ -21,11 +21,19 @@ if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
     kill -9 $(lsof -Pi :$PORT -sTCP:LISTEN -t)
 fi
 
-# With 2 GPUs: user model owns GPU 1 exclusively, agent model runs on GPU 0.
-# With 1 GPU: remove CUDA_VISIBLE_DEVICES line and both share the single GPU.
-export CUDA_VISIBLE_DEVICES=1
+# ── GPU AUTO-DETECTION ───────────────────────────────────────────────────────
+GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | wc -l)
+if [ "$GPU_COUNT" -ge 2 ]; then
+    echo "Detected $GPU_COUNT GPUs → DUAL-GPU mode: user model on GPU 1 (dedicated)"
+    export CUDA_VISIBLE_DEVICES=1
+    GPU_MEM_UTIL=0.90
+else
+    echo "Detected $GPU_COUNT GPU → SINGLE-GPU mode: user model shares GPU 0 with agent"
+    GPU_MEM_UTIL=0.50
+fi
+# ────────────────────────────────────────────────────────────────────────────
 
-echo "Starting vLLM server for User Simulator ($MODEL) on port $PORT (GPU 1)..."
+echo "Starting vLLM server for User Simulator ($MODEL) on port $PORT..."
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL \
     --served-model-name "User-Qwen3-32B" \
@@ -35,6 +43,6 @@ python3 -m vllm.entrypoints.openai.api_server \
     --max-model-len 30000 \
     --max-num-batched-tokens 30000 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.90 \
+    --gpu-memory-utilization $GPU_MEM_UTIL \
     --quantization bitsandbytes \
     --load-format bitsandbytes

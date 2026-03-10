@@ -21,6 +21,19 @@ if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
     kill -9 $(lsof -Pi :$PORT -sTCP:LISTEN -t)
 fi
 
+# ── GPU AUTO-DETECTION ───────────────────────────────────────────────────────
+GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | wc -l)
+if [ "$GPU_COUNT" -ge 2 ]; then
+    echo "Detected $GPU_COUNT GPUs → DUAL-GPU mode: agent on GPU 0 (dedicated)"
+    export CUDA_VISIBLE_DEVICES=0
+    GPU_MEM_UTIL=0.90
+else
+    echo "Detected $GPU_COUNT GPU → SINGLE-GPU mode: agent shares GPU 0 with user model"
+    # No CUDA_VISIBLE_DEVICES override — use system default (GPU 0)
+    GPU_MEM_UTIL=0.45
+fi
+# ────────────────────────────────────────────────────────────────────────────
+
 echo "Starting vLLM server for Agent ($MODEL) on port $PORT..."
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL \
@@ -30,7 +43,7 @@ python3 -m vllm.entrypoints.openai.api_server \
     --max-model-len 30000 \
     --max-num-batched-tokens 30000 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.45 \
+    --gpu-memory-utilization $GPU_MEM_UTIL \
     --quantization bitsandbytes \
     --load-format bitsandbytes \
     --enable-auto-tool-choice \
