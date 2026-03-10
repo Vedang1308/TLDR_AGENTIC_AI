@@ -62,9 +62,9 @@ def get_gpu_config(gpu_count: int) -> dict:
         }
     else:
         return {
-            "mode": "SINGLE-GPU (sequential)",
+            "mode": "SINGLE-GPU (sequential, unchanged)",
             "max_workers": 1,
-            "max_concurrency": 4,
+            "max_concurrency": 1,
             "user_gpu_device": 0,
         }
 
