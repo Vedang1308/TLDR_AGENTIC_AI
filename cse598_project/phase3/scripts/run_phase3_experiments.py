@@ -38,8 +38,8 @@ def get_existing_completed_tasks(output_path):
             pass # Ignore corrupt files
     return completed_ids
 
-def run_experiment(domain, model, strategy, user_model, user_strategy, trial, start_index=0, results_dir="results/phase3"):
-    print(f"Running Experiment: Domain={domain}, Model={model}, Strategy={strategy}, Trial={trial}, ResumeFrom={start_index}")
+def run_experiment(domain, model, strategy, user_model, user_strategy, trial, start_index=0, max_tasks=None, max_concurrency=1, results_dir="results/phase3"):
+    print(f"Running Experiment: Domain={domain}, Model={model}, Strategy={strategy}, Trial={trial}, ResumeFrom={start_index}, MaxTasks={max_tasks}, Concurrency={max_concurrency}")
     
     # Construct output path
     model_safe_name = model.replace("/", "_")
@@ -81,15 +81,20 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
     
     # Identify missing task IDs to build the queue
     needed_ids = []
+    
     for i in range(total_tasks):
+        # Apply the max_tasks limit only if it was explicitly provided
+        if max_tasks is not None and len(needed_ids) >= max_tasks:
+            break
+            
         if i >= start_index and str(i) not in completed_ids and i not in completed_ids: # Also check string versions
             needed_ids.append(str(i))
             
     if not needed_ids:
-        print(f"All {total_tasks} tasks completed! Skipping.")
+        print(f"All requested tasks completed! Skipping.")
         return
 
-    print(f"Resuming/Retrying {len(needed_ids)} tasks: {needed_ids[:5]}...")
+    print(f"Resuming/Retrying {len(needed_ids)} tasks: {needed_ids[:min(5, len(needed_ids))]}...")
 
     
     env = os.environ.copy()
@@ -105,7 +110,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
         "--user-model", user_model,
         "--user-model-provider", "openai",
         "--user-strategy", user_strategy,
-        "--max-concurrency", "1", # Sequential for local
+        "--max-concurrency", str(max_concurrency),
         "--seed", str(trial),
         "--log-dir", output_path,
         "--task-ids"
@@ -124,6 +129,8 @@ def main():
     parser.add_argument("--model", type=str, help="Specific model to run (e.g., Qwen/Qwen3-4B-Instruct)")
     parser.add_argument("--user-model", type=str, default="User-Qwen3-32B", help="Fixed user model")
     parser.add_argument("--start-index", type=int, default=0, help="Task index to start execution from")
+    parser.add_argument("--max-tasks", type=int, default=None, help="Maximum number of new tasks to run (useful for testing)")
+    parser.add_argument("--max-concurrency", type=int, default=1, help="Number of tasks to run concurrently (WARNING: high memory footprint if >1)")
     parser.add_argument("--trials", type=int, default=5)
     
     args = parser.parse_args()
@@ -142,7 +149,9 @@ def main():
         for model in models:
             for strategy in strategies:
                 for trial in range(args.trials):
-                   run_experiment(domain, model, strategy, args.user_model, "llm", trial, start_index=args.start_index)
+                   run_experiment(domain, model, strategy, args.user_model, "llm", trial, 
+                                  start_index=args.start_index, max_tasks=args.max_tasks, 
+                                  max_concurrency=args.max_concurrency)
 
 if __name__ == "__main__":
     main()
