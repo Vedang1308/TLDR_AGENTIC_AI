@@ -138,6 +138,7 @@ def agent_factory(
     # We need to set env vars so the nodes know which base URL and model to use
     os.environ["AGENT_MODEL_NAME"] = config.model
     os.environ["AGENT_API_BASE"] = "http://localhost:8000/v1"
+    os.environ["CURRENT_DOMAIN"] = config.env
 
     # User Simulator is hardcoded to 8001 in our architecture
     os.environ["USER_MODEL_NAME"] = config.user_model
