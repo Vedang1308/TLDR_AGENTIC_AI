@@ -208,7 +208,12 @@ CRITICAL RULES:
             
     print(f"         [Executor JSON Output] {json.dumps(drafted_tool)}")
         
-    return {"drafted_tool_call": drafted_tool, "node_logs": [{"node": "executor", "raw_output": content}]}
+    return {
+        "drafted_tool_call": drafted_tool, 
+        "node_logs": [{"node": "executor", "raw_output": content}],
+        "rejection_feedback": None,
+        "rejection_source": None
+    }
 
 def syntax_monitor_node(state: PevState) -> Dict:
     """
