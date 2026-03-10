@@ -10,25 +10,6 @@ from tau_bench.types import SolveResult, Action, RESPOND_ACTION_NAME
 from .state import PevState
 from .graph import create_pev_graph, create_reflection_graph
 
-
-def load_behavioral_guidelines() -> str:
-    """
-    Load behavioral guidelines from the external markdown file at runtime.
-    File path: scripts/behavioral_guidelines.md (sibling to this file's parent dir).
-    This function is called once per task — guidelines can be edited between runs
-    without any code changes. New guidelines: just append [G##] to the .md file.
-    """
-    guidelines_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "behavioral_guidelines.md"
-    )
-    try:
-        with open(guidelines_path, "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        print(f"[WARNING] behavioral_guidelines.md not found at {guidelines_path}. Proceeding without guidelines seed.")
-        return ""
-
 class MultiAgentStrategy(Agent):
     """
     Replaces the monolithic single-LLM completion loop with our
@@ -80,21 +61,6 @@ class MultiAgentStrategy(Agent):
         
         # Inject tool schemas
         state.tools_info = self.tools_info
-
-        # ── BEHAVIORAL GUIDELINES SEED ─────────────────────────────────────────
-        # Load the domain-agnostic behavioral guidelines from the external file
-        # (scripts/behavioral_guidelines.md) and inject as the FIRST memory entry.
-        # The file is read fresh each task — update/add guidelines by editing the
-        # .md file without touching any Python code.
-        # The error_reflection node handles novel failures not covered by guidelines.
-        guidelines_text = load_behavioral_guidelines()
-        if guidelines_text:
-            state.memory.append({
-                "type": "guidelines_seed",
-                "action_taken": "_system_guidelines",
-                "arguments_used": {},
-                "api_observation": guidelines_text
-            })
 
         # ── PROACTIVE CONTEXT SEEDING ──────────────────────────────────────────
         # A real customer service agent always pulls up the caller's account
