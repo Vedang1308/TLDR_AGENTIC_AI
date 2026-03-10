@@ -15,7 +15,7 @@ import json
 import glob
 from tau_bench.envs import get_env
 
-def get_existing_completed_tasks(output_path):
+def get_existing_completed_tasks(output_path, retry_failed=False):
     completed_ids = set()
     # Check all json files in the directory
     search_pattern = os.path.join(output_path, "*.json")
@@ -33,12 +33,18 @@ def get_existing_completed_tasks(output_path):
                             info = item.get("info", {})
                             if info and "error" in info:
                                 continue # Treat as failed/missing
+                            # If --retry-failed is set, skip tasks with reward=0.0
+                            if retry_failed:
+                                reward = item.get("reward_info", {}).get("reward", None)
+                                if reward is not None and reward == 0.0:
+                                    print(f"  [retry-failed] Re-queuing task_id={item['task_id']} (reward=0.0)")
+                                    continue  # Don't mark as completed — retry it
                             completed_ids.add(item["task_id"])
         except Exception:
             pass # Ignore corrupt files
     return completed_ids
 
-def run_experiment(domain, model, strategy, user_model, user_strategy, trial, start_index=0, results_dir="results/phase3"):
+def run_experiment(domain, model, strategy, user_model, user_strategy, trial, start_index=0, results_dir="results/phase3", args=None):
     print(f"Running Experiment: Domain={domain}, Model={model}, Strategy={strategy}, Trial={trial}, ResumeFrom={start_index}")
     
     # Construct output path
@@ -67,7 +73,15 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
     os.environ["LITELLM_API_BASE"] = f"http://localhost:{port_map.get(model, 8000)}/v1"
     
     # SMART RESUME LOGIC
-    completed_ids = get_existing_completed_tasks(output_path)
+    if args.clean:
+        import shutil
+        if os.path.exists(output_path):
+            shutil.rmtree(output_path)
+            print(f"[--clean] Wiped result directory: {output_path}")
+        os.makedirs(output_path, exist_ok=True)
+        completed_ids = set()
+    else:
+        completed_ids = get_existing_completed_tasks(output_path, retry_failed=args.retry_failed)
     
     # Get total tasks count (lightweight init)
     # Note: We assume 'test' split as per default
@@ -125,6 +139,10 @@ def main():
     parser.add_argument("--user-model", type=str, default="User-Qwen3-32B", help="Fixed user model")
     parser.add_argument("--start-index", type=int, default=0, help="Task index to start execution from")
     parser.add_argument("--trials", type=int, default=5)
+    parser.add_argument("--retry-failed", action="store_true",
+                        help="Re-run tasks that previously scored reward=0.0 instead of skipping them.")
+    parser.add_argument("--clean", action="store_true",
+                        help="Wipe the result directory for this run and start completely from scratch.")
     
     args = parser.parse_args()
     
@@ -142,7 +160,7 @@ def main():
         for model in models:
             for strategy in strategies:
                 for trial in range(args.trials):
-                   run_experiment(domain, model, strategy, args.user_model, "llm", trial, start_index=args.start_index)
+                   run_experiment(domain, model, strategy, args.user_model, "llm", trial, start_index=args.start_index, results_dir="results/phase3", args=args)
 
 if __name__ == "__main__":
     main()
