@@ -22,7 +22,7 @@ def get_llm(context="agent"):
         api_key="EMPTY",
         model=model_name,
         temperature=0.0,
-        max_tokens=3000,  # Massively increased: Qwen3 evaluates list returns (like flights) extremely thoroughly in <think> tags. 900 was cutting it off.
+        max_tokens=4096,  # Massively increased: Qwen3 evaluates list returns (like flights) extremely thoroughly in <think> tags. 900 was cutting it off.
     )
 
 def planner_node(state: PevState) -> Dict:
@@ -110,9 +110,12 @@ End your internal <think> reasoning and output your final action plan starting e
         if turn['role'] != 'system': # don't duplicate the wiki if it's in the last 3
             user_msgs.append(HumanMessage(content=f"{turn['role']}: {turn['content']}"))
         
-    response = llm.invoke([sys_msg] + user_msgs)
-    
-    raw_content = response.content.strip()
+    try:
+        response = llm.invoke([sys_msg] + user_msgs)
+        raw_content = response.content.strip()
+    except Exception as e:
+        print(f"      ↳ [Planner] Model generation error (e.g., max tokens reached): {e}")
+        raw_content = "Ask the user how you can help them further based on the current context."
     print(f"      ↳ [Planner RAW Output] {raw_content[:500]}..." if len(raw_content) > 500 else f"      ↳ [Planner RAW Output] {raw_content}")
     
     import re
@@ -179,8 +182,12 @@ CRITICAL RULES:
 7. PRICING AWARENESS: If booking for MULTIPLE passengers, you MUST multiply the ticket price by the number of passengers when calculating the `payment_methods` amounts! (e.g. 2 passengers * $255 = $510 total).
 8. For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}"""
 
-    resp = llm.invoke([SystemMessage(content=sys_prompt)])
-    content = resp.content.strip()
+    try:
+        resp = llm.invoke([SystemMessage(content=sys_prompt)])
+        content = resp.content.strip()
+    except Exception as e:
+        print(f"      ↳ [Executor] Model generation error (e.g., max tokens reached): {e}")
+        content = '{"name": "respond", "arguments": {"content": "I encountered an error planning my next step. Could you please hold on a moment?"}}'
     
     import re
     # Robust think-tag stripping
