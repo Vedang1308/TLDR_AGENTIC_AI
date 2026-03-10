@@ -15,7 +15,7 @@ import json
 import glob
 from tau_bench.envs import get_env
 
-def get_existing_completed_tasks(output_path, retry_failed=False):
+def get_existing_completed_tasks(output_path):
     completed_ids = set()
     # Check all json files in the directory
     search_pattern = os.path.join(output_path, "*.json")
@@ -29,16 +29,12 @@ def get_existing_completed_tasks(output_path, retry_failed=False):
                 if isinstance(data, list):
                     for item in data:
                         if isinstance(item, dict) and "task_id" in item:
-                            # Check if it was a crash/error
+                            # Only retry tasks that crashed/errored — NOT reward=0.0 tasks.
+                            # reward=0.0 means the LLM ran but gave wrong actions. That is a
+                            # valid attempt and counts as a completed task (matching Phase 1 behavior).
                             info = item.get("info", {})
                             if info and "error" in info:
-                                continue # Treat as failed/missing
-                            # If --retry-failed is set, skip tasks with reward=0.0
-                            if retry_failed:
-                                reward = item.get("reward_info", {}).get("reward", None)
-                                if reward is not None and reward == 0.0:
-                                    print(f"  [retry-failed] Re-queuing task_id={item['task_id']} (reward=0.0)")
-                                    continue  # Don't mark as completed — retry it
+                                continue # Crashed/error → retry it
                             completed_ids.add(item["task_id"])
         except Exception:
             pass # Ignore corrupt files
@@ -81,7 +77,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
         os.makedirs(output_path, exist_ok=True)
         completed_ids = set()
     else:
-        completed_ids = get_existing_completed_tasks(output_path, retry_failed=args.retry_failed)
+        completed_ids = get_existing_completed_tasks(output_path)
     
     # Get total tasks count (lightweight init)
     # Note: We assume 'test' split as per default
@@ -139,10 +135,8 @@ def main():
     parser.add_argument("--user-model", type=str, default="User-Qwen3-32B", help="Fixed user model")
     parser.add_argument("--start-index", type=int, default=0, help="Task index to start execution from")
     parser.add_argument("--trials", type=int, default=5)
-    parser.add_argument("--retry-failed", action="store_true",
-                        help="Re-run tasks that previously scored reward=0.0 instead of skipping them.")
     parser.add_argument("--clean", action="store_true",
-                        help="Wipe the result directory for this run and start completely from scratch.")
+                        help="Wipe the result directory and start completely from scratch.")
     
     args = parser.parse_args()
     
