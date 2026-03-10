@@ -11,6 +11,78 @@ from .state import PevState
 # From run_phase1_experiments.py we know we passed `--model-provider openai` 
 # with base_url injected, but here we can instantiate directly.
 
+# ============================================================
+# BEHAVIORAL GUIDELINES — External memory component.
+# Maintained here as a single source of truth, separate from
+# the system prompt. Injected into every Planner call via the
+# {guidelines} slot so they can be updated without touching
+# the Planner logic. Domain-agnostic: every rule describes
+# WHAT to do, not which specific tool to call.
+# ============================================================
+BEHAVIORAL_GUIDELINES = """
+[G1] CONFIRMATION GATE: Before invoking ANY tool whose name implies a permanent change
+(keywords in tool schema: exchange, cancel, modify, return, book, update, delete),
+summarize ALL action details and ask the user to confirm with a bare "yes".
+DO NOT invoke such a tool unless the user's VERY LAST MESSAGE was literally "yes"
+or "Yes" — and nothing else. "ok", "sure", "please do it" are NOT sufficient.
+This rule applies ONLY to JSON tool calls, not to conversational respond messages.
+
+[G2] ID AND CODE LOOKUP: Never pass guessed or invented IDs/codes.
+Before using any parameter expecting a specific ID or code (item ID, flight number,
+airport IATA code, reservation ID, product SKU), retrieve it from the API or wiki first.
+Never pass city names (e.g. "New York") into airport code fields — use IATA codes.
+CRITICAL: Tool schema descriptions often include examples like 'sara_doe_496'.
+These are PLACEHOLDER EXAMPLES ONLY — never use them as real values.
+Always wait for the user to provide their actual ID before calling any lookup tool.
+
+[G3] USER DATA SELF-DISCOVERY: Never ask the user for data retrievable from their profile.
+After authentication, call the user details tool to retrieve their full profile
+(order IDs, reservation IDs, payment methods, passenger DOBs, etc.).
+Then call order/reservation detail tools on each ID to locate the relevant item.
+
+[G4] PAYMENT MATH: Before asking for "yes", calculate the EXACT payment total.
+Sum all costs: unit prices × quantity, baggage fees ($50/extra bag), insurance ($30/passenger),
+any price difference adjustments. Split across payment methods exactly as the user specified.
+Amounts in payment_methods MUST sum exactly to total_cost. Include this breakdown
+in your confirmation message so the user can verify before confirming.
+
+[G5] AVAILABLE OPTIONS ONLY: When counting product variants, flight options, or any set of
+results for a user, count ONLY entries explicitly marked as available/in-stock/bookable.
+Never include unavailable, sold-out, or delayed entries in the count or recommendation.
+
+[G6] SEARCH RESULT FILTERING: After any search or list tool, read ALL returned entries.
+FIRST apply hard constraints (departure time, date, destination, cabin class, availability).
+THEN among those passing all constraints, pick the one matching the user's stated preference
+(e.g. lowest price, fewest stops, fastest). Never pick the globally cheapest or fastest option
+if it violates a hard constraint the user stated.
+
+[G7] STATUS ELIGIBILITY GATE: Before calling cancel, modify, return, or exchange tools,
+verify the item/order/reservation current status from memory.
+Actions are status-restricted:
+  - Returns/exchanges require delivered status.
+  - Cancellations/modifications require pending status (retail) or policy eligibility (airline).
+  - Airline cancellation eligibility: within 24h of booking OR airline cancelled the flight
+    OR the reservation is business class OR travel insurance was purchased.
+If status does not permit the action, inform the user clearly — do NOT attempt the tool call.
+
+[G8] ONE-SHOT WRITE OPERATIONS: Some tools (modify items, exchange items, update flights)
+can only be called ONCE per record and permanently lock it afterward.
+Before calling such a tool, collect ALL changes the user wants in one list.
+Ask explicitly: "Have you listed ALL the changes you want? This action cannot be undone."
+Then submit a single tool call with the complete list.
+
+[G9] REFUND METHOD VALIDATION: Refunds must go to a payment method the user already owns.
+For retail: refund to the original payment method or an existing gift card in the user profile.
+For airline: refund goes back to the original payment methods.
+Never refund to a method not in the user's profile and never invent a payment ID.
+
+[G10] PASSENGER IDENTITY: When booking a flight for the user themselves, the passenger must
+be the account holder — use their first name, last name, and DOB from their own user profile.
+Only add additional passengers or saved contacts if the user explicitly names them.
+Never automatically default to a 'saved passenger' in the profile.
+"""
+
+
 def get_llm(context="agent"):
     # Read custom env vars passed down from phase3 run script
     # We'll set these dynamically when orchestrating.
@@ -40,33 +112,28 @@ Your job is to read the user conversation, the environment's BUSINESS RULES, and
 == ENVIRONMENT BUSINESS RULES (The Wiki) ==
 {wiki}
 
-CRITICAL RULES:
-1. READ MEMORY FIRST. Before planning an action, check the MEMORY KERNEL below. If that action already appears in memory, DO NOT plan it again - proceed to the NEXT logical step.
-2. Be API-FIRST. If the user provided necessary authentication details (like ID, email, or zip), look them up via tool immediately.
+META-RULES (Always apply these):
+1. READ MEMORY FIRST. Before planning, check the MEMORY KERNEL. If an action already appears in memory, DO NOT plan it again - move to the NEXT logical step.
+2. Be API-FIRST. If the user provided authentication details (ID, email, zip), call the lookup tool immediately. Do NOT ask for what you can retrieve.
 3. DO NOT ask the user for information retrievable via API (profile details, reservation info, flight options).
-4. NEVER transfer to a human agent. In this environment, transferring to a human immediately fails the task (0.0 reward). You MUST solve the problem yourself using available tools, no matter how complex.
-5. EXPLICIT TERMINATION: NEVER output [TASK COMPLETED] unless the user explicitly ends the conversation (e.g. 'thank you, bye') or you have successfully executed the final required action (e.g. `book_reservation` or `exchange_items`) and the user needs nothing else. If you are stuck or an API fails, DO NOT output [TASK COMPLETED] - instead, `respond` to the user and explain!
-6. If an action was rejected (see Rejection Feedback), pivot the plan to try a different approach.
-7. ALREADY LOOKED UP?: Scan the MEMORY KERNEL thoroughly! If an API was ALREADY called successfully, DO NOT CALL IT AGAIN. Proceed to the next logical step.
-8. CONFIRMATION GATE: Before invoking ANY tool whose name implies a permanent change (keywords in schema: exchange, cancel, modify, return, book, update, delete), summarize ALL action details and ask the user to confirm with a bare "yes". DO NOT invoke such a tool unless the user's VERY LAST MESSAGE was literally "yes" or "Yes" and nothing else. "ok", "sure", "please do it" are NOT sufficient — ask again for a bare "yes". This applies ONLY to JSON tool calls, not to conversational text.
-9. ID AND CODE LOOKUP: Before using any parameter expecting an ID or code (item ID, flight number, airport IATA code, reservation ID, product SKU), retrieve it from the API or wiki first. NEVER pass city names into airport fields — use IATA codes. NEVER guess or invent IDs. CRITICAL: Tool schema descriptions contain example IDs like 'sara_doe_496' — these are EXAMPLES ONLY, NEVER use them as actual values. Always wait for the user to give their real ID before calling any user-lookup tool.
-10. USER DATA SELF-DISCOVERY: NEVER ask the user for data available in their profile (order IDs, reservation IDs, payment methods, passenger DOBs). After authentication, call the user details tool to retrieve their full profile, then call order/reservation detail tools on each ID to locate the relevant item.
-11. PAYMENT MATH: Before asking for "yes", calculate the EXACT payment total: sum all costs including unit prices, baggage fees ($50 each extra bag), insurance ($30/passenger), price difference adjustments. Split across payment methods exactly as user specified. Amounts in payment_methods MUST sum exactly to total. Include this breakdown in your confirmation message.
-12. AVAILABLE OPTIONS ONLY: When counting product variants or options for a user, count ONLY entries explicitly marked as available/in-stock. Never include unavailable entries in the count or recommendations.
-13. READ ALL SEARCH RESULTS: After any search or list tool, read ALL returned entries before picking the best match. FIRST apply hard filters (departure time constraints, date, destination, cabin class). THEN among the filtered results, pick the one matching the user's preference (e.g. lowest price, fewest stops). Do NOT pick the globally cheapest option if it violates a hard constraint like departure time.
-14. CHECK STATUS BEFORE ACTING: Before calling cancel, modify, return, or exchange tools, verify the current status from memory. Business rules restrict actions by status: returns/exchanges require delivered status; cancellations require pending status; airline cancellations require policy eligibility (within 24h of booking, or airline cancelled, or business class/insurance). If ineligible, tell the user why — do NOT attempt the tool call.
-15. ONE-SHOT WRITE OPERATIONS: Tools that modify or exchange items can only be called ONCE per order and permanently lock the record. Collect ALL items the user wants to change into one list FIRST. Ask: "Have you told me all the items you want to change? This action cannot be repeated." Then proceed with a single tool call containing all changes.
-16. REFUND METHOD VALIDATION: When processing a return, cancellation, or exchange, the refund must go to a payment method the user owns. For retail returns: refund must go to the original payment method or an existing gift card in the user's profile. For airline: refund goes to original payment methods. NEVER refund to a method not in the user's profile and never invent a payment ID.
-17. PASSENGER IDENTITY: When booking a flight for the user themselves, the passenger must be the account holder using the first name, last name, and date of birth from their own user profile. Only add additional passengers or saved contacts if the user explicitly asks to include someone else by name. NEVER default to a 'saved passenger' in the profile unless the user specifically requests it.
+4. NEVER transfer to a human agent. Solve the task yourself using available tools no matter what.
+5. EXPLICIT TERMINATION: NEVER output [TASK COMPLETED] unless the user explicitly ends conversation or you have successfully executed the final required action. If stuck, use `respond` to explain.
+6. If an action was rejected (see Rejection Feedback), pivot to a different approach.
+7. ALREADY LOOKED UP? If an API was already called successfully in the MEMORY KERNEL, DO NOT CALL IT AGAIN. Proceed to the next logical step.
 
-STRATEGY GUIDE: Read the BUSINESS RULES above carefully. Determine the exact sequence of tools required to fulfill the user's request.
+== BEHAVIORAL GUIDELINES (Scan these BEFORE planning each action) ==
+These are domain-agnostic behavioral rules derived from observed failure patterns.
+Before writing your plan, identify which guidelines below apply to the current situation
+and explicitly state which ones constrain your next action.
+
+{guidelines}
 
 {{strategy_specific_instructions}}
 
 LATEST API RESULT (Did your last action succeed or fail? Read this!):
 {latest_api}
 
-MEMORY KERNEL (Past actions and data):
+MEMORY KERNEL (Past actions and data — read ALL of this before planning):
 {memory_str}
 
 REJECTION FEEDBACK:
@@ -103,7 +170,8 @@ End your internal <think> reasoning and output your final action plan starting e
         memory_str=mem_str, 
         feedback=feed_str,
         strategy_specific_instructions=strategy_instructions,
-        wiki=state.wiki
+        wiki=state.wiki,
+        guidelines=BEHAVIORAL_GUIDELINES
     ))
     
     # Format user convo
