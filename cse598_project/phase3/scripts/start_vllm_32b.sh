@@ -21,7 +21,11 @@ if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
     kill -9 $(lsof -Pi :$PORT -sTCP:LISTEN -t)
 fi
 
-echo "Starting vLLM server for Agent ($MODEL) on port $PORT..."
+# With 2 GPUs: agent owns GPU 0 exclusively, user model runs on GPU 1.
+# With 1 GPU: remove CUDA_VISIBLE_DEVICES line and both share the single GPU.
+export CUDA_VISIBLE_DEVICES=0
+
+echo "Starting vLLM server for Agent ($MODEL) on port $PORT (GPU 0)..."
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL \
     --trust-remote-code \
@@ -30,7 +34,7 @@ python3 -m vllm.entrypoints.openai.api_server \
     --max-model-len 30000 \
     --max-num-batched-tokens 30000 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.45 \
+    --gpu-memory-utilization 0.90 \
     --quantization bitsandbytes \
     --load-format bitsandbytes \
     --enable-auto-tool-choice \
