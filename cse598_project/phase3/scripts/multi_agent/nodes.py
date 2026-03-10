@@ -46,8 +46,9 @@ CRITICAL RULES:
 6. If an action was rejected (see Rejection Feedback), pivot the plan to try a different approach.
 
 STRATEGY GUIDE (use ACTUAL tool names as they appear in tools_info):
-- User mentioned user_id AND no user lookup in memory yet? → call `get_user_details` with that user_id
-- User profile already in memory? → proceed to NEXT step (search flights, search reservations, etc.)
+- USER ID LOOKUP: If you need their user profile (for payment, bags, names) and you DO NOT have their user_id, FIRST ask them for it. 
+- USER ID LOOKUP (Step 2): Once they provide the `user_id`, immediately call `get_user_details`. 
+- ALREADY LOOKED UP?: Scan the MEMORY KERNEL thoroughly! If `get_user_details` was ALREADY called successfully for this user_id, DO NOT ASK FOR IT AGAIN AND DO NOT CALL THE TOOL AGAIN. Proceed immediately to the NEXT step (Search flights, check reservations, etc).
 - Need flight options? → call `search_direct_flight` first. 
 - ANTI-LOOP CIRCUIT BREAKER: If `search_direct_flight` returns `[]` or no results, DO NOT try `search_direct_flight` again! Pivot IMMEDIATELY to `search_onestop_flight`!
 - PRICING AWARENESS: Before calling `book_reservation`, check the number of passengers! Total Price = (Flight Price * Number of Passengers). Use the `calculate` tool if necessary!
