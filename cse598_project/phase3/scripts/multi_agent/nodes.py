@@ -142,8 +142,6 @@ End your internal <think> reasoning and output your final action plan starting e
         
     return {
         "current_plan": plan, 
-        "rejection_feedback": None, # Clear it once incorporated into plan
-        "rejection_source": None,
         "node_logs": [{"node": "planner", "plan": plan}]
     }
 
@@ -165,6 +163,9 @@ def executor_node(state: PevState) -> Dict:
 == AVAILABLE TOOL SCHEMAS ==
 {tool_schemas}
 Additional tools allowed without schema: "respond", "transfer_to_human_agents"
+
+== PREVIOUS REJECTION FEEDBACK ==
+{f"The Validator or Syntax Monitor rejected your last attempt with this error: {state.rejection_feedback}" if state.rejection_feedback else "None. This is a fresh plan."}
 
 == CONTEXT MEMORY (Use this to fill in exact parameter values) ==
 {memory_dump}
@@ -221,12 +222,12 @@ def syntax_monitor_node(state: PevState) -> Dict:
     if not tool_draft:
         reason = "Executor failed to output valid JSON. Try again."
         print(f"         [Syntax Monitor REJECTED] {reason}")
-        return {"rejection_feedback": reason, "rejection_source": "syntax_monitor"}
+        return {"rejection_feedback": reason, "rejection_source": "syntax_monitor", "rejection_count": state.rejection_count + 1}
         
     if "name" not in tool_draft or "arguments" not in tool_draft:
         reason = "JSON missing 'name' or 'arguments' keys."
         print(f"         [Syntax Monitor REJECTED] {reason} | Draft: {tool_draft}")
-        return {"rejection_feedback": reason, "rejection_source": "syntax_monitor"}
+        return {"rejection_feedback": reason, "rejection_source": "syntax_monitor", "rejection_count": state.rejection_count + 1}
     
     tool_name = tool_draft["name"].lower()
     
@@ -238,7 +239,8 @@ def syntax_monitor_node(state: PevState) -> Dict:
         print(f"         [Syntax Monitor REJECTED] {reason}")
         return {
             "rejection_feedback": reason,
-            "rejection_source": "syntax_monitor"
+            "rejection_source": "syntax_monitor",
+            "rejection_count": state.rejection_count + 1
         }
     
     # --- ToolGate Schema Validation ---
@@ -258,7 +260,8 @@ def syntax_monitor_node(state: PevState) -> Dict:
             print(f"         [Syntax Monitor REJECTED] {reason}")
             return {
                 "rejection_feedback": reason,
-                "rejection_source": "syntax_monitor"
+                "rejection_source": "syntax_monitor",
+                "rejection_count": state.rejection_count + 1
             }
         # Check required parameters are present (only if schema has parameters defined)
         params_schema = get_tool_params(matching_schema)
@@ -281,7 +284,8 @@ def syntax_monitor_node(state: PevState) -> Dict:
                 print(f"         [Syntax Monitor REJECTED] {reason}")
                 return {
                     "rejection_feedback": reason,
-                    "rejection_source": "syntax_monitor"
+                    "rejection_source": "syntax_monitor",
+                    "rejection_count": state.rejection_count + 1
                 }
     # (PDF Section 4.6: Repetitive Stuck Loops)
     recent_failures = [m for m in state.memory[-5:] if m.get('type') == 'tool_error']
@@ -289,7 +293,7 @@ def syntax_monitor_node(state: PevState) -> Dict:
         if rf.get('tool_call') == tool_draft:
             reason = "You already tried this exact action and it failed. Formulate a NEW strategy."
             print(f"         [Syntax Monitor REJECTED] {reason}")
-            return {"rejection_feedback": reason, "rejection_source": "syntax_monitor"}
+            return {"rejection_feedback": reason, "rejection_source": "syntax_monitor", "rejection_count": state.rejection_count + 1}
 
     # Passed all checks
     return {"node_logs": [{"node": "syntax_monitor", "status": "passed"}]}
@@ -350,7 +354,7 @@ MEMORY (recent observations):
     
     if decision.startswith("REJECT"):
         print(f"         [Validator REJECTED] {decision}")
-        return {"rejection_feedback": decision, "rejection_source": "validator"}
+        return {"rejection_feedback": decision, "rejection_source": "validator", "rejection_count": state.rejection_count + 1}
         
     # If approved, the tool call is returned to multi_agent_strategy.py to execute via env.step()
     return {"node_logs": [{"node": "validator", "status": "approved"}]}

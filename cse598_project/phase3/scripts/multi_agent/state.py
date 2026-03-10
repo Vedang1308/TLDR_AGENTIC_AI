@@ -32,6 +32,7 @@ class PevState(BaseModel):
     # Feedback from Monitor or Validator (if rejected)
     rejection_feedback: Optional[str] = Field(default=None)
     rejection_source: Optional[str] = Field(default=None)
+    rejection_count: int = Field(default=0)
     
     # Memory Kernel: observations and API returns
     memory: Annotated[List[Dict[str, Any]], append_to_list] = Field(default_factory=list)

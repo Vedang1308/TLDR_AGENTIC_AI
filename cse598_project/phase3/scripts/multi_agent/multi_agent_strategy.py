@@ -151,6 +151,7 @@ class MultiAgentStrategy(Agent):
             # jump from Planner -> Rejected -> Planner in an infinite loop!
             state.rejection_feedback = None
             state.rejection_source = None
+            state.rejection_count = 0
             
             if env_response.done:
                 break
