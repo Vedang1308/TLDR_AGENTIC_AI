@@ -13,6 +13,11 @@ def append_to_list(existing: List, new: Any) -> List:
 class PevState(BaseModel):
     """
     The shared state passed around the nodes in LangGraph.
+    
+    Architecture Upgrade: Added failure_log and consecutive_error_count for
+    domain-agnostic self-correction. The system can now track which approaches
+    have already been tried and failed, and trigger deeper reflection when
+    the environment repeatedly rejects actions.
     """
     # History with the user
     user_conversation: Annotated[List[Dict[str, str]], append_to_list] = Field(default_factory=list)
@@ -41,4 +46,19 @@ class PevState(BaseModel):
 
     # API schemas injected at strategy startup
     tools_info: List[Dict[str, Any]] = Field(default_factory=list)
+    
+    # --- SELF-CORRECTION FIELDS ---
+    
+    # Tracks ALL failed strategies as {"action": ..., "args": ..., "error": ..., "reflection": ...}
+    # This is the agent's "experience log" — never reset, always growing, letting it learn
+    # within a single conversation what approaches do NOT work so it can try something different.
+    failure_log: Annotated[List[Dict[str, Any]], append_to_list] = Field(default_factory=list)
+    
+    # Counts how many consecutive API errors happened (reset on success).
+    # When this hits >= 2, triggers the Error Reflection node for deeper analysis.
+    consecutive_error_count: int = Field(default=0)
+    
+    # The output of the Error Reflection node — a synthesized diagnosis and corrective plan
+    # that the Planner reads as high-priority context on its next invocation.
+    error_reflection: Optional[str] = Field(default=None)
 

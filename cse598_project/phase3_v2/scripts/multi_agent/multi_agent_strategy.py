@@ -1,4 +1,5 @@
 import os
+import re
 import json
 from typing import List, Optional, Dict, Any
 
@@ -7,7 +8,7 @@ from tau_bench.envs.base import Env
 from tau_bench.types import SolveResult, Action, RESPOND_ACTION_NAME
 
 from .state import PevState
-from .graph import create_pev_graph
+from .graph import create_pev_graph, create_reflection_graph
 
 class MultiAgentStrategy(Agent):
     """
@@ -28,8 +29,10 @@ class MultiAgentStrategy(Agent):
         self.provider = provider
         self.temperature = temperature
         
-        # Compile our Multi-Agent LangGraph
+        # Compile our Multi-Agent LangGraph (main PEVAL loop)
         self.workflow = create_pev_graph()
+        # Compile the Error Reflection graph (triggered on consecutive API errors)
+        self.reflection_workflow = create_reflection_graph()
 
     def solve(
         self, env: Env, task_index: Optional[int] = None, max_num_steps: int = 30
@@ -59,7 +62,80 @@ class MultiAgentStrategy(Agent):
         # Inject tool schemas
         state.tools_info = self.tools_info
 
-        messages_log = state.user_conversation.copy()
+        # ── PROACTIVE CONTEXT SEEDING ──────────────────────────────────────────
+        # A real customer service agent always pulls up the caller's account
+        # before doing anything else. We replicate this:
+        #   1. Scan the initial observation for a user_id (domain-agnostic pattern)
+        #   2. Find the profile lookup tool dynamically by inspecting tool names
+        #   3. Call it automatically and seed the memory kernel
+        #
+        # This is NOT hardcoded domain logic — it's a universal initialization
+        # heuristic: "if we know who the user is, look them up before planning."
+        # The Planner then has real account data (balances, reservations, DOBs)
+        # instead of reasoning in a data vacuum and concluding "I can't do this."
+        
+        user_id_match = re.search(
+            r'\b([a-z]+_[a-z]+_\d{3,6})\b', obs, re.IGNORECASE
+        )
+        if user_id_match:
+            detected_user_id = user_id_match.group(1).lower()
+            
+            # Find the user-profile lookup tool dynamically.
+            # We look for a tool whose name contains BOTH "user" and "detail"
+            # — this matches get_user_details in airline/retail without hardcoding.
+            lookup_tool = next(
+                (t for t in self.tools_info
+                 if isinstance(t, dict)
+                 and 'function' in t
+                 and 'user' in t['function'].get('name', '').lower()
+                 and 'detail' in t['function'].get('name', '').lower()),
+                None
+            )
+            
+            if lookup_tool:
+                tool_name = lookup_tool['function']['name']
+                try:
+                    seed_action = Action(
+                        name=tool_name,
+                        kwargs={"user_id": detected_user_id}
+                    )
+                    seed_response = env.step(seed_action)
+                    
+                    # Only seed if the lookup succeeded (no error in response)
+                    seed_obs = seed_response.observation
+                    if not any(k in seed_obs.lower() for k in ["error", "not found"]):
+                        state.memory.append({
+                            "type": "tool_result",
+                            "action_taken": tool_name,
+                            "arguments_used": {"user_id": detected_user_id},
+                            "api_observation": seed_obs
+                        })
+                        # Also add to the messages log so the full tool cycle is tracked
+                        messages_log_seed = [
+                            {"role": "assistant", "tool_calls": [{
+                                "id": "call_seed_0",
+                                "type": "function",
+                                "function": {"name": tool_name, "arguments": json.dumps({"user_id": detected_user_id})}
+                            }]},
+                            {"role": "tool", "tool_call_id": "call_seed_0",
+                             "name": tool_name, "content": seed_obs}
+                        ]
+                    else:
+                        seed_response = None  # Don't seed on error
+                        messages_log_seed = []
+                except Exception as seed_err:
+                    # Non-fatal — if seeding fails, the agent continues normally
+                    seed_response = None
+                    messages_log_seed = []
+            else:
+                seed_response = None
+                messages_log_seed = []
+        else:
+            seed_response = None
+            messages_log_seed = []
+
+        messages_log = state.user_conversation.copy() + messages_log_seed
+
 
         for _ in range(max_num_steps):
             # Run the graph orchestrator
@@ -85,6 +161,10 @@ class MultiAgentStrategy(Agent):
             # Update our state object with changes from the graph
             for k, v in final_state.items():
                 setattr(state, k, v)
+            
+            # Accumulate node logs into info for result tracing
+            step_logs = final_state.get("node_logs", [])
+            info.setdefault("pev_node_logs", []).extend(step_logs)
                 
             # Check if planner forced an exit
             if state.task_completed:
@@ -137,15 +217,47 @@ class MultiAgentStrategy(Agent):
                 }
                 messages_log.append(tool_result_msg)
                 
-                is_error = any(kw in env_response.observation.lower() for kw in ["error", "invalid", "exception"])
-                # Push to Context Memory Kernel for the Planner/Validator to see
-                state.memory.append({
-                    "type": "tool_error" if is_error else "tool_result",
-                    "action_taken": action.name,
-                    "arguments_used": action.kwargs,
-                    "api_observation": env_response.observation,
-                    "tool_call": drafted_tool
-                })
+                # Broadened domain-agnostic error heuristic to reliably trigger Metacognition
+                error_signals = ["error", "invalid", "exception", "not found", "failed", "insufficient", "cannot", "does not"]
+                is_error = any(kw in env_response.observation.lower() for kw in error_signals)
+                
+                # Push to Context Memory Kernel for the Planner/Validator to see.
+                # Crucial Fix: We do NOT push 'think' actions to the memory kernel. 
+                # 'think' is internal scratchpad context and bloating the memory kernel 
+                # with it pushes real API data (like user profiles) out of the Planner's view.
+                if action.name != "think":
+                    state.memory.append({
+                        "type": "tool_error" if is_error else "tool_result",
+                        "action_taken": action.name,
+                        "arguments_used": action.kwargs,
+                        "api_observation": env_response.observation,
+                        "tool_call": drafted_tool
+                    })
+                
+                # --- SELF-CORRECTION: Track consecutive errors and trigger reflection ---
+                if is_error:
+                    state.consecutive_error_count = state.consecutive_error_count + 1
+                    # After 2 consecutive errors, invoke the Error Reflection node
+                    # This is the 'step back and think' mechanism — domain-agnostic metacognition
+                    if state.consecutive_error_count >= 2:
+                        try:
+                            reflection_state = self.reflection_workflow.invoke(
+                                state, {"recursion_limit": 5}
+                            )
+                            # Pull out the reflection and failure_log entries
+                            for k, v in reflection_state.items():
+                                if k in ["error_reflection", "failure_log", "consecutive_error_count", "node_logs"]:
+                                    if k == "failure_log" and v:
+                                        state.failure_log = state.failure_log + v
+                                    elif k == "node_logs" and v:
+                                        info.setdefault("pev_node_logs", []).extend(v)
+                                    else:
+                                        setattr(state, k, v)
+                        except Exception as reflect_err:
+                            print(f"Error Reflection failed: {reflect_err}")
+                else:
+                    # Reset consecutive error count on success
+                    state.consecutive_error_count = 0
             else:
                 user_resp_msg = {"role": "user", "content": env_response.observation}
                 messages_log.append(user_resp_msg)
@@ -181,5 +293,5 @@ class MultiAgentStrategy(Agent):
             reward=reward,
             info=info,
             messages=messages_log,
-            total_cost=total_cost, # Cost tracing is harder across LangGraph, ignoring for now
+            total_cost=total_cost,
         )
