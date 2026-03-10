@@ -34,40 +34,22 @@ def planner_node(state: PevState) -> Dict:
     llm = get_llm()
     
     # 1. Build context
-    domain = os.environ.get("CURRENT_DOMAIN", "airline")
-    
-    if domain == "airline":
-        domain_strategy = """STRATEGY GUIDE (use ACTUAL tool names as they appear in tools_info):
-- USER ID LOOKUP: If you need their user profile (for payment, bags, names) and you DO NOT have their user_id, FIRST ask them for it. 
-- USER ID LOOKUP (Step 2): Once they provide the `user_id`, immediately call `get_user_details`. 
-- ALREADY LOOKED UP?: Scan the MEMORY KERNEL thoroughly! If `get_user_details` was ALREADY called successfully for this user_id, DO NOT ASK FOR IT AGAIN AND DO NOT CALL THE TOOL AGAIN. Proceed immediately to the NEXT step (Search flights, check reservations, etc).
-- Need flight options? → call `search_direct_flight` first. 
-- ANTI-LOOP CIRCUIT BREAKER: If `search_direct_flight` returns `[]` or no results, DO NOT try `search_direct_flight` again! Pivot IMMEDIATELY to `search_onestop_flight`!
-- PRICING AWARENESS: Before calling `book_reservation`, check the number of passengers! Total Price = (Flight Price * Number of Passengers). Use the `calculate` tool if necessary!
-- Need reservation info but no ID? → call `get_user_details` to get reservations list from profile
-- Need to modify/cancel? → call `get_reservation_details` then the appropriate action API
-- User confirmed booking details? → call `book_reservation` with all required params"""
-    else:
-        domain_strategy = """STRATEGY GUIDE (use ACTUAL tool names as they appear in tools_info):
-- AUTHENTICATION: If you need their user profile and DO NOT have their user_id, DO NOT ask for their user_id. Ask for their email OR their name and zip code.
-- LOOKUP (Step 2): Once they provide email, call `find_user_id_by_email`. If they provide name and zip, call `find_user_id_by_name_zip`. This returns their user_id.
-- PROFILE INFO: Once you have their user_id, immediately call `get_user_details` to get their orders, payment methods, and profile info.
-- ORDER DETAILS: Call `get_order_details` (or get_reservation_details) to retrieve the items in an order before trying to exchange or return them.
-- EXCHANGING ITEMS: To exchange an item, call `get_product_details` for the initial items they want to exchange to fetch variations. Determine the exact `item_id` of the variant that matches their request. Confirm the exact variant and any price difference with the user before calling `exchange_delivered_order_items`. NOTE: The `new_item_ids` array MUST ONLY contain valid IDs discovered from `get_product_details`!
-- ALREADY LOOKED UP?: Scan the MEMORY KERNEL thoroughly! If an API was ALREADY called successfully, DO NOT CALL IT AGAIN. Proceed to the next logical step."""
-
     sys_prompt = f"""You are the STRATEGIC PLANNER for a tool-using AI agent in a customer service setting.
-Your job is to read the user conversation and the memory kernel, then output a strict 1-2 sentence PLAN for the Executor.
+Your job is to read the user conversation, the environment's BUSINESS RULES, and the memory kernel, then output a strict 1-2 sentence PLAN for the Executor.
+
+== ENVIRONMENT BUSINESS RULES (The Wiki) ==
+{state.wiki}
 
 CRITICAL RULES:
 1. READ MEMORY FIRST. Before planning an action, check the MEMORY KERNEL below. If that action already appears in memory, DO NOT plan it again - proceed to the NEXT logical step.
-2. Be API-FIRST. If the user provided their user_id, DO NOT ask for it - look it up via tool immediately.
+2. Be API-FIRST. If the user provided necessary authentication details (like ID, email, or zip), look them up via tool immediately.
 3. DO NOT ask the user for information retrievable via API (profile details, reservation info, flight options).
 4. NEVER transfer to a human agent. In this environment, transferring to a human immediately fails the task (0.0 reward). You MUST solve the problem yourself using available tools, no matter how complex.
-5. EXPLICIT TERMINATION: NEVER output [TASK COMPLETED] unless the user explicitly ends the conversation (e.g. 'thank you, bye') or you have successfully executed the final required action (e.g. `book_reservation` was successful) and the user needs nothing else. If you are stuck or an API fails, DO NOT output [TASK COMPLETED] - instead, `respond` to the user and explain!
+5. EXPLICIT TERMINATION: NEVER output [TASK COMPLETED] unless the user explicitly ends the conversation (e.g. 'thank you, bye') or you have successfully executed the final required action (e.g. `book_reservation` or `exchange_items`) and the user needs nothing else. If you are stuck or an API fails, DO NOT output [TASK COMPLETED] - instead, `respond` to the user and explain!
 6. If an action was rejected (see Rejection Feedback), pivot the plan to try a different approach.
+7. ALREADY LOOKED UP?: Scan the MEMORY KERNEL thoroughly! If an API was ALREADY called successfully, DO NOT CALL IT AGAIN. Proceed to the next logical step.
 
-{domain_strategy}
+STRATEGY GUIDE: Read the BUSINESS RULES above carefully. Determine the exact sequence of tools required to fulfill the user's request.
 
 {{strategy_specific_instructions}}
 
@@ -172,16 +154,6 @@ def executor_node(state: PevState) -> Dict:
     tool_schemas = json.dumps(state.tools_info, indent=2)
     memory_dump = json.dumps(state.memory[-10:], indent=2) 
     
-    domain = os.environ.get("CURRENT_DOMAIN", "airline")
-    domain_rules = ""
-    if domain == "airline":
-        domain_rules = """4. Airport codes: ALWAYS use 3-letter IATA codes (JFK not 'New York', SEA not 'Seattle').
-5. POPULATE ARRAYS: If a parameter is an array (like `flights` or `passengers`), you MUST fully populate it with the detailed objects found in memory. DO NOT output empty arrays `[]` if the data exists.
-7. PRICING AWARENESS: If booking for MULTIPLE passengers, you MUST multiply the ticket price by the number of passengers when calculating the `payment_methods` amounts! (e.g. 2 passengers * $255 = $510 total)."""
-    else:
-        domain_rules = """4. DO NOT INVENT ITEM IDs. When exchanging items, the `new_item_ids` parameter MUST contain EXACT item IDs returned from `get_product_details` variants. NEVER just reuse the old item ID unless they specifically want the exact same item.
-5. POPULATE ARRAYS: If a parameter is an array (like `item_ids` or `new_item_ids`), fully populate it with the exact strings based on the context."""
-
     sys_prompt = f"""You are the EXECUTOR. Your ONLY job is to output a JSON tool call based on the PLAN below.
 
 == PLAN TO EXECUTE (MANDATORY - follow this EXACTLY) ==
@@ -200,8 +172,9 @@ Additional tools allowed without schema: "respond", "transfer_to_human_agents"
 CRITICAL RULES:
 1. Output ONLY a raw JSON object: {{"name": "<tool_name>", "arguments": {{...}}}}
 2. Use EXACT tool names and EXACT parameter keys from the schemas above.
-3. NEVER invent parameter values. Only use values explicitly confirmed in the Context Memory or User Instructions.
-{domain_rules}
+3. NEVER invent parameter values like IDs or Codes. Only use values explicitly confirmed in the Context Memory or User Instructions.
+4. POPULATE ARRAYS: If a parameter is an array, you MUST fully populate it with the detailed objects or strings found in memory matching the schema. DO NOT output empty arrays `[]` if the data exists.
+5. Calculate Math carefully: If pricing requires multiplication (e.g. Flight Price * Number of Passengers), do the math before submitting `payment_methods` amounts.
 8. For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}"""
 
     try:

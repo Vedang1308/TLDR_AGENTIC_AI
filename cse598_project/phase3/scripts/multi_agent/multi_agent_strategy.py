@@ -42,7 +42,7 @@ class MultiAgentStrategy(Agent):
         reward = 0.0
         
         # Initialize our PEV State for this specific conversation
-        state = PevState(strategy=self.agent_strategy)
+        state = PevState(strategy=self.agent_strategy, wiki=self.wiki)
         
         # Seed the initial user conversation turn
         state.user_conversation.append({"role": "system", "content": self.wiki})

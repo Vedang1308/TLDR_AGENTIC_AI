@@ -20,6 +20,9 @@ class PevState(BaseModel):
     # The Planner's current high-level plan and reasoning
     current_plan: str = Field(default="")
     
+    # Environment Rules defining business logic
+    wiki: str = Field(default="")
+    
     # The sub-strategy (multi-agent-react, multi-agent-act, multi-agent-fc)
     strategy: str = Field(default="multi-agent-react")
     
