@@ -1,10 +1,8 @@
-
 import argparse
 import subprocess
 import os
 import time
 import sys
-import os
 
 # Ensure the parent phase3 directory is in Python's path so we can resolve the local tau_bench copy
 phase3_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -29,18 +27,16 @@ def get_existing_completed_tasks(output_path):
                 if isinstance(data, list):
                     for item in data:
                         if isinstance(item, dict) and "task_id" in item:
-                            # Only retry tasks that crashed/errored — NOT reward=0.0 tasks.
-                            # reward=0.0 means the LLM ran but gave wrong actions. That is a
-                            # valid attempt and counts as a completed task (matching Phase 1 behavior).
+                            # Check if it was a crash/error
                             info = item.get("info", {})
                             if info and "error" in info:
-                                continue # Crashed/error → retry it
+                                continue # Treat as failed/missing
                             completed_ids.add(item["task_id"])
         except Exception:
             pass # Ignore corrupt files
     return completed_ids
 
-def run_experiment(domain, model, strategy, user_model, user_strategy, trial, start_index=0, results_dir="results/phase3", args=None):
+def run_experiment(domain, model, strategy, user_model, user_strategy, trial, start_index=0, max_concurrency=1, results_dir="results/phase3_v2"):
     print(f"Running Experiment: Domain={domain}, Model={model}, Strategy={strategy}, Trial={trial}, ResumeFrom={start_index}")
     
     # Construct output path
@@ -69,15 +65,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
     os.environ["LITELLM_API_BASE"] = f"http://localhost:{port_map.get(model, 8000)}/v1"
     
     # SMART RESUME LOGIC
-    if args.clean:
-        import shutil
-        if os.path.exists(output_path):
-            shutil.rmtree(output_path)
-            print(f"[--clean] Wiped result directory: {output_path}")
-        os.makedirs(output_path, exist_ok=True)
-        completed_ids = set()
-    else:
-        completed_ids = get_existing_completed_tasks(output_path)
+    completed_ids = get_existing_completed_tasks(output_path)
     
     # Get total tasks count (lightweight init)
     # Note: We assume 'test' split as per default
@@ -106,16 +94,31 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
     env["TAUBENCH_PORT_MAP"] = json.dumps(port_map)
     env["OPENAI_API_KEY"] = "sk-1234" # Ensure fake key is present to bypass LiteLLM validation
     
+    # NEW: Link VLLM ports for Phase3_v2 Custom Nodes
+    env["AGENT_MODEL_NAME"] = model
+    env["AGENT_API_BASE"] = f"http://localhost:{port_map.get(model, 8000)}/v1"
+    
+    # NEW: Zero-Touch Integration for Reasoning Paradigms
+    base_strategy = strategy
+    if strategy.startswith("multi-agent"):
+        base_strategy = "multi-agent" # What tau_bench expects
+        if strategy == "multi-agent-react":
+            env["AGENT_REASONING_MODE"] = "react"
+        elif strategy == "multi-agent-act":
+            env["AGENT_REASONING_MODE"] = "act"
+        else:
+            env["AGENT_REASONING_MODE"] = "fc"
+    
     cmd = [
         sys.executable, "run.py",
-        "--agent-strategy", "tool-calling" if strategy == "fc" else strategy,
+        "--agent-strategy", "tool-calling" if base_strategy == "fc" else base_strategy,
         "--env", domain,
         "--model", model,
         "--model-provider", "openai",
         "--user-model", user_model,
         "--user-model-provider", "openai",
         "--user-strategy", user_strategy,
-        "--max-concurrency", "1", # Sequential for local
+        "--max-concurrency", str(max_concurrency),
         "--seed", str(trial),
         "--log-dir", output_path,
         "--task-ids"
@@ -128,15 +131,15 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
         print(f"Experiment failed with error: {e}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Phase 3 Experiments")
+    parser = argparse.ArgumentParser(description="Run Phase 1 Experiments")
     parser.add_argument("--domain", choices=["retail", "airline", "all"], default="all")
-    parser.add_argument("--strategy", choices=["react", "act", "fc", "all"], default="all")
+    parser.add_argument("--strategy", choices=["react", "act", "fc", "multi-agent", "multi-agent-act", "multi-agent-react", "multi-agent-fc", "all"], default="multi-agent-fc")
     parser.add_argument("--model", type=str, help="Specific model to run (e.g., Qwen/Qwen3-4B-Instruct)")
     parser.add_argument("--user-model", type=str, default="User-Qwen3-32B", help="Fixed user model")
     parser.add_argument("--start-index", type=int, default=0, help="Task index to start execution from")
     parser.add_argument("--trials", type=int, default=5)
-    parser.add_argument("--clean", action="store_true",
-                        help="Wipe the result directory and start completely from scratch.")
+    parser.add_argument("--max-workers", type=int, default=5, help="Maximum number of parallel workers")
+    parser.add_argument("--max-concurrency", type=int, default=20, help="Maximum concurrency for run.py within each experiment")
     
     args = parser.parse_args()
     
@@ -144,17 +147,44 @@ def main():
     os.environ["OPENAI_API_KEY"] = "sk-1234"
     
     domains = ["retail", "airline"] if args.domain == "all" else [args.domain]
-    strategies = ["react", "act", "fc"] if args.strategy == "all" else [args.strategy]
     
-    # If no specific model is provided, it defaults to None and fails, 
-    # as the user should specify the model they are running servers for.
-    models = [args.model] if args.model else []
+    if args.strategy == "all":
+        strategies = [
+            "fc", "act", "react",
+            "multi-agent-fc", "multi-agent-act", "multi-agent-react"
+        ]
+    else:
+        strategies = [args.strategy]
+
+    models = [
+        "Qwen/Qwen3-4B",
+        "Qwen/Qwen3-8B",
+        "Qwen/Qwen3-14B",
+        "Qwen/Qwen3-32B"
+    ] if not args.model else [args.model]
     
+    experiments = []
     for domain in domains:
         for model in models:
             for strategy in strategies:
                 for trial in range(args.trials):
-                   run_experiment(domain, model, strategy, args.user_model, "llm", trial, start_index=args.start_index, results_dir="results/phase3", args=args)
+                    experiments.append((domain, model, strategy, args.user_model, "llm", trial, args.start_index, args.max_concurrency))
+                    
+    if args.max_workers > 1:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+            futures = [
+                executor.submit(run_experiment, domain, model, strategy, user_model, user_strategy, trial, start_index, max_concurrency)
+                for domain, model, strategy, user_model, user_strategy, trial, start_index, max_concurrency in experiments
+            ]
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"Experiment failed with exception: {e}")
+    else:
+        for exp in experiments:
+            run_experiment(*exp)
 
 if __name__ == "__main__":
     main()

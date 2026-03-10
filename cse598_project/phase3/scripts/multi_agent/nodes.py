@@ -1,91 +1,82 @@
 import os
+import re
 import json
 from typing import Dict, Any, List
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from .state import PevState
 
-# The port map determines which model to call locally:
-# 8000: Agent (4B, 8B, 14B, 32B)
-# 8001: User (fixed to 32B)
-# From run_phase1_experiments.py we know we passed `--model-provider openai` 
-# with base_url injected, but here we can instantiate directly.
+# ============================================================
+# BEHAVIORAL GUIDELINES — Startup memory seed.
+# Injected once before Turn 1 via multi_agent_strategy.py.
+# Domain-agnostic: every guideline describes WHAT pattern to
+# follow, not which specific tool to call. The error_reflection
+# node handles unexpected failures; these guidelines handle
+# KNOWN systematic failure modes derived from prior analysis.
+# To add a new guideline: append [G##] below. No code changes needed.
+# ============================================================
+BEHAVIORAL_GUIDELINES = """== BEHAVIORAL GUIDELINES (Read BEFORE your first action) ==
+These are domain-agnostic behavioral rules derived from systematic task failure analysis.
+For each action you plan, first check which guidelines apply and explicitly follow them.
 
-# ============================================================
-# BEHAVIORAL GUIDELINES — External memory component.
-# Maintained here as a single source of truth, separate from
-# the system prompt. Injected into every Planner call via the
-# {guidelines} slot so they can be updated without touching
-# the Planner logic. Domain-agnostic: every rule describes
-# WHAT to do, not which specific tool to call.
-# ============================================================
-BEHAVIORAL_GUIDELINES = """
 [G1] CONFIRMATION GATE: Before invoking ANY tool whose name implies a permanent change
-(keywords in tool schema: exchange, cancel, modify, return, book, update, delete),
-summarize ALL action details and ask the user to confirm with a bare "yes".
-DO NOT invoke such a tool unless the user's VERY LAST MESSAGE was literally "yes"
-or "Yes" — and nothing else. "ok", "sure", "please do it" are NOT sufficient.
-This rule applies ONLY to JSON tool calls, not to conversational respond messages.
+(keywords: exchange, cancel, modify, return, book, update, delete), summarize ALL action
+details and ask the user to confirm with a bare "yes". DO NOT invoke such a tool unless
+the user's VERY LAST MESSAGE was literally "yes" or "Yes" — and nothing else.
+"ok", "sure", "please do it" are NOT sufficient. Ask again for a bare "yes".
+This applies ONLY to JSON tool calls, not to conversational respond messages.
 
-[G2] ID AND CODE LOOKUP: Never pass guessed or invented IDs/codes.
+[G2] ID AND CODE LOOKUP: Never pass guessed or invented IDs/codes into tool calls.
 Before using any parameter expecting a specific ID or code (item ID, flight number,
-airport IATA code, reservation ID, product SKU), retrieve it from the API or wiki first.
+airport IATA code, reservation ID, product SKU), retrieve it from the API first.
 Never pass city names (e.g. "New York") into airport code fields — use IATA codes.
-CRITICAL: Tool schema descriptions often include examples like 'sara_doe_496'.
+Tool schema descriptions sometimes include example IDs like 'sara_doe_496'.
 These are PLACEHOLDER EXAMPLES ONLY — never use them as real values.
-Always wait for the user to provide their actual ID before calling any lookup tool.
 
 [G3] USER DATA SELF-DISCOVERY: Never ask the user for data retrievable from their profile.
-After authentication, call the user details tool to retrieve their full profile
-(order IDs, reservation IDs, payment methods, passenger DOBs, etc.).
-Then call order/reservation detail tools on each ID to locate the relevant item.
+After authentication, retrieve the full user profile (order IDs, reservation IDs,
+payment methods, passenger DOBs) via the lookup tool. Then call detail tools on each ID.
 
 [G4] PAYMENT MATH: Before asking for "yes", calculate the EXACT payment total.
 Sum all costs: unit prices × quantity, baggage fees ($50/extra bag), insurance ($30/passenger),
-any price difference adjustments. Split across payment methods exactly as the user specified.
-Amounts in payment_methods MUST sum exactly to total_cost. Include this breakdown
-in your confirmation message so the user can verify before confirming.
+price difference adjustments. Amounts in payment_methods MUST sum exactly to total_cost.
+Include this breakdown in your confirmation message so the user can verify.
 
-[G5] AVAILABLE OPTIONS ONLY: When counting product variants, flight options, or any set of
-results for a user, count ONLY entries explicitly marked as available/in-stock/bookable.
-Never include unavailable, sold-out, or delayed entries in the count or recommendation.
+[G5] AVAILABLE OPTIONS ONLY: When counting product variants, flight options, or any results
+for a user, count ONLY entries explicitly marked as available/in-stock/bookable.
+Never include unavailable, sold-out, delayed, or cancelled entries in the count.
 
 [G6] SEARCH RESULT FILTERING: After any search or list tool, read ALL returned entries.
-FIRST apply hard constraints (departure time, date, destination, cabin class, availability).
-THEN among those passing all constraints, pick the one matching the user's stated preference
-(e.g. lowest price, fewest stops, fastest). Never pick the globally cheapest or fastest option
-if it violates a hard constraint the user stated.
+FIRST apply hard constraints (departure time, date, destination, cabin class).
+THEN among those passing all constraints, pick by user's stated preference (lowest price, etc.).
+Never pick the globally cheapest/fastest option if it violates a hard constraint the user stated.
 
 [G7] STATUS ELIGIBILITY GATE: Before calling cancel, modify, return, or exchange tools,
-verify the item/order/reservation current status from memory.
-Actions are status-restricted:
+verify the current status from memory. Actions are status-restricted:
   - Returns/exchanges require delivered status.
   - Cancellations/modifications require pending status (retail) or policy eligibility (airline).
-  - Airline cancellation eligibility: within 24h of booking OR airline cancelled the flight
-    OR the reservation is business class OR travel insurance was purchased.
-If status does not permit the action, inform the user clearly — do NOT attempt the tool call.
+  - Airline cancellation eligibility: within 24h of booking, OR airline cancelled the flight,
+    OR the reservation is business class, OR travel insurance was purchased.
+If status does not permit the action, inform the user — do NOT attempt the tool call.
 
 [G8] ONE-SHOT WRITE OPERATIONS: Some tools (modify items, exchange items, update flights)
 can only be called ONCE per record and permanently lock it afterward.
-Before calling such a tool, collect ALL changes the user wants in one list.
-Ask explicitly: "Have you listed ALL the changes you want? This action cannot be undone."
+Collect ALL changes the user wants in one list FIRST.
+Ask: "Have you listed ALL the changes you want? This action cannot be undone."
 Then submit a single tool call with the complete list.
 
 [G9] REFUND METHOD VALIDATION: Refunds must go to a payment method the user already owns.
-For retail: refund to the original payment method or an existing gift card in the user profile.
+For retail: refund to the original payment method or an existing gift card in the profile.
 For airline: refund goes back to the original payment methods.
 Never refund to a method not in the user's profile and never invent a payment ID.
 
-[G10] PASSENGER IDENTITY: When booking a flight for the user themselves, the passenger must
-be the account holder — use their first name, last name, and DOB from their own user profile.
+[G10] PASSENGER IDENTITY: When booking for the user themselves, the passenger must be the
+account holder — use their first name, last name, and DOB from their own user profile.
 Only add additional passengers or saved contacts if the user explicitly names them.
 Never automatically default to a 'saved passenger' in the profile.
 """
 
-
 def get_llm(context="agent"):
-    # Read custom env vars passed down from phase3 run script
-    # We'll set these dynamically when orchestrating.
     api_base = os.environ.get("AGENT_API_BASE", "http://localhost:8000/v1")
     model_name = os.environ.get("AGENT_MODEL_NAME", "Qwen/Qwen3-4B")
     
@@ -94,355 +85,518 @@ def get_llm(context="agent"):
         api_key="EMPTY",
         model=model_name,
         temperature=0.0,
-        max_tokens=4096,  # Massively increased: Qwen3 evaluates list returns (like flights) extremely thoroughly in <think> tags. 900 was cutting it off.
+        max_tokens=1500,
+        stop=["Observation:", "OBSERVATION:"]
     )
 
-def planner_node(state: PevState) -> Dict:
+def format_memory(memory_list: List[Dict]) -> str:
+    """Converts the raw JSON memory array into a clean, human-readable structural markdown trace for the LLM."""
+    if not memory_list:
+        return "No prior history."
+    out = []
+    for i, m in enumerate(memory_list):
+        if m.get('type') == 'tool_result':
+            out.append(f"--- Step {i+1} ---")
+            out.append(f"Action: {m.get('action_taken')}")
+            out.append(f"Arguments: {json.dumps(m.get('arguments_used', {}))}")
+            out.append(f"Result Observation: {str(m.get('api_observation', 'None'))}") # Let the LLM see the whole JSON returned
+        elif m.get('type') == 'tool_error':
+            out.append(f"--- Step {i+1} [FAILED] ---")
+            out.append(f"Attempted Action: {m.get('action_taken')}")
+            out.append(f"Error: {m.get('api_observation', 'None')}")
+    return "\n".join(out) if out else "No parseable actions."
+
+def invoke_with_paradigm(llm, sys_prompt: str, user_msgs: List, tools: List[Dict], reasoning_mode: str, role_name: str):
     """
-    Supervisor Node: Analyzes conversation, checks memory, sets next objective.
-    Does NOT output JSON tool calls. Outputs natural language plan.
+    Universal wrapper to force ANY agent (Planner/Executor/Validator) 
+    to output using Act, ReAct, or strict Function Calling (FC) with Claude-optimized prompts.
     """
-    print(f"      ↳ [Planner] Analyzing memory and setting objective...")
-    llm = get_llm()
+    example_tools = '''
+[
+  {
+    "type": "function",
+    "function": {
+        "name": "get_current_weather",
+        "description": "Get the current weather",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "The city and state"}
+            },
+            "required": ["location"]
+        }
+    }
+  }
+]
+'''
     
-    # 1. Build context
-    sys_prompt = """You are the STRATEGIC PLANNER for a tool-using AI agent in a customer service setting.
-Your job is to read the user conversation, the environment's BUSINESS RULES, and the memory kernel, then output a strict 1-2 sentence PLAN for the Executor.
+    if reasoning_mode == "react":
+        instruction = f"""
+<tool_instructions>
+You are an expert agent. You must use the provided tools to assist the user.
+At each step, your generation MUST follow this exact sequence:
 
-== ENVIRONMENT BUSINESS RULES (The Wiki) ==
-{wiki}
+1. Think step-by-step about what to do next inside a Thought block.
+2. Output a valid JSON Action block containing the tool execution.
 
-META-RULES (Always apply these):
-1. READ MEMORY FIRST. Before planning, check the MEMORY KERNEL. If an action already appears in memory, DO NOT plan it again - move to the NEXT logical step.
-2. Be API-FIRST. If the user provided authentication details (ID, email, zip), call the lookup tool immediately. Do NOT ask for what you can retrieve.
-3. DO NOT ask the user for information retrievable via API (profile details, reservation info, flight options).
-4. NEVER transfer to a human agent. Solve the task yourself using available tools no matter what.
-5. EXPLICIT TERMINATION: NEVER output [TASK COMPLETED] unless the user explicitly ends conversation or you have successfully executed the final required action. If stuck, use `respond` to explain.
-6. If an action was rejected (see Rejection Feedback), pivot to a different approach.
-7. ALREADY LOOKED UP? If an API was already called successfully in the MEMORY KERNEL, DO NOT CALL IT AGAIN. Proceed to the next logical step.
+**Format required:**
+Thought:
+<A single line of powerful reasoning to analyze your current task, state the chosen tool, and map its required arguments.>
+Action:
+{{"name": <The name of the action>, "arguments": <The arguments to the action in json format>}}
 
-== BEHAVIORAL GUIDELINES (Scan these BEFORE planning each action) ==
-These are domain-agnostic behavioral rules derived from observed failure patterns.
-Before writing your plan, identify which guidelines below apply to the current situation
-and explicitly state which ones constrain your next action.
+**Example Usage for a Weather query:**
+Thought:
+Since the user asked for the weather in San Francisco, I need to use the get_current_weather tool with the location parameter set.
+Action:
+{{"name": "get_current_weather", "arguments": {{"location": "San Francisco, CA"}}}}
 
-{guidelines}
+CRITICAL: The Action must be perfectly valid JSON with no trailing commas.
+</tool_instructions>
+"""
+        sys_prompt_final = sys_prompt + "\n" + instruction + "\n<available_tools>\n" + json.dumps(tools, indent=2) + "\n</available_tools>\n"
+        resp = llm.invoke([SystemMessage(content=sys_prompt_final)] + user_msgs)
+        content = resp.content.strip()
+        
+        # Robust multi-block extraction
+        try:
+            # 1. Try to strictly parse the Action block ignoring Thought brackets
+            action_split = content.split("Action:")[-1].strip()
+            start = action_split.find('{')
+            end = action_split.rfind('}')
+            if start != -1 and end != -1:
+                return json.loads(action_split[start:end+1]), content
+        except json.JSONDecodeError:
+            pass
+            
+        # 2. Fallback extreme extraction (regex)
+        match = re.search(r'\{[^{}]*\"name\"[^{}]*\}', content)
+        if match:
+            try:
+                return json.loads(match.group(0)), content
+            except json.JSONDecodeError:
+                pass
+                
+        return None, content
 
-{{strategy_specific_instructions}}
+    elif reasoning_mode == "act":
+        instruction = f"""
+<tool_instructions>
+You are an expert agent. You must use the provided tools to assist the user.
+You MUST output your decision as a raw Action block. Do NOT write any conversational text or thinking out loud.
 
-LATEST API RESULT (Did your last action succeed or fail? Read this!):
-{latest_api}
+**Format required:**
+Action:
+{{"name": <The name of the action>, "arguments": <The arguments to the action in json format>}}
 
-MEMORY KERNEL (Past actions and data — read ALL of this before planning):
+**Example Usage for a Weather query:**
+Action:
+{{"name": "get_current_weather", "arguments": {{"location": "San Francisco, CA"}}}}
+
+CRITICAL: Your entire generation must instantly be the Action block. It must be valid JSON.
+</tool_instructions>
+"""
+        sys_prompt_final = sys_prompt + "\n" + instruction + "\n<available_tools>\n" + json.dumps(tools, indent=2) + "\n</available_tools>\n"
+        resp = llm.invoke([SystemMessage(content=sys_prompt_final)] + user_msgs)
+        content = resp.content.strip()
+        
+        try:
+            action_split = content.split("Action:")[-1].strip()
+            start = action_split.find('{')
+            end = action_split.rfind('}')
+            if start != -1 and end != -1:
+                return json.loads(action_split[start:end+1]), content
+        except json.JSONDecodeError:
+            pass
+            
+        match = re.search(r'\{[^{}]*\"name\"[^{}]*\}', content)
+        if match:
+            try:
+                return json.loads(match.group(0)), content
+            except json.JSONDecodeError:
+                pass
+
+        return None, content
+
+    else: # "fc" Native Function Calling
+        instruction = """
+<tool_instructions>
+You are operating in Native Function Calling mode. 
+Your ONLY job is to output a raw JSON dictionary representing a function call based on your task. 
+Do NOT write any text, conversational filler, or <think> tags. Just output the mathematical JSON payload.
+</tool_instructions>
+"""
+        sys_prompt_final = sys_prompt + "\n" + instruction
+        llm_with_tools = llm.bind_tools(tools)
+        resp = llm_with_tools.invoke([SystemMessage(content=sys_prompt_final)] + user_msgs)
+        
+        if hasattr(resp, 'tool_calls') and resp.tool_calls:
+            tc = resp.tool_calls[0]
+            return {"name": tc["name"], "arguments": tc["args"]}, "Tool Call: " + tc["name"]
+        else:
+            # Fallback manually parsing
+            content = resp.content.strip()
+            try:
+                action_split = content.split("Action:")[-1].strip() if "Action:" in content else content
+                start = action_split.find('{')
+                end = action_split.rfind('}')
+                if start != -1 and end != -1:
+                    parsed = json.loads(action_split[start:end+1])
+                    if "name" in parsed:
+                        return parsed, content
+            except json.JSONDecodeError:
+                pass
+                
+            match = re.search(r'\{[^{}]*\"name\"[^{}]*\}', content)
+            if match:
+                try:
+                    return json.loads(match.group(0)), content
+                except json.JSONDecodeError:
+                    pass
+                    
+            return None, content
+
+def planner_node(state: PevState) -> Dict:
+    llm = get_llm()
+    reasoning_mode = os.environ.get("AGENT_REASONING_MODE", "fc")
+    
+    # Build failure history section — lets the Planner see what already didn't work
+    failure_history = ""
+    if state.failure_log:
+        lines = []
+        for i, f in enumerate(state.failure_log[-6:]):  # Last 6 failures max
+            lines.append(f"Failure {i+1}: Tried `{f.get('action')}` → Error: {f.get('error', '?')}")
+            if f.get('reflection'):
+                lines.append(f"  Diagnosis: {f.get('reflection')}")
+        failure_history = "\n".join(lines)
+    else:
+        failure_history = "None."
+    
+    # Include error reflection if generated by the reflection node
+    reflection_section = ""
+    if state.error_reflection:
+        reflection_section = f"\n\nERROR REFLECTION (Diagnosis from recent failures — CRITICAL, read this first):\n{state.error_reflection}\n"
+    
+    sys_prompt = """You are the HIERARCHICAL PLANNER for a customer service agent.
+Your job is to read the user conversation, memory kernel, and failure history, then use the 'submit_plan' tool to set the next objective.
+
+CRITICAL RULE 1: Do NOT transfer to a human agent unless you have truly exhausted all available tools and approaches.
+CRITICAL RULE 2: CHECK THE MEMORY KERNEL before asking the user for any information. If `get_user_details` or `get_reservation_details` already ran, the data is already available — use it directly.
+CRITICAL RULE 3: Do NOT re-call a tool whose result is already in the MEMORY KERNEL. Use that data to formulate your next action.
+CRITICAL RULE 4: Before planning, read the FAILURE HISTORY carefully. If previous approaches failed, you MUST propose a different strategy — not repeat what already didn't work.
+CRITICAL RULE 5: If the FAILURE HISTORY shows the same tool being rejected multiple times, shift to an alternate tool or a different argument structure.
+
+MEMORY KERNEL:
 {memory_str}
 
+FAILURE HISTORY (strategies that have already been tried and failed):
+{failure_history}
+{reflection_section}
 REJECTION FEEDBACK:
 {feedback}
-
-CRITICAL FORMATTING INSTRUCTION:
-End your internal <think> reasoning and output your final action plan starting exactly with `[PLAN]`.
 """
-
-    # Branch the prompt behavior based on the specific strategy variant
-    if state.strategy == "multi-agent-react":
-        strategy_instructions = (
-            "You MUST use the <think> tag to reason about your plan first, "
-            "then output your final plan after closing the </think> tag."
-        )
-    else:
-        # For 'act' and 'fc', we forbid reasoning.
-        strategy_instructions = (
-            "CRITICAL: DO NOT use <think> tags or write internal reasoning. "
-            "You MUST immediately output your final action plan and nothing else. "
-            "Think silently."
-        )
-
-    mem_str = json.dumps(state.memory[-10:], indent=2) if state.memory else "No prior history."
+    mem_str = format_memory(state.memory)
     feed_str = f"Source: {state.rejection_source} | Message: {state.rejection_feedback}" if state.rejection_feedback else "None."
-    
-    # Extract the absolute latest API observation to prevent "lost in the middle" blindness
-    latest_api = "None yet."
-    if state.memory and state.memory[-1].get("type") == "tool_result":
-        latest_api = f"Action: {state.memory[-1].get('action_taken')}\nObservation: {state.memory[-1].get('api_observation')}"
-    
-    sys_msg = SystemMessage(content=sys_prompt.format(
-        latest_api=latest_api,
-        memory_str=mem_str, 
-        feedback=feed_str,
-        strategy_specific_instructions=strategy_instructions,
-        wiki=state.wiki,
-        guidelines=BEHAVIORAL_GUIDELINES
-    ))
-    
-    # Format user convo
-    # Always include the system wiki (turn 0) which contains business logic!
+    sys_prompt = sys_prompt.format(
+        memory_str=mem_str,
+        failure_history=failure_history,
+        reflection_section=reflection_section,
+        feedback=feed_str
+    )
+
     user_msgs = []
     if state.user_conversation:
         user_msgs.append(SystemMessage(content=state.user_conversation[0]['content']))
-        
-    # include only the most recent conversation to prevent context explosion
-    for turn in state.user_conversation[-3:]: 
-        if turn['role'] != 'system': # don't duplicate the wiki if it's in the last 3
+    for turn in state.user_conversation[-6:]:
+        if turn['role'] != 'system':
             user_msgs.append(HumanMessage(content=f"{turn['role']}: {turn['content']}"))
-        
-    try:
-        response = llm.invoke([sys_msg] + user_msgs)
-        raw_content = response.content.strip()
-    except Exception as e:
-        print(f"      ↳ [Planner] Model generation error (e.g., max tokens reached): {e}")
-        raw_content = "Ask the user how you can help them further based on the current context."
-    print(f"      ↳ [Planner RAW Output] {raw_content[:500]}..." if len(raw_content) > 500 else f"      ↳ [Planner RAW Output] {raw_content}")
+
+    tools = [{
+        "type": "function",
+        "function": {
+            "name": "submit_plan",
+            "description": "Submit a 1-2 sentence plan for the executor",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "plan": {"type": "string", "description": "The plan to execute next."},
+                    "task_completed": {"type": "boolean", "description": "True ONLY if the user's issue is fully resolved."}
+                },
+                "required": ["plan", "task_completed"]
+            }
+        }
+    }]
     
-    import re
-    plan = raw_content
-    # Robust Qwen3 think-tag stripping
-    plan = re.sub(r'<think>.*?</think>', '', plan, flags=re.DOTALL)
-    plan = re.sub(r'<think>.*', '', plan, flags=re.DOTALL)
-    plan = plan.strip()
+    parsed_json, raw_log = invoke_with_paradigm(llm, sys_prompt, user_msgs, tools, reasoning_mode, "Planner")
     
-    # Extract only the text after [PLAN]
-    if "[PLAN]" in plan:
-        plan = plan.split("[PLAN]")[-1].strip()
+    if parsed_json and parsed_json.get("name") == "submit_plan":
+        args = parsed_json.get("arguments", {})
+        plan = args.get("plan", "Follow the rules.")
+        if args.get("task_completed", False):
+            return {"task_completed": True, "error_reflection": None, "node_logs": [{"node": "planner", "plan": plan, "log": raw_log}]}
+        return {
+            "current_plan": plan, 
+            "rejection_feedback": None,
+            "rejection_source": None,
+            "error_reflection": None,  # Clear reflection after Planner has absorbed it
+            "node_logs": [{"node": "planner", "plan": plan, "log": raw_log}]
+        }
     else:
-        # Truncate circular post-think rambling to first 3 meaningful lines
-        lines = [l.strip() for l in plan.split('\n') if l.strip()]
-        noise_starters = ('wait,', 'however,', 'but wait,', 'hmm,', 'actually,')
-        clean_lines = [l for l in lines if not l.lower().startswith(noise_starters)]
-        plan = ' '.join(clean_lines[:3]) if clean_lines else ' '.join(lines[:3])
-        plan = plan.strip()
+        return {
+            "current_plan": "Proceed with default action or ask for clarification.",
+            "rejection_feedback": None,
+            "rejection_source": None,
+            "node_logs": [{"node": "planner", "error": "Failed to output plan", "log": raw_log}]
+        }
+
+def error_reflection_node(state: PevState) -> Dict:
+    """
+    METACOGNITION NODE — The 'step back and think' node.
     
-    # If plan ended up empty, use a highly explicit fallback instead of a generic one
-    if not plan:
-        plan = "Ask the user how you can help them further based on the current context."
+    Triggered by multi_agent_strategy.py when the environment returns an API error.
+    This node uses the LLM to reason holistically about WHY the error occurred,
+    what assumptions were wrong, and what a fundamentally different approach would be.
     
-    if "[TASK COMPLETED]" in plan:
-        return {"task_completed": True, "node_logs": [{"node": "planner", "plan": plan}]}
-        
+    This is domain-agnostic because it does NOT check hardcoded rules — it asks the LLM
+    to use its own knowledge of the environment (tools available, prior conversation context)
+    to understand the failure and propose recovery. This mirrors human metacognition:
+    'I made a mistake. Why? What should I do differently?'
+    """
+    llm = get_llm()
+    
+    # Find the most recent error(s)
+    recent_errors = [m for m in state.memory if m.get('type') == 'tool_error'][-3:]
+    if not recent_errors:
+        return {"node_logs": [{"node": "error_reflection", "status": "no_errors_found"}]}
+    
+    error_summary = "\n".join([
+        f"Action: {e.get('action_taken')} | Args: {json.dumps(e.get('arguments_used', {}))} | Error: {e.get('api_observation', '?')}"
+        for e in recent_errors
+    ])
+    
+    failure_history = format_memory(state.memory)
+    
+    sys_prompt = f"""You are a METACOGNITION ANALYST for an AI agent that just failed.
+
+The agent recently received one or more error responses from the environment:
+{error_summary}
+
+Here is everything the agent has done so far in this conversation:
+{failure_history}
+
+Your task:
+1. Identify the ROOT CAUSE of the error(s). Was it wrong arguments? Wrong tool? Wrong precondition? Wrong ID? Missing data lookup?
+2. Explain what the agent believed vs. what was actually true.
+3. Propose a CONCISE corrective strategy (1-3 sentences) for the agent's next attempt that avoids the same mistake.
+
+IMPORTANT: Do NOT hardcode domain-specific rules. Reason purely from what the error message tells you and what the prior memory shows.
+Do NOT say 'I don't know'. Always produce a diagnosis and corrective plan.
+Output format:
+ROOT CAUSE: <one line>
+CORRECTIVE PLAN: <1-3 sentences on what to do differently>"""
+    
+    resp = llm.invoke([SystemMessage(content=sys_prompt)])
+    reflection_text = resp.content.strip() if resp.content else "Unable to produce reflection."
+    
+    # Append to failure_log so Planner can see specific failures with their diagnosis
+    failure_entries = [{
+        "action": e.get('action_taken'),
+        "args": e.get('arguments_used'),
+        "error": e.get('api_observation'),
+        "reflection": reflection_text
+    } for e in recent_errors]
+    
     return {
-        "current_plan": plan, 
-        "node_logs": [{"node": "planner", "plan": plan}]
+        "error_reflection": reflection_text,
+        "failure_log": failure_entries,
+        "consecutive_error_count": 0,  # Reset after reflection
+        "node_logs": [{"node": "error_reflection", "reflection": reflection_text}]
     }
+
 
 def executor_node(state: PevState) -> Dict:
-    """
-    Actor Node: Receives the specific plan and drafts the exact JSON tool call.
-    """
-    print(f"      ↳ [Executor] Drafting JSON tool call from plan...")
-    llm = get_llm().bind(response_format={"type": "json_object"})
+    llm = get_llm()
+    reasoning_mode = os.environ.get("AGENT_REASONING_MODE", "fc")
     
-    tool_schemas = json.dumps(state.tools_info, indent=2)
-    memory_dump = json.dumps(state.memory[-10:], indent=2) 
+    # Build context from failure log for executor awareness
+    failed_actions_note = ""
+    if state.failure_log:
+        failed_names = list(set(f.get('action') for f in state.failure_log[-4:] if f.get('action')))
+        if failed_names:
+            failed_actions_note = f"\n\n[ALREADY FAILED]: The following actions have already failed and should NOT be repeated with the same arguments: {failed_names}\n"
     
-    sys_prompt = f"""You are the EXECUTOR. Your ONLY job is to output a JSON tool call based on the PLAN below.
+    sys_prompt = f"""You are the EXECUTOR.
+Your ONLY job is to select the exact tool call based on the PLAN provided.
 
-== PLAN TO EXECUTE (MANDATORY - follow this EXACTLY) ==
+PLAN TO EXECUTE:
 {state.current_plan}
 
-== AVAILABLE TOOL SCHEMAS ==
-{tool_schemas}
-Additional tools allowed without schema: "respond", "transfer_to_human_agents"
+MEMORY CONTEXT (Recent past actions):
+{format_memory(state.memory)}
+{failed_actions_note}
+UNIVERSAL TOOL SELECTION PRINCIPLE:
+- Use `respond` whenever the plan requires communicating with the user — asking a question,
+  requesting clarification, providing information, or confirming a step. This is the ONLY
+  tool for user-facing messages.
+- Use `transfer_to_human_agents` ONLY when the user has explicitly requested a human agent,
+  OR when every available domain tool has been tried and none can resolve the issue.
+  This is a PERMANENT, irreversible escalation — do not use it as a substitute for `respond`.
+- Use `think` ONLY for internal scratchpad reasoning or calculations. The `think` tool is
+  COMPLETELY INVISIBLE to the user. Do not put questions for the user inside `think`."""
+    if state.rejection_feedback and state.rejection_source == "syntax_monitor":
+        sys_prompt += f"\n\n[CRITICAL]: YOUR PREVIOUS DRAFT WAS REJECTED. Fix this error:\n{state.rejection_feedback}\n"
 
-== PREVIOUS REJECTION FEEDBACK ==
-{f"The Validator or Syntax Monitor rejected your last attempt with this error: {state.rejection_feedback}" if state.rejection_feedback else "None. This is a fresh plan."}
 
-== CONTEXT MEMORY (Use this to fill in exact parameter values) ==
-{memory_dump}
+    tools = state.tools_info.copy()
+    tools.append({
+        "type": "function",
+        "function": {
+            "name": "transfer_to_human_agents",
+            "description": "PERMANENT escalation to a human agent. Use ONLY when the user explicitly requests a human, or all domain tools are exhausted. Do NOT use this to ask the user a question — use `respond` instead.",
+            "parameters": {
+                "type": "object",
+                "properties": {"summary": {"type": "string"}}
+            }
+        }
+    })
 
-CRITICAL RULES:
-1. Output ONLY a raw JSON object: {{"name": "<tool_name>", "arguments": {{...}}}}
-2. Use EXACT tool names and EXACT parameter keys from the schemas above.
-3. NEVER invent parameter values like IDs or Codes. Only use values explicitly confirmed in the Context Memory or User Instructions.
-4. POPULATE ARRAYS: If a parameter is an array, you MUST fully populate it with the detailed objects or strings found in memory matching the schema. DO NOT output empty arrays `[]` if the data exists.
-5. Calculate Math carefully: If pricing requires multiplication (e.g. Flight Price * Number of Passengers), do the math before submitting `payment_methods` amounts.
-6. DOMAIN HACK - NEW ITEM IDs: When calling `exchange_delivered_order_items`, the `new_item_ids` array MUST EXACTLY MATCH THE LENGTH of the `item_ids` array and MUST contain exact 10-digit IDs. Do NOT put natural language like "clicky switch keyboard" into the array!
-7. DOMAIN HACK - AIRLINE PAYMENT: When submitting `book_reservation` or `update_reservation`, the `payment_methods` array `amount` field MUST equal the exact calculated total (price × passenger count). NEVER leave it as 0 or as a partial amount.
-8. For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}"""
+    parsed_json, raw_log = invoke_with_paradigm(llm, sys_prompt, [], tools, reasoning_mode, "Executor")
+    return {"drafted_tool_call": parsed_json, "node_logs": [{"node": "executor", "raw_output": raw_log}]}
 
-    try:
-        resp = llm.invoke([SystemMessage(content=sys_prompt)])
-        content = resp.content.strip()
-    except Exception as e:
-        print(f"      ↳ [Executor] Model generation error (e.g., max tokens reached): {e}")
-        content = '{"name": "respond", "arguments": {"content": "I encountered an error planning my next step. Could you please hold on a moment?"}}'
-    
-    import re
-    # Robust think-tag stripping
-    content_no_think = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
-    content_no_think = re.sub(r'<think>.*', '', content_no_think, flags=re.DOTALL).strip()
-    
-    # Aggressive JSON extraction: find first { and last }
-    first_brace = content_no_think.find('{')
-    last_brace = content_no_think.rfind('}')
-    
-    drafted_tool = None
-    if first_brace != -1 and last_brace != -1 and last_brace >= first_brace:
-        json_str = content_no_think[first_brace:last_brace+1]
-        # Clean up any leftover markdown codeblock markers if they snuck inside the braces
-        json_str = json_str.replace("```json", "").replace("```", "").strip()
-        try:
-            drafted_tool = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            print(f"      ↳ [Executor] JSON Parse Error: {e} | Raw string: {json_str}")
-            # Fallback for completely trashed JSON: force a harmless conversational turn
-            drafted_tool = {"name": "respond", "arguments": {"content": "I encountered an error planning my next step. Could you please hold on a moment?"}}
-    else:
-        print(f"      ↳ [Executor] No JSON braces found in output: {content_no_think}")
-        drafted_tool = {"name": "respond", "arguments": {"content": "I encountered an error processing my plan. Could you please hold on a moment?"}}
-            
-    print(f"         [Executor JSON Output] {json.dumps(drafted_tool)}")
-        
-    return {
-        "drafted_tool_call": drafted_tool, 
-        "node_logs": [{"node": "executor", "raw_output": content}],
-        "rejection_feedback": None,
-        "rejection_source": None
-    }
 
 def syntax_monitor_node(state: PevState) -> Dict:
-    """
-    Code Monitor / ToolGate: Deterministically validates syntax, schema, and repetition.
-    Directly addresses: Tool Parameter Errors & Repetitive Stuck Loops (PDF Section 4.1, 4.6)
-    """
-    print(f"      ↳ [Syntax Monitor] Validating JSON schema structure...")
-    import re
     tool_draft = state.drafted_tool_call
+    current_retries = state.internal_retry_count + 1
     
+    if current_retries >= 5:
+        fallback = {"name": "respond", "arguments": {"content": "I encountered an internal logic error and could not proceed. Can you rephrase or try another approach?"}}
+        return {"drafted_tool_call": fallback, "internal_retry_count": 0, "rejection_feedback": None, "rejection_source": None}
+        
     if not tool_draft:
-        reason = "Executor failed to output valid JSON. Try again."
-        print(f"         [Syntax Monitor REJECTED] {reason}")
-        return {"rejection_feedback": reason, "rejection_source": "syntax_monitor", "rejection_count": state.rejection_count + 1}
-        
+        return {"rejection_feedback": "Executor failed to output valid JSON. Try again.", "rejection_source": "syntax_monitor", "internal_retry_count": current_retries}
     if "name" not in tool_draft or "arguments" not in tool_draft:
-        reason = "JSON missing 'name' or 'arguments' keys."
-        print(f"         [Syntax Monitor REJECTED] {reason} | Draft: {tool_draft}")
-        return {"rejection_feedback": reason, "rejection_source": "syntax_monitor", "rejection_count": state.rejection_count + 1}
+        return {"rejection_feedback": "JSON missing 'name' or 'arguments' keys.", "rejection_source": "syntax_monitor", "internal_retry_count": current_retries}
     
-    tool_name = tool_draft["name"].lower()
-    
-    # Block pseudo-tool names that Qwen3 hallucinates instead of real API calls
-    FAKE_TOOLS = {"think", "thought", "reasoning", "internal_thought", "chain_of_thought"}
-    if tool_name in FAKE_TOOLS:
-        valid_names = [t.get("name", "") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
-        reason = f"'{tool_draft['name']}' is NOT a valid tool. You MUST pick a tool name from this list: {valid_names}. For conversational messages use 'respond'."
-        print(f"         [Syntax Monitor REJECTED] {reason}")
-        return {
-            "rejection_feedback": reason,
-            "rejection_source": "syntax_monitor",
-            "rejection_count": state.rejection_count + 1
-        }
-    
-    # --- ToolGate Schema Validation ---
-    # Find the matching tool schema from tools_info (PDF Section 4.1: validate against API schemas)
-    # Handles both flat format {name: ...} and nested OpenAI format {type: function, function: {name: ...}}
-    allowed_no_schema = {"respond", "transfer_to_human_agents"}
-    if tool_draft["name"] not in allowed_no_schema:
-        def get_tool_name(t):
-            return t.get("name") or t.get("function", {}).get("name")
-        def get_tool_params(t):
-            return t.get("parameters") or t.get("function", {}).get("parameters", {})
-        
-        matching_schema = next((t for t in state.tools_info if get_tool_name(t) == tool_draft["name"]), None)
-        if matching_schema is None:
-            valid_names = [get_tool_name(t) for t in state.tools_info if get_tool_name(t)] + list(allowed_no_schema)
-            reason = f"Tool '{tool_draft['name']}' does not exist. Valid tools: {valid_names}"
-            print(f"         [Syntax Monitor REJECTED] {reason}")
+    # ── PREMATURE TRANSFER GUARD ───────────────────────────────────────────────
+    # Domain-agnostic rule: if the agent has fresh un-acted-upon data in memory
+    # (e.g. profile lookup results from proactive seeding) but is trying to
+    # immediately transfer to a human agent, the transfer is premature.
+    # The agent should use that data before escalating.
+    if tool_draft.get("name") == "transfer_to_human_agents":
+        successful_results = [m for m in state.memory if m.get('type') == 'tool_result']
+        if successful_results and len(state.memory) <= 2:
             return {
-                "rejection_feedback": reason,
+                "rejection_feedback": (
+                    "You have retrieved account/context data in memory but have not used it to "
+                    "resolve the user's request. Read the MEMORY KERNEL carefully and proceed "
+                    "with the task before considering a transfer to a human agent."
+                ),
                 "rejection_source": "syntax_monitor",
-                "rejection_count": state.rejection_count + 1
+                "internal_retry_count": current_retries
             }
-        # Check required parameters are present (only if schema has parameters defined)
-        params_schema = get_tool_params(matching_schema)
-        if params_schema:
-            required = params_schema.get("required", [])
-            schema_props = params_schema.get("properties", {})
-            args = tool_draft.get("arguments", {})
-            
-            # --- Auto-Repair Common Qwen3 Hallucinations ---
-            # 1. Hallucinating 'time' instead of 'departure_time' (seen in search_direct_flight logs)
-            if "time" in args and "departure_time" not in args and "departure_time" in schema_props:
-                args["departure_time"] = args.pop("time")
-            # 2. Hallucinating raw 'date' string instead of copying memory
-            if args.get("user_id") == "user_id":
-                args["user_id"] = "required_but_missing" # Force a real rejection reason instead of echoing string
-                
-            missing = [r for r in required if r not in args]
-            if missing:
-                reason = f"Tool '{tool_draft['name']}' is missing required parameters: {missing}. Full parameter list: {list(schema_props.keys())}. YOU MUST PROVIDE EXACT ARGUMENTS."
-                print(f"         [Syntax Monitor REJECTED] {reason}")
-                return {
-                    "rejection_feedback": reason,
-                    "rejection_source": "syntax_monitor",
-                    "rejection_count": state.rejection_count + 1
-                }
-    # (PDF Section 4.6: Repetitive Stuck Loops)
-    recent_failures = [m for m in state.memory[-5:] if m.get('type') == 'tool_error']
-    for rf in recent_failures:
-        if rf.get('tool_call') == tool_draft:
-            reason = "You already tried this exact action and it failed. Formulate a NEW strategy."
-            print(f"         [Syntax Monitor REJECTED] {reason}")
-            return {"rejection_feedback": reason, "rejection_source": "syntax_monitor", "rejection_count": state.rejection_count + 1}
+    
+    return {"node_logs": [{"node": "syntax_monitor", "status": "passed"}], "internal_retry_count": 0}
 
-    # Passed all checks
-    return {"node_logs": [{"node": "syntax_monitor", "status": "passed"}]}
+
 
 def validator_node(state: PevState) -> Dict:
     """
-    Actor-Critic Validator: Evaluates drafted tool against domain business policies.
-    Directly addresses: Business Logic Errors & Missing Preconditions (PDF Sections 4.2, 4.5)
+    UPGRADED: Domain-agnostic LLM pre-flight simulation.
+    
+    Instead of hardcoded domain-specific rules (which break for new domains),
+    the Validator now asks the LLM to SIMULATE the outcome of the proposed action
+    BEFORE sending it to the environment. This is analogous to a human thinking
+    'if I do X right now, what will happen?' before committing to an action.
+    
+    The LLM uses the full memory context, the tool schema, and the drafted call
+    to predict whether the action will succeed or fail, and reject it proactively
+    if it identifies a likely failure.
     """
-    print(f"      ↳ [Validator] Checking drafted tool against business logic policies...")
-    import re
-    
-    # Fast-path: auto-approve read-only tools without LLM call (~60% of actions)
-    # These are pure lookups with no business logic risk
-    READ_ONLY_TOOLS = {
-        "get_user_details", "get_user_profile", "search_direct_flight",
-        "search_onestop_flight", "get_reservation_details", "list_all_airports",
-        "respond", "transfer_to_human_agents",
-    }
-    tool_name = state.drafted_tool_call.get("name", "") if state.drafted_tool_call else ""
-    if tool_name in READ_ONLY_TOOLS or tool_name.startswith("search_") or tool_name.startswith("get_") or tool_name.startswith("list_"):
-        return {"node_logs": [{"node": "validator", "status": "approved (fast-path)"}]}
-    
     llm = get_llm()
+    reasoning_mode = os.environ.get("AGENT_REASONING_MODE", "fc")
+    current_retries = state.internal_retry_count + 1
     
-    # Inject the domain business policy wiki (from the system turn) for informed validation
-    # Truncated to 2000 chars to keep validator prompt lean and fast
-    wiki_context = ""
-    if state.user_conversation and state.user_conversation[0].get('role') == 'system':
-        full_wiki = state.user_conversation[0]['content']
-        wiki_context = full_wiki[:2000] + ("..." if len(full_wiki) > 2000 else "")
+    # Fast-path for fallback calls generated by syntax_monitor
+    if state.drafted_tool_call and state.drafted_tool_call.get("name") in ["respond", "transfer_to_human_agents"] and current_retries >= 5:
+        return {"internal_retry_count": 0, "node_logs": [{"node": "validator", "status": "bypassed_for_fallback"}]}
+        
+    if current_retries >= 5:
+        fallback = {"name": "respond", "arguments": {"content": "I encountered a policy violation I couldn't resolve. Let's try a different request."}}
+        return {"drafted_tool_call": fallback, "internal_retry_count": 0, "rejection_feedback": None, "rejection_source": None}
     
-    sys_prompt = f"""You are the VALIDATOR (Actor-Critic). Your role is to CRITIQUE the drafted tool call below.
+    # Find matching tool schema to give to the Validator so it can check arguments
+    tool_name = state.drafted_tool_call.get("name", "") if state.drafted_tool_call else ""
+    matching_schema = next(
+        (t for t in state.tools_info if t.get("function", {}).get("name") == tool_name),
+        None
+    )
+    schema_str = json.dumps(matching_schema, indent=2) if matching_schema else "Schema not found."
+    
+    sys_prompt = f"""You are the VALIDATOR — a critical reasoning agent that performs PRE-FLIGHT SIMULATION.
 
-BUSINESS DOMAIN POLICIES (key rules only):
-{wiki_context}
+Before the agent submits an action to the real environment, you must predict whether it will SUCCEED or FAIL.
 
-Your review criteria:
-1. MISSING PRECONDITIONS: Does the tool require prior observations (e.g., searching before booking) that are NOT in memory? → REJECT
-   - *Note: Look closely at memory for `user_interaction` blocks where the user said 'yes' before rejecting bookings!*
-2. BUSINESS LOGIC ERRORS: Does it violate a domain policy (e.g., refund to wrong payment type, exceed allowed coupons, cancel without insurance)? → REJECT
-3. PREMATURE TRANSFER: Is `transfer_to_human_agents` called when there are still API tools that could resolve the issue? → REJECT
-4. JSON SCHEMA IS NOT YOUR JOB: DO NOT REJECT based on exact JSON parameter formatting (e.g., complaining that `payment_methods` contains amounts, or `flights` is missing an origin). The Syntax Monitor already approved the formatting!
-5. SAFE ACTION: Is the action logically sound, has all required preconditions met, and follows policy? → APPROVE
-6. READ/LOOKUP ACTIONS: Actions like `get_user_profile`, `search_direct_flight` etc. are ALWAYS safe to APPROVE.
-
-Respond with ONLY "APPROVE" or "REJECT: <specific reason>".
-
-DRAFTED TOOL:
+DRAFTED ACTION:
 {json.dumps(state.drafted_tool_call, indent=2)}
 
-MEMORY (recent observations):
-{json.dumps(state.memory[-8:], indent=2)}
-"""
+TOOL SCHEMA:
+{schema_str}
 
-    resp = llm.invoke([SystemMessage(content=sys_prompt)])
-    decision = re.sub(r'<think>.*?</think>', '', resp.content, flags=re.DOTALL).strip()
+PRIOR MEMORY (what has happened so far):
+{format_memory(state.memory)}
+
+FAILURE HISTORY (approaches that already failed):
+{chr(10).join([f"`{f.get('action')}` failed: {f.get('error', '?')}" for f in state.failure_log[-4:]]) if state.failure_log else 'None.'}
+
+Your simulation task:
+1. Check: Are all required arguments present and non-null?
+2. Check: Do the IDs, names, or values in the arguments actually appear in the PRIOR MEMORY? (If an ID was never returned by a previous API call, it may be hallucinated.)
+3. Check: Based on the memory, is the precondition for this action satisfied? (e.g., can you modify something that may already be in a terminal state?)
+4. Check: Is this action a repetition of something that already failed with the same arguments?
+5. Check: If this is `transfer_to_human_agents` — is this truly the ONLY option left, or is there still a valid tool approach available?
+
+If any check fails, use `declare_verdict` with REJECT and clearly state which check failed and what the agent should do instead.
+If all checks pass, use `declare_verdict` with APPROVE.
+
+Be willing to APPROVE when the action logically follows from the memory. Do not be overly restrictive.
+The fast-path APPROVE is appropriate for `respond` actions where the agent is simply asking the user a question."""
     
-    if decision.startswith("REJECT"):
-        print(f"         [Validator REJECTED] {decision}")
-        return {"rejection_feedback": decision, "rejection_source": "validator", "rejection_count": state.rejection_count + 1}
-        
-    # If approved, the tool call is returned to multi_agent_strategy.py to execute via env.step()
-    return {"node_logs": [{"node": "validator", "status": "approved"}]}
+    # Fast-path: Don't invoke LLM for simple respond actions (saves tokens, avoids false rejections)
+    if tool_name == "respond":
+        return {
+            "node_logs": [{"node": "validator", "status": "approved (fast-path respond)"}],
+            "internal_retry_count": 0
+        }
+    
+    tools = [{
+        "type": "function",
+        "function": {
+            "name": "declare_verdict",
+            "description": "Approve or reject the drafted tool call based on pre-flight simulation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "decision": {"type": "string", "enum": ["APPROVE", "REJECT"]},
+                    "reason": {"type": "string", "description": "Explain which check failed and what the correct approach is."}
+                },
+                "required": ["decision"]
+            }
+        }
+    }]
+
+    parsed_json, raw_log = invoke_with_paradigm(llm, sys_prompt, [], tools, reasoning_mode, "Validator")
+    
+    if parsed_json and parsed_json.get("name") == "declare_verdict":
+        args = parsed_json.get("arguments", {})
+        if args.get("decision") == "REJECT":
+            return {
+                "rejection_feedback": args.get("reason", "Rejected by pre-flight simulation"),
+                "rejection_source": "validator",
+                "internal_retry_count": current_retries,
+                "node_logs": [{"node": "validator", "status": f"rejected: {args.get('reason', '')[:100]}"}]
+            }
+    
+    return {
+        "node_logs": [{"node": "validator", "status": "approved"}],
+        "internal_retry_count": 0
+    }
