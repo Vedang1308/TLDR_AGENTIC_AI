@@ -3,6 +3,7 @@ import subprocess
 import os
 import time
 import sys
+import concurrent.futures
 
 # Ensure the parent phase3 directory is in Python's path so we can resolve the local tau_bench copy
 phase3_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -13,9 +14,63 @@ import json
 import glob
 from tau_bench.envs import get_env
 
+
+# ── GPU AUTO-DETECTION ─────────────────────────────────────────────────────────
+# Runs `nvidia-smi` to count available GPUs.
+# Returns the integer GPU count (0 if nvidia-smi is not available / no GPUs).
+# This drives two key decisions:
+#   1-GPU  → sequential experiments (max_workers=1), lower concurrency,
+#             user model shares GPU 0 (same port 8001 but same device).
+#   2+ GPU → parallel experiments (max_workers=5), higher concurrency,
+#             user model pinned to GPU 1 via CUDA_VISIBLE_DEVICES in the
+#             start_user_model.sh script (already configured that way).
+# ──────────────────────────────────────────────────────────────────────────────
+def detect_gpu_count() -> int:
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            gpus = [line.strip() for line in result.stdout.strip().splitlines() if line.strip()]
+            return len(gpus)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return 0  # No nvidia-smi or no GPUs found
+
+
+def get_gpu_config(gpu_count: int) -> dict:
+    """
+    Returns the execution configuration based on available GPU count.
+
+    1 GPU  — safe conservative mode:
+        - max_workers=1     → experiments run one after another (no thread contention)
+        - max_concurrency=4 → 4 tasks hit the vLLM server simultaneously (it handles async batching)
+        - user_device=0     → user model shares the single GPU (as started by start_user_model.sh)
+
+    2+ GPU — parallel acceleration mode:
+        - max_workers=5     → up to 5 experiment combos run simultaneously in threads
+        - max_concurrency=20 → 20 concurrent tasks per experiment
+        - user_device=1     → user model runs on GPU 1 (dedicated, no contention with agent)
+    """
+    if gpu_count >= 2:
+        return {
+            "mode": "DUAL-GPU (parallel)",
+            "max_workers": 5,
+            "max_concurrency": 20,
+            "user_gpu_device": 1,
+        }
+    else:
+        return {
+            "mode": "SINGLE-GPU (sequential)",
+            "max_workers": 1,
+            "max_concurrency": 4,
+            "user_gpu_device": 0,
+        }
+
+
 def get_existing_completed_tasks(output_path):
     completed_ids = set()
-    # Check all json files in the directory
     search_pattern = os.path.join(output_path, "*.json")
     print(f"Scanning for completed tasks in: {search_pattern}")
     files = glob.glob(search_pattern)
@@ -27,88 +82,82 @@ def get_existing_completed_tasks(output_path):
                 if isinstance(data, list):
                     for item in data:
                         if isinstance(item, dict) and "task_id" in item:
-                            # Check if it was a crash/error
                             info = item.get("info", {})
                             if info and "error" in info:
-                                continue # Treat as failed/missing
+                                continue  # Treat crashed tasks as incomplete
                             completed_ids.add(item["task_id"])
         except Exception:
-            pass # Ignore corrupt files
+            pass
     return completed_ids
 
-def run_experiment(domain, model, strategy, user_model, user_strategy, trial, start_index=0, max_concurrency=1, results_dir="results/phase3_v2"):
-    print(f"Running Experiment: Domain={domain}, Model={model}, Strategy={strategy}, Trial={trial}, ResumeFrom={start_index}")
-    
+
+def run_experiment(domain, model, strategy, user_model, user_strategy, trial,
+                   start_index=0, max_concurrency=1, results_dir="results/phase3"):
+    print(f"Running Experiment: Domain={domain}, Model={model}, Strategy={strategy}, "
+          f"Trial={trial}, ResumeFrom={start_index}, Concurrency={max_concurrency}")
+
     # Construct output path
     model_safe_name = model.replace("/", "_")
     output_path = os.path.join(results_dir, domain, model_safe_name, strategy, f"trial_{trial}")
     os.makedirs(output_path, exist_ok=True)
-    
-    # Determine model provider (assuming openai for vLLM/GPT)
-    model_provider = "openai" 
-    
-    # Set up Port Map for Local vLLM
-    # Maps specific models to ports 8000 (Agent) and 8001 (User)
+
+    # Port map: agent model always on 8000, user model always on 8001
     port_map = {
         "Qwen/Qwen3-4B": 8000,
         "Qwen/Qwen3-8B": 8000,
         "Qwen/Qwen3-14B": 8000,
         "Qwen/Qwen3-32B": 8000,
         "User-Qwen3-32B": 8001,
-        "gpt-4o": 8001 # Fallback if using gpt-4o as alias for user
+        "gpt-4o": 8001,
     }
-    
-    # Export Port Map to environment so get_env can find local servers
+
+    # Export Port Map to environment so get_env and LiteLLM can find local servers
     os.environ["TAUBENCH_PORT_MAP"] = json.dumps(port_map)
-    # Give LiteLLM explicit base urls if available
     os.environ["OPENAI_API_BASE"] = f"http://localhost:{port_map.get(model, 8000)}/v1"
     os.environ["LITELLM_API_BASE"] = f"http://localhost:{port_map.get(model, 8000)}/v1"
-    
-    # SMART RESUME LOGIC
+
+    # Smart Resume Logic: only run tasks not yet completed
     completed_ids = get_existing_completed_tasks(output_path)
-    
-    # Get total tasks count (lightweight init)
-    # Note: We assume 'test' split as per default
+
     try:
-        temp_env = get_env(domain, user_strategy=user_strategy, user_model=user_model, user_provider="openai", task_split="test")
+        temp_env = get_env(domain, user_strategy=user_strategy, user_model=user_model,
+                           user_provider="openai", task_split="test")
         total_tasks = len(temp_env.tasks)
         print(f"Total tasks in dataset: {total_tasks}. Completed so far: {len(completed_ids)}")
     except Exception as e:
-        print(f"Warning: Could not determine total tasks ({e}). Falling back to simple start-index.")
-        total_tasks = 116 # Default fallback for retail-test
-    
-    # Identify missing task IDs to build the queue
-    needed_ids = []
-    for i in range(total_tasks):
-        if i >= start_index and str(i) not in completed_ids and i not in completed_ids: # Also check string versions
-            needed_ids.append(str(i))
-            
+        print(f"Warning: Could not determine total tasks ({e}). Falling back to 116.")
+        total_tasks = 116
+
+    needed_ids = [
+        str(i) for i in range(total_tasks)
+        if i >= start_index and str(i) not in completed_ids and i not in completed_ids
+    ]
+
     if not needed_ids:
         print(f"All {total_tasks} tasks completed! Skipping.")
         return
 
     print(f"Resuming/Retrying {len(needed_ids)} tasks: {needed_ids[:5]}...")
 
-    
     env = os.environ.copy()
     env["TAUBENCH_PORT_MAP"] = json.dumps(port_map)
-    env["OPENAI_API_KEY"] = "sk-1234" # Ensure fake key is present to bypass LiteLLM validation
-    
-    # NEW: Link VLLM ports for Phase3_v2 Custom Nodes
+    env["OPENAI_API_KEY"] = "sk-1234"  # Bypass LiteLLM validation for local vLLM
+
+    # Pass model info to multi-agent nodes (used by get_llm() in nodes.py)
     env["AGENT_MODEL_NAME"] = model
     env["AGENT_API_BASE"] = f"http://localhost:{port_map.get(model, 8000)}/v1"
-    
-    # NEW: Zero-Touch Integration for Reasoning Paradigms
+
+    # Map strategy name to tau_bench strategy + reasoning mode env var
     base_strategy = strategy
     if strategy.startswith("multi-agent"):
-        base_strategy = "multi-agent" # What tau_bench expects
+        base_strategy = "multi-agent"
         if strategy == "multi-agent-react":
             env["AGENT_REASONING_MODE"] = "react"
         elif strategy == "multi-agent-act":
             env["AGENT_REASONING_MODE"] = "act"
         else:
             env["AGENT_REASONING_MODE"] = "fc"
-    
+
     cmd = [
         sys.executable, "run.py",
         "--agent-strategy", "tool-calling" if base_strategy == "fc" else base_strategy,
@@ -123,36 +172,55 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
         "--log-dir", output_path,
         "--task-ids"
     ] + needed_ids
-    
+
     try:
         subprocess.run(cmd, check=True, env=env)
         print(f"Experiment finished successfully. Results in {output_path}")
     except subprocess.CalledProcessError as e:
         print(f"Experiment failed with error: {e}")
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Run Phase 1 Experiments")
+    parser = argparse.ArgumentParser(description="Run Phase 3 Experiments")
     parser.add_argument("--domain", choices=["retail", "airline", "all"], default="all")
-    parser.add_argument("--strategy", choices=["react", "act", "fc", "multi-agent", "multi-agent-act", "multi-agent-react", "multi-agent-fc", "all"], default="multi-agent-fc")
-    parser.add_argument("--model", type=str, help="Specific model to run (e.g., Qwen/Qwen3-4B-Instruct)")
-    parser.add_argument("--user-model", type=str, default="User-Qwen3-32B", help="Fixed user model")
-    parser.add_argument("--start-index", type=int, default=0, help="Task index to start execution from")
-    parser.add_argument("--trials", type=int, default=5)
-    parser.add_argument("--max-workers", type=int, default=5, help="Maximum number of parallel workers")
-    parser.add_argument("--max-concurrency", type=int, default=20, help="Maximum concurrency for run.py within each experiment")
-    
+    parser.add_argument("--strategy", choices=[
+        "react", "act", "fc",
+        "multi-agent", "multi-agent-act", "multi-agent-react", "multi-agent-fc", "all"
+    ], default="multi-agent-fc")
+    parser.add_argument("--model", type=str, help="Specific model to run (e.g., Qwen/Qwen3-32B)")
+    parser.add_argument("--user-model", type=str, default="User-Qwen3-32B")
+    parser.add_argument("--start-index", type=int, default=0)
+    parser.add_argument("--trials", type=int, default=1)
+    # These two are OVERRIDDEN by GPU auto-detection unless --force-workers / --force-concurrency are passed
+    parser.add_argument("--max-workers", type=int, default=None,
+                        help="Override auto-detected parallel workers (default: auto from GPU count)")
+    parser.add_argument("--max-concurrency", type=int, default=None,
+                        help="Override auto-detected task concurrency (default: auto from GPU count)")
     args = parser.parse_args()
-    
-    # GLOBAL FIX: Set API Key for get_env calls (User/Task counting)
+
+    # ── AUTO-DETECT GPU COUNT AND SET EXECUTION CONFIG ────────────────────────
+    gpu_count = detect_gpu_count()
+    gpu_cfg = get_gpu_config(gpu_count)
+
+    # Allow manual overrides, otherwise use auto-detected values
+    max_workers = args.max_workers if args.max_workers is not None else gpu_cfg["max_workers"]
+    max_concurrency = args.max_concurrency if args.max_concurrency is not None else gpu_cfg["max_concurrency"]
+
+    print(f"\n{'='*60}")
+    print(f"  GPU AUTO-DETECTION")
+    print(f"  Detected GPUs : {gpu_count}")
+    print(f"  Execution Mode: {gpu_cfg['mode']}")
+    print(f"  Max Workers   : {max_workers}  (parallel experiment threads)")
+    print(f"  Max Concurrency: {max_concurrency}  (concurrent tasks per experiment)")
+    print(f"{'='*60}\n")
+    # ─────────────────────────────────────────────────────────────────────────
+
     os.environ["OPENAI_API_KEY"] = "sk-1234"
-    
+
     domains = ["retail", "airline"] if args.domain == "all" else [args.domain]
-    
+
     if args.strategy == "all":
-        strategies = [
-            "fc", "act", "react",
-            "multi-agent-fc", "multi-agent-act", "multi-agent-react"
-        ]
+        strategies = ["fc", "act", "react", "multi-agent-fc", "multi-agent-act", "multi-agent-react"]
     else:
         strategies = [args.strategy]
 
@@ -160,31 +228,34 @@ def main():
         "Qwen/Qwen3-4B",
         "Qwen/Qwen3-8B",
         "Qwen/Qwen3-14B",
-        "Qwen/Qwen3-32B"
+        "Qwen/Qwen3-32B",
     ] if not args.model else [args.model]
-    
-    experiments = []
-    for domain in domains:
-        for model in models:
-            for strategy in strategies:
-                for trial in range(args.trials):
-                    experiments.append((domain, model, strategy, args.user_model, "llm", trial, args.start_index, args.max_concurrency))
-                    
-    if args.max_workers > 1:
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+
+    experiments = [
+        (domain, model, strategy, args.user_model, "llm", trial, args.start_index, max_concurrency)
+        for domain in domains
+        for model in models
+        for strategy in strategies
+        for trial in range(args.trials)
+    ]
+
+    if max_workers > 1:
+        print(f"Running {len(experiments)} experiments in parallel (max_workers={max_workers})...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [
-                executor.submit(run_experiment, domain, model, strategy, user_model, user_strategy, trial, start_index, max_concurrency)
-                for domain, model, strategy, user_model, user_strategy, trial, start_index, max_concurrency in experiments
+                executor.submit(run_experiment, *exp)
+                for exp in experiments
             ]
             for future in concurrent.futures.as_completed(futures):
                 try:
                     future.result()
                 except Exception as e:
-                    print(f"Experiment failed with exception: {e}")
+                    print(f"Experiment thread failed: {e}")
     else:
+        print(f"Running {len(experiments)} experiments sequentially...")
         for exp in experiments:
             run_experiment(*exp)
+
 
 if __name__ == "__main__":
     main()
