@@ -34,11 +34,11 @@ def planner_node(state: PevState) -> Dict:
     llm = get_llm()
     
     # 1. Build context
-    sys_prompt = f"""You are the STRATEGIC PLANNER for a tool-using AI agent in a customer service setting.
+    sys_prompt = """You are the STRATEGIC PLANNER for a tool-using AI agent in a customer service setting.
 Your job is to read the user conversation, the environment's BUSINESS RULES, and the memory kernel, then output a strict 1-2 sentence PLAN for the Executor.
 
 == ENVIRONMENT BUSINESS RULES (The Wiki) ==
-{state.wiki}
+{wiki}
 
 CRITICAL RULES:
 1. READ MEMORY FIRST. Before planning an action, check the MEMORY KERNEL below. If that action already appears in memory, DO NOT plan it again - proceed to the NEXT logical step.
@@ -92,7 +92,8 @@ End your internal <think> reasoning and output your final action plan starting e
         latest_api=latest_api,
         memory_str=mem_str, 
         feedback=feed_str,
-        strategy_specific_instructions=strategy_instructions
+        strategy_specific_instructions=strategy_instructions,
+        wiki=state.wiki
     ))
     
     # Format user convo
