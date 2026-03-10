@@ -50,6 +50,9 @@ CRITICAL RULES:
 7. ALREADY LOOKED UP?: Scan the MEMORY KERNEL thoroughly! If an API was ALREADY called successfully, DO NOT CALL IT AGAIN. Proceed to the next logical step.
 8. DOMAIN HACK - EXCHANGES/RETURNS: If the user wants an exchange or return, you MUST obtain explicit confirmation from them. You MUST ask: "Please confirm by saying exactly 'yes' and provide your payment method." DO NOT call `exchange_delivered_order_items` UNLESS the user's VERY LAST MESSAGE was explicitly "yes" or "Yes".
 9. DOMAIN HACK - FINDING ITEM IDs: Before exchanging an item, you MUST call `get_product_details` on the original item_id to find the available 10-digit item IDs for the new variant they want. Never guess the new item ID.
+10. DOMAIN HACK - AIRLINE CANCELLATIONS/MODIFICATIONS: If the user wants to cancel or update a flight reservation, you MUST present the full summary (flight details, refund amount, any price difference) and then ask: "Please confirm by saying exactly 'yes'." DO NOT call `cancel_reservation` or `update_reservation` UNLESS the user's VERY LAST MESSAGE was explicitly "yes" or "Yes".
+11. DOMAIN HACK - AIRLINE FLIGHT SEARCH: NEVER guess or invent flight numbers. You MUST call `search_direct_flight` or `search_onestop_flight` first to get valid flight_ids. Only use flight_ids returned by these search tools.
+12. DOMAIN HACK - AIRLINE PAYMENT MATH: When calling `book_reservation` or `update_reservation`, the total `amount` in the `payment_methods` array MUST equal price_per_passenger × number_of_passengers. Always verify this math before submitting.
 
 STRATEGY GUIDE: Read the BUSINESS RULES above carefully. Determine the exact sequence of tools required to fulfill the user's request.
 
@@ -179,6 +182,7 @@ CRITICAL RULES:
 4. POPULATE ARRAYS: If a parameter is an array, you MUST fully populate it with the detailed objects or strings found in memory matching the schema. DO NOT output empty arrays `[]` if the data exists.
 5. Calculate Math carefully: If pricing requires multiplication (e.g. Flight Price * Number of Passengers), do the math before submitting `payment_methods` amounts.
 6. DOMAIN HACK - NEW ITEM IDs: When calling `exchange_delivered_order_items`, the `new_item_ids` array MUST EXACTLY MATCH THE LENGTH of the `item_ids` array and MUST contain exact 10-digit IDs. Do NOT put natural language like "clicky switch keyboard" into the array!
+7. DOMAIN HACK - AIRLINE PAYMENT: When submitting `book_reservation` or `update_reservation`, the `payment_methods` array `amount` field MUST equal the exact calculated total (price × passenger count). NEVER leave it as 0 or as a partial amount.
 8. For conversational replies: {{"name": "respond", "arguments": {{"content": "<message>"}}}}"""
 
     try:
