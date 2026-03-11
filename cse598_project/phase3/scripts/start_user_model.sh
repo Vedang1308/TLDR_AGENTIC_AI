@@ -1,5 +1,5 @@
 #!/bin/bash
-MODEL="Qwen/Qwen3-32B"
+MODEL="Qwen/Qwen3-32B-FP8"
 PORT=8001
 
 # Load CUDA compiler if on SOL
@@ -26,10 +26,9 @@ python3 -m vllm.entrypoints.openai.api_server \
     --served-model-name "User-Qwen3-32B" \
     --trust-remote-code \
     --port $PORT \
-    --dtype float16 \
+    --dtype auto \
     --max-model-len 30000 \
     --max-num-batched-tokens 30000 \
     --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.50 \
-    --quantization bitsandbytes \
-    --load-format bitsandbytes
+    --quantization fp8
