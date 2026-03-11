@@ -125,7 +125,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial, st
 def main():
     parser = argparse.ArgumentParser(description="Run Phase 3 Experiments")
     parser.add_argument("--domain", choices=["retail", "airline", "all"], default="all")
-    parser.add_argument("--strategy", choices=["react", "act", "fc", "all"], default="all")
+    parser.add_argument("--strategy", choices=["react", "act", "fc", "multi-agent", "all"], default="all")
     parser.add_argument("--model", type=str, help="Specific model to run (e.g., Qwen/Qwen3-4B-Instruct)")
     parser.add_argument("--user-model", type=str, default="User-Qwen3-32B", help="Fixed user model")
     parser.add_argument("--start-index", type=int, default=0, help="Task index to start execution from")
@@ -139,7 +139,7 @@ def main():
     os.environ["OPENAI_API_KEY"] = "sk-1234"
     
     domains = ["retail", "airline"] if args.domain == "all" else [args.domain]
-    strategies = ["react", "act", "fc"] if args.strategy == "all" else [args.strategy]
+    strategies = ["react", "act", "fc", "multi-agent"] if args.strategy == "all" else [args.strategy]
     
     # If no specific model is provided, it defaults to None and fails, 
     # as the user should specify the model they are running servers for.
