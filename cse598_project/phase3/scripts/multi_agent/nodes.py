@@ -186,6 +186,19 @@ Do NOT write any text, conversational filler, or <think> tags. Just output the m
                     
             return None, content
 
+def load_live_wisdom(state: PevState):
+    """Refreshes state.global_wisdom from disk for real-time parallel learning."""
+    wisdom_file = "results/phase3/persistent_wisdom.json"
+    if os.path.exists(wisdom_file):
+        try:
+            with open(wisdom_file, "r") as f:
+                live_wisdom = json.load(f)
+                # Merge and deduplicate
+                # Using dict.fromkeys to preserve order and deduplicate
+                state.global_wisdom = list(dict.fromkeys(state.global_wisdom + live_wisdom))
+        except:
+            pass
+
 def planner_node(state: PevState) -> Dict:
     llm = get_llm()
     reasoning_mode = os.environ.get("AGENT_REASONING_MODE", "fc")
@@ -203,17 +216,8 @@ def planner_node(state: PevState) -> Dict:
         failure_history = "None."
     
     # LIVE WISDOM RELOAD (Enables real-time learning across parallel trials)
-    wisdom_file = "results/phase3/persistent_wisdom.json"
-    live_wisdom = []
-    if os.path.exists(wisdom_file):
-        try:
-            with open(wisdom_file, "r") as f:
-                live_wisdom = json.load(f)
-        except:
-            pass
-    
-    # Merge initial state wisdom with live disk wisdom
-    all_wisdom = list(set(state.global_wisdom + live_wisdom))
+    load_live_wisdom(state)
+    all_wisdom = state.global_wisdom
     
     wisdom_section = ""
     if all_wisdom:
@@ -495,10 +499,13 @@ def validator_node(state: PevState) -> Dict:
     if state.drafted_tool_call and state.drafted_tool_call.get("name") in ["respond", "transfer_to_human_agents"] and current_retries >= 5:
         return {"internal_retry_count": 0, "node_logs": [{"node": "validator", "status": "bypassed_for_fallback"}]}
         
-    if current_retries >= 5:
-        fallback = {"name": "respond", "arguments": {"content": "I encountered a policy violation I couldn't resolve. Let's try a different request."}}
-        return {"drafted_tool_call": fallback, "internal_retry_count": 0, "rejection_feedback": None, "rejection_source": None}
+    # LIVE WISDOM RELOAD: Access the global hive-mind even in the Validator
+    load_live_wisdom(state)
     
+    wisdom_section = ""
+    if state.global_wisdom:
+        wisdom_section = "\nGLOBAL EXPERTISE (Universal Rules from other trials):\n" + "\n".join([f"- {w}" for w in state.global_wisdom])
+
     # Find matching tool schema to give to the Validator so it can check arguments
     tool_name = state.drafted_tool_call.get("name", "") if state.drafted_tool_call else ""
     matching_schema = next(
@@ -528,7 +535,10 @@ Your simulation task:
 2. Check: Do the IDs, names, or values in the arguments actually appear in the PRIOR MEMORY? (If an ID was never returned by a previous API call, it may be hallucinated.)
 3. Check: Based on the memory, is the precondition for this action satisfied? (e.g., can you modify something that may already be in a terminal state?)
 4. Check: Is this action a repetition of something that already failed with the same arguments?
-5. Check: If this is `transfer_to_human_agents` — is this truly the ONLY option left, or is there still a valid tool approach available?
+5. Check: GLOBAL EXPERTISE VIOLATION — Does this action violate any of the global technical rules? If so, REJECT.
+6. Check: If this is `transfer_to_human_agents` — is this truly the ONLY option left, or is there still a valid tool approach available?
+
+{wisdom_section}
 
 If any check fails, use `declare_verdict` with REJECT and clearly state which check failed and what the agent should do instead.
 If all checks pass, use `declare_verdict` with APPROVE.
@@ -595,9 +605,16 @@ def global_reflector_node(state: PevState) -> Dict:
         trace_steps.append(f"[{node}]: {content}")
     trace_str = "\n".join(trace_steps[-10:]) # last 10 steps
 
+    # LIVE WISDOM RELOAD for comparison
+    load_live_wisdom(state)
+    existing_wisdom_str = "\n".join([f"- {w}" for w in state.global_wisdom]) if state.global_wisdom else "None."
+
     sys_prompt = """You are a META-COGNITIVE ARCHITECT. 
 Your task is to analyze a failed agent trajectory and synthesize exactly ONE domain-agnostic technical insight.
 This insight will be used by future agents to avoid similar failures.
+
+EXISTING GLOBAL WISDOM (Do NOT repeat or duplicate these):
+{existing_wisdom}
 
 FAILURE ANALYSIS DATA:
 1. USER CONVERSATION HISTORY:
@@ -608,8 +625,15 @@ FAILURE ANALYSIS DATA:
 
 3. MEMORY KERNEL AT FAILURE:
 {memory}
+
+GUIDELINES:
+1. Be technical and procedural (e.g., "Verify record state before submission").
+2. Be domain-agnostic (no names or specific values).
+3. Be UNIQUE. If the failure is already explained by one of the EXISTING GLOBAL WISDOM rules, respond with exactly "REDUNDANT".
+4. Focus on the HIGHEST-LEVEL technical mistake.
 """
     prompt = sys_prompt.format(
+        existing_wisdom=existing_wisdom_str,
         conversation=conv_history,
         trace=trace_str,
         memory=mem_str
@@ -621,6 +645,12 @@ FAILURE ANALYSIS DATA:
     # Clean up any "Insight:" prefixes
     insight = re.sub(r'^(Insight|Meta-Insight):\s*', '', insight, flags=re.IGNORECASE)
     
+    if "REDUNDANT" in insight.upper() and len(insight) < 20:
+        return {
+            "global_wisdom": [], 
+            "node_logs": [{"node": "global_reflector", "status": "redundant_insight_skipped"}]
+        }
+
     return {
         "global_wisdom": [insight], # This will be appended to the global state
         "node_logs": [{"node": "global_reflector", "insight": insight}]

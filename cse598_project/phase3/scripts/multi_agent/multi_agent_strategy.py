@@ -62,7 +62,8 @@ class MultiAgentStrategy(Agent):
     def _save_wisdom(self, wisdom: List[str]):
         # Keep only unique wisdom to prevent bloating
         current = self._load_wisdom()
-        updated = list(set(current + wisdom))
+        # Merged and deduplicate while preserving order (newest last)
+        updated = list(dict.fromkeys(current + wisdom))
         
         # Atomic save to prevent corruption during parallel trials
         temp_file = self.wisdom_file + ".tmp"
