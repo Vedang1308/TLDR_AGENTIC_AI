@@ -5,13 +5,14 @@ PORT=8001
 # Load CUDA compiler if on SOL
 module load cuda-12.4.1-gcc-12.1.0 2>/dev/null || true
 
-# Activate Python venv
-source ~/agents/TLDR_AGENTIC_AI/phase3_env/bin/activate
+# Activate conda
+eval "$(conda shell.bash hook)"
+conda activate phase3_env
 
 # Force cache to scratch to prevent home directory quota limits
-export HF_HOME=/scratch/svijay/huggingface_cache
-export XDG_CACHE_HOME=/scratch/svijay/xdg_cache
-export TMPDIR=/scratch/svijay/tmp
+export HF_HOME=/scratch/svijay46/huggingface_cache
+export XDG_CACHE_HOME=/scratch/svijay46/xdg_cache
+export TMPDIR=/scratch/svijay46/tmp
 mkdir -p $HF_HOME
 mkdir -p $XDG_CACHE_HOME
 mkdir -p $TMPDIR
@@ -28,9 +29,10 @@ python3 -m vllm.entrypoints.openai.api_server \
     --served-model-name "User-Qwen3-32B" \
     --trust-remote-code \
     --port $PORT \
-    --dtype float16 \
     --max-model-len 30000 \
     --max-num-batched-tokens 30000 \
     --tensor-parallel-size 1 \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.60 \
+    --quantization bitsandbytes \
+    --load-format bitsandbytes \
     --swap-space 64
