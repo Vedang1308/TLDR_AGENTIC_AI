@@ -242,7 +242,12 @@ CRITICAL RULE 4: Before planning, read the FAILURE HISTORY and GLOBAL EXPERTISE 
 CRITICAL RULE 5: If the FAILURE HISTORY shows the same tool being rejected multiple times, shift to an alternate tool or a different argument structure.
 
 {wisdom_section}
+
 {tool_wiki_section}
+
+### MANDATORY UNIFORM ACTION RULE:
+You are a STRATEGIST, not an executor. You ONLY have access to the `submit_plan` tool.
+DO NOT ATTEMPT TO CALL ANY OTHER TOOLS. Use the 'TECHNICAL TOOL WIKI' above to understand what the Executor can do, but your ONLY output must be a `submit_plan` call.
 
 MEMORY KERNEL:
 {memory_str}
@@ -289,19 +294,29 @@ REJECTION FEEDBACK:
     
     parsed_json, raw_log = invoke_with_paradigm(llm, sys_prompt, user_msgs, tools, reasoning_mode, "Planner")
     
-    if parsed_json and parsed_json.get("name") == "submit_plan":
+    if parsed_json:
+        # ROBUST WRAPPING: If the Planner tried to call a domain tool directly, wrap it as a plan
+        name = parsed_json.get("name")
         args = parsed_json.get("arguments", {})
-        plan = args.get("plan", "Follow the rules.")
-        if args.get("task_completed", False):
-            return {"task_completed": True, "error_reflection": None, "node_logs": [{"node": "planner", "plan": plan, "log": raw_log}]}
+        
+        if name == "submit_plan":
+            plan = args.get("plan", "Proceed with next steps.")
+            if args.get("task_completed", False):
+                return {"task_completed": True, "error_reflection": None, "node_logs": [{"node": "planner", "plan": plan, "log": raw_log}]}
+        else:
+            # Planner hallucinated a domain tool call. Convert it to a plan for the executor.
+            plan = f"I will use the {name} tool with these parameters: {json.dumps(args)}. This is to move the task forward."
+            print(f"--- [PLANNER RECOVERY] Wrapped direct tool call '{name}' into a plan ---")
+
         return {
             "current_plan": plan, 
             "rejection_feedback": None,
             "rejection_source": None,
-            "error_reflection": None,  # Clear reflection after Planner has absorbed it
+            "error_reflection": None,
             "node_logs": [{"node": "planner", "plan": plan, "log": raw_log}]
         }
     else:
+        # Fallback if no JSON at all
         return {
             "current_plan": "Proceed with default action or ask for clarification.",
             "rejection_feedback": None,
@@ -568,23 +583,37 @@ def global_reflector_node(state: PevState) -> Dict:
     """
     llm = get_llm()
     
-    # We only care about the technical sequence that led to failure
+    # We care about the user's initial goals vs. what the agent actually did
     mem_str = format_memory(state.memory)
+    conv_history = "\n".join([f"{m['role']}: {m['content']}" for m in state.user_conversation])
     
-    sys_prompt = """You are a META-COGNITIVE EXPERT. 
+    # Extract the sequence of plans and errors from the logs
+    trace_steps = []
+    for log in state.node_logs:
+        node = log.get("node", "unknown")
+        content = log.get("plan") or log.get("status") or log.get("error") or ""
+        trace_steps.append(f"[{node}]: {content}")
+    trace_str = "\n".join(trace_steps[-10:]) # last 10 steps
+
+    sys_prompt = """You are a META-COGNITIVE ARCHITECT. 
 Your task is to analyze a failed agent trajectory and synthesize exactly ONE domain-agnostic technical insight.
 This insight will be used by future agents to avoid similar failures.
 
-Guidelines for the insight:
-1. Do NOT mention specific names, values, or domain-specific entities (e.g., avoid "Mohamed" or "Flight HAT023").
-2. DO focus on technical/procedural patterns (e.g., "Always verify account data exists in memory before attempting modifications").
-3. Make it a single, actionable sentence.
-4. Focus on the root cause of the failure.
+FAILURE ANALYSIS DATA:
+1. USER CONVERSATION HISTORY:
+{conversation}
 
-The trajectory summary:
+2. EXECUTION TRACE (Last 10 steps):
+{trace}
+
+3. MEMORY KERNEL AT FAILURE:
 {memory}
 """
-    prompt = sys_prompt.format(memory=mem_str)
+    prompt = sys_prompt.format(
+        conversation=conv_history,
+        trace=trace_str,
+        memory=mem_str
+    )
     
     resp = llm.invoke([SystemMessage(content=prompt), HumanMessage(content="Synthesize the meta-insight for this failure.")])
     insight = resp.content.strip()

@@ -124,63 +124,52 @@ class MultiAgentStrategy(Agent):
         )
         if user_id_match:
             detected_user_id = user_id_match.group(1).lower()
-            
-            # Find the user-profile lookup tool dynamically.
-            # We look for a tool whose name contains BOTH "user" and "detail"
-            # — this matches get_user_details in airline/retail without hardcoding.
-            lookup_tool = next(
-                (t for t in self.tools_info
-                 if isinstance(t, dict)
-                 and 'function' in t
-                 and 'user' in t['function'].get('name', '').lower()
-                 and 'detail' in t['function'].get('name', '').lower()),
-                None
-            )
+            lookup_tool = None
+            for t in self.tools_info:
+                t_name = t.get('name', '').lower() if not 'function' in t else t['function'].get('name', '').lower()
+                if 'user' in t_name and 'detail' in t_name:
+                    lookup_tool = t
+                    break
             
             if lookup_tool:
-                tool_name = lookup_tool['function']['name']
                 try:
-                    seed_action = Action(
-                        name=tool_name,
-                        kwargs={"user_id": detected_user_id}
-                    )
-                    seed_response = env.step(seed_action)
-                    
-                    # Only seed if the lookup succeeded (no error in response)
-                    seed_obs = seed_response.observation
-                    if not any(k in seed_obs.lower() for k in ["error", "not found"]):
-                        state.memory.append({
-                            "type": "tool_result",
-                            "action_taken": tool_name,
-                            "arguments_used": {"user_id": detected_user_id},
-                            "api_observation": seed_obs
-                        })
-                        # Also add to the messages log so the full tool cycle is tracked
-                        messages_log_seed = [
-                            {"role": "assistant", "tool_calls": [{
-                                "id": "call_seed_0",
-                                "type": "function",
-                                "function": {"name": tool_name, "arguments": json.dumps({"user_id": detected_user_id})}
-                            }]},
-                            {"role": "tool", "tool_call_id": "call_seed_0",
-                             "name": tool_name, "content": seed_obs}
-                        ]
-                    else:
-                        seed_response = None  # Don't seed on error
-                        messages_log_seed = []
-                except Exception as seed_err:
-                    # Non-fatal — if seeding fails, the agent continues normally
-                    seed_response = None
-                    messages_log_seed = []
-            else:
-                seed_response = None
-                messages_log_seed = []
-        else:
-            seed_response = None
-            messages_log_seed = []
+                    tool_name = lookup_tool.get('name') or lookup_tool.get('function', {}).get('name')
+                    res = env.step(Action(name=tool_name, kwargs={'user_id': detected_user_id}))
+                    state.memory.append({
+                        "action": "AUTO_PREFETCH_USER",
+                        "args": {"user_id": detected_user_id},
+                        "observation": str(res.observation)
+                    })
+                    print(f"--- [PROACTIVE] Pre-fetched profile for {detected_user_id} ---")
+                except:
+                    pass
 
-        messages_log = state.user_conversation.copy() + messages_log_seed
+        # Also look for reservation_id (e.g. 1N99U6)
+        res_id_match = re.search(r'\b([A-Z\d]{6})\b', obs)
+        if res_id_match:
+            detected_res_id = res_id_match.group(1)
+            res_lookup = None
+            for t in self.tools_info:
+                t_name = t.get('name', '').lower() if not 'function' in t else t['function'].get('name', '').lower()
+                if 'reservation' in t_name and 'detail' in t_name:
+                    res_lookup = t
+                    break
+            
+            if res_lookup:
+                try:
+                    tool_name = res_lookup.get('name') or res_lookup.get('function', {}).get('name')
+                    res = env.step(Action(name=tool_name, kwargs={'reservation_id': detected_res_id}))
+                    state.memory.append({
+                        "action": "AUTO_PREFETCH_RESERVATION",
+                        "args": {"reservation_id": detected_res_id},
+                        "observation": str(res.observation)
+                    })
+                    print(f"--- [PROACTIVE] Pre-fetched reservation {detected_res_id} ---")
+                except:
+                    pass
 
+
+        messages_log = state.user_conversation.copy()
 
         for _ in range(max_num_steps):
             # Run the graph orchestrator
