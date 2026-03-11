@@ -126,7 +126,7 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial,
         print(f"Total tasks in dataset: {total_tasks}. Completed so far: {len(completed_ids)}")
     except Exception as e:
         # Fallback to known task counts if env initialization fails
-        fallback_counts = {"airline": 50, "retail": 116}
+        fallback_counts = {"airline": 50, "retail": 115}
         total_tasks = fallback_counts.get(domain, 50)
         print(f"Warning: Could not determine total tasks ({e}). Falling back to {total_tasks}.")
 
