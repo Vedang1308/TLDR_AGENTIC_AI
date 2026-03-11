@@ -257,6 +257,7 @@ REJECTION FEEDBACK:
     feed_str = f"Source: {state.rejection_source} | Message: {state.rejection_feedback}" if state.rejection_feedback else "None."
     sys_prompt = sys_prompt.format(
         wisdom_section=wisdom_section,
+        tool_wiki_section=tool_wiki_section,
         memory_str=mem_str,
         failure_history=failure_history,
         reflection_section=reflection_section,
