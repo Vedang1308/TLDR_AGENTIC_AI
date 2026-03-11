@@ -120,15 +120,15 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial,
     completed_ids = get_existing_completed_tasks(output_path)
 
     try:
+        # Use task_index=0 to avoid random out-of-bounds errors in environment init
         temp_env = get_env(domain, user_strategy=user_strategy, user_model=user_model,
-                           user_provider="openai", task_split="test")
+                           user_provider="openai", task_split="test", task_index=0)
         total_tasks = len(temp_env.tasks)
         print(f"Total tasks in dataset: {total_tasks}. Completed so far: {len(completed_ids)}")
     except Exception as e:
-        # Fallback to known task counts if env initialization fails
-        fallback_counts = {"airline": 50, "retail": 115}
-        total_tasks = fallback_counts.get(domain, 50)
-        print(f"Warning: Could not determine total tasks ({e}). Falling back to {total_tasks}.")
+        # Fallback safety net (now less likely to be needed after base.py fix)
+        total_tasks = 50 if domain == "airline" else 115
+        print(f"Warning: Auto-detection failed ({e}). Using safety fallback: {total_tasks}")
 
     needed_ids = [
         str(i) for i in range(total_tasks)
