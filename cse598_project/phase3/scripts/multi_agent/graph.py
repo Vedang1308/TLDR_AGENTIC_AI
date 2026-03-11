@@ -94,3 +94,13 @@ def create_reflection_graph():
     workflow.set_entry_point("error_reflection")
     workflow.add_edge("error_reflection", END)
     return workflow.compile()
+def create_global_reflection_graph():
+    """
+    A single-node graph for global expertise synthesis.
+    Runs once after a task finishes with a failure (reward < 1.0).
+    """
+    workflow = StateGraph(PevState)
+    workflow.add_node("global_reflector", global_reflector_node)
+    workflow.set_entry_point("global_reflector")
+    workflow.add_edge("global_reflector", END)
+    return workflow.compile()

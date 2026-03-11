@@ -8,12 +8,14 @@ from tau_bench.envs.base import Env
 from tau_bench.types import SolveResult, Action, RESPOND_ACTION_NAME
 
 from .state import PevState
-from .graph import create_pev_graph, create_reflection_graph
+from .graph import create_pev_graph, create_reflection_graph, create_global_reflection_graph
 
 class MultiAgentStrategy(Agent):
     """
     Replaces the monolithic single-LLM completion loop with our
     LangGraph Plan-Execute-Validate multi-agent orchestration.
+    
+    Includes PEV-Wisdom: Persistent cross-trial technical self-learning.
     """
     def __init__(
         self,
@@ -30,10 +32,30 @@ class MultiAgentStrategy(Agent):
         self.provider = provider
         self.temperature = temperature
         
-        # Compile our Multi-Agent LangGraph (main PEVAL loop)
+        # Compile our Multi-Agent LangGraphs
         self.workflow = create_pev_graph()
-        # Compile the Error Reflection graph (triggered on consecutive API errors)
         self.reflection_workflow = create_reflection_graph()
+        self.global_reflection_workflow = create_global_reflection_graph()
+        
+        # Persistent Wisdom Storage
+        self.wisdom_file = "results/phase3/persistent_wisdom.json"
+        os.makedirs(os.path.dirname(self.wisdom_file), exist_ok=True)
+
+    def _load_wisdom(self) -> List[str]:
+        if os.path.exists(self.wisdom_file):
+            try:
+                with open(self.wisdom_file, "r") as f:
+                    return json.load(f)
+            except:
+                return []
+        return []
+
+    def _save_wisdom(self, wisdom: List[str]):
+        # Keep only unique wisdom to prevent bloating
+        current = self._load_wisdom()
+        updated = list(set(current + wisdom))
+        with open(self.wisdom_file, "w") as f:
+            json.dump(updated, f, indent=2)
 
     def solve(
         self, env: Env, task_index: Optional[int] = None, max_num_steps: int = 30
@@ -55,6 +77,9 @@ class MultiAgentStrategy(Agent):
 
         # Initialize our PEV State for this specific conversation
         state = PevState()
+        
+        # Load and inject persistent wisdom (the cross-task knowledge base)
+        state.global_wisdom = self._load_wisdom()
         
         # Seed the initial user conversation turn
         state.user_conversation.append({"role": "system", "content": self.wiki})
@@ -286,9 +311,27 @@ class MultiAgentStrategy(Agent):
             if env_response.done:
                 break
                 
-        # We deliberately DO NOT inject node_logs into the 'info' array here, 
-        # so that the main tau-bench wrapper's terminal output remains clean entirely.
-        # Logs are perfectly safely written to the Markdown files on disk!
+        # --- TASK COMPLETION: SELF-LEARNING ---
+        # If the task failed (reward < 1.0), we synthesize a "Global Insight" 
+        # using the global reflection graph. This insight is saved persistently 
+        # to help future trials and tasks avoid the same technical trap.
+        if reward < 1.0:
+            try:
+                # Add one final log entry for the global reflector
+                state.memory.append({
+                    "type": "final_failure_state",
+                    "reward": reward,
+                    "explanation": "Task terminated without completing the required goal."
+                })
+                
+                final_reflection = self.global_reflection_workflow.invoke(state, {"recursion_limit": 5})
+                new_wisdom = final_reflection.get("global_wisdom", [])
+                if new_wisdom:
+                    self._save_wisdom(new_wisdom)
+                    # Add to info for transparency in logs
+                    info.setdefault("pev_global_insights", []).extend(new_wisdom)
+            except Exception as e:
+                print(f"Global Reflection failed: {e}")
 
         return SolveResult(
             reward=reward,

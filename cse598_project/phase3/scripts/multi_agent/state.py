@@ -49,6 +49,9 @@ class PevState(BaseModel):
     
     # --- SELF-CORRECTION FIELDS ---
     
+    # Persistent Wisdom: Technical insights gathered from across all previous trials/domains
+    global_wisdom: List[str] = Field(default_factory=list)
+    
     # Tracks ALL failed strategies as {"action": ..., "args": ..., "error": ..., "reflection": ...}
     # This is the agent's "experience log" — never reset, always growing, letting it learn
     # within a single conversation what approaches do NOT work so it can try something different.
