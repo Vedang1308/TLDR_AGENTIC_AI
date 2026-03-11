@@ -5,9 +5,8 @@ PORT=8001
 # Load CUDA compiler if on SOL
 module load cuda-12.4.1-gcc-12.1.0 2>/dev/null || true
 
-# Activate conda
-eval "$(conda shell.bash hook)"
-conda activate phase3_env
+# Activate Python venv
+source ~/agents/TLDR_AGENTIC_AI/phase3_env/bin/activate
 
 # Force cache to scratch to prevent home directory quota limits
 export HF_HOME=/scratch/vavaghad/huggingface_cache
