@@ -125,8 +125,10 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial,
         total_tasks = len(temp_env.tasks)
         print(f"Total tasks in dataset: {total_tasks}. Completed so far: {len(completed_ids)}")
     except Exception as e:
-        print(f"Warning: Could not determine total tasks ({e}). Falling back to 116.")
-        total_tasks = 116
+        # Fallback to known task counts if env initialization fails
+        fallback_counts = {"airline": 50, "retail": 116}
+        total_tasks = fallback_counts.get(domain, 50)
+        print(f"Warning: Could not determine total tasks ({e}). Falling back to {total_tasks}.")
 
     needed_ids = [
         str(i) for i in range(total_tasks)
