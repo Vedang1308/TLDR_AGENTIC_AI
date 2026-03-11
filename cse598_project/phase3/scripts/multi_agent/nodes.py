@@ -236,9 +236,9 @@ def planner_node(state: PevState) -> Dict:
 Your job is to read the user conversation, memory kernel, and failure history, then use the 'submit_plan' tool to set the next objective.
 
 CRITICAL RULE 1: Do NOT transfer to a human agent unless you have truly exhausted all available tools and approaches.
-CRITICAL RULE 2: CHECK THE MEMORY KERNEL before asking the user for any information. If `get_user_details` or `get_reservation_details` already ran, the data is already available — use it directly.
-CRITICAL RULE 3: Do NOT re-call a tool whose result is already in the MEMORY KERNEL. Use that data to formulate your next action.
-CRITICAL RULE 4: Before planning, read the FAILURE HISTORY and GLOBAL EXPERTISE carefully. If previous approaches (global or local) failed, you MUST propose a different strategy.
+CRITICAL RULE 2: CHECK THE MEMORY KERNEL before asking the user for any information. If a data retrieval or lookup tool has already executed, the information is already available — use it directly.
+CRITICAL RULE 3: Do NOT re-call a data lookup tool whose result is already in the MEMORY KERNEL. Use the existing record to formulate your next action.
+CRITICAL RULE 4: Before planning, read the FAILURE HISTORY and GLOBAL EXPERTISE carefully. If previous technical sequences or tool combinations failed, you MUST propose a fundamentally different trajectory.
 CRITICAL RULE 5: If the FAILURE HISTORY shows the same tool being rejected multiple times, shift to an alternate tool or a different argument structure.
 
 {wisdom_section}

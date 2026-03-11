@@ -134,37 +134,45 @@ class MultiAgentStrategy(Agent):
             if lookup_tool:
                 try:
                     tool_name = lookup_tool.get('name') or lookup_tool.get('function', {}).get('name')
-                    res = env.step(Action(name=tool_name, kwargs={'user_id': detected_user_id}))
+                    # IDENTIFY ARG NAME FROM SCHEMA (Truly domain-agnostic)
+                    schema = lookup_tool.get('parameters', {}) if not 'function' in lookup_tool else lookup_tool['function'].get('parameters', {})
+                    arg_name = list(schema.get('properties', {}).keys())[0] if schema.get('properties') else 'user_id'
+                    
+                    res = env.step(Action(name=tool_name, kwargs={arg_name: detected_user_id}))
                     state.memory.append({
-                        "action": "AUTO_PREFETCH_USER",
-                        "args": {"user_id": detected_user_id},
+                        "action": "AUTO_PREFETCH",
+                        "args": {arg_name: detected_user_id},
                         "observation": str(res.observation)
                     })
-                    print(f"--- [PROACTIVE] Pre-fetched profile for {detected_user_id} ---")
+                    print(f"--- [PROACTIVE] Pre-fetched using {tool_name} with {arg_name}={detected_user_id} ---")
                 except:
                     pass
 
-        # Also look for reservation_id (e.g. 1N99U6)
+        # Also look for reservation/order IDs (alphanumeric 6-char strings)
         res_id_match = re.search(r'\b([A-Z\d]{6})\b', obs)
         if res_id_match:
             detected_res_id = res_id_match.group(1)
             res_lookup = None
             for t in self.tools_info:
                 t_name = t.get('name', '').lower() if not 'function' in t else t['function'].get('name', '').lower()
-                if 'reservation' in t_name and 'detail' in t_name:
+                if ('reservation' in t_name or 'order' in t_name) and 'detail' in t_name:
                     res_lookup = t
                     break
             
             if res_lookup:
                 try:
                     tool_name = res_lookup.get('name') or res_lookup.get('function', {}).get('name')
-                    res = env.step(Action(name=tool_name, kwargs={'reservation_id': detected_res_id}))
+                    # IDENTIFY ARG NAME FROM SCHEMA (Truly domain-agnostic)
+                    schema = res_lookup.get('parameters', {}) if not 'function' in res_lookup else res_lookup['function'].get('parameters', {})
+                    arg_name = list(schema.get('properties', {}).keys())[0] if schema.get('properties') else 'reservation_id'
+
+                    res = env.step(Action(name=tool_name, kwargs={arg_name: detected_res_id}))
                     state.memory.append({
-                        "action": "AUTO_PREFETCH_RESERVATION",
-                        "args": {"reservation_id": detected_res_id},
+                        "action": "AUTO_PREFETCH",
+                        "args": {arg_name: detected_res_id},
                         "observation": str(res.observation)
                     })
-                    print(f"--- [PROACTIVE] Pre-fetched reservation {detected_res_id} ---")
+                    print(f"--- [PROACTIVE] Pre-fetched using {tool_name} with {arg_name}={detected_res_id} ---")
                 except:
                     pass
 
