@@ -41,6 +41,15 @@ class MultiAgentStrategy(Agent):
         self.wisdom_file = "results/phase3/persistent_wisdom.json"
         os.makedirs(os.path.dirname(self.wisdom_file), exist_ok=True)
 
+        # Pre-populate Tools Wiki (Technical specs for the Planner)
+        tools_desc = []
+        for t in self.tools_info:
+            name = t.get('name', 'unknown')
+            desc = t.get('description', 'No description available.')
+            params = list(t.get('parameters', {}).get('properties', {}).keys())
+            tools_desc.append(f"- {name}: {desc} (Args: {', '.join(params)})")
+        self.tools_wiki = "\n".join(tools_desc)
+
     def _load_wisdom(self) -> List[str]:
         if os.path.exists(self.wisdom_file):
             try:
@@ -54,8 +63,17 @@ class MultiAgentStrategy(Agent):
         # Keep only unique wisdom to prevent bloating
         current = self._load_wisdom()
         updated = list(set(current + wisdom))
-        with open(self.wisdom_file, "w") as f:
-            json.dump(updated, f, indent=2)
+        
+        # Atomic save to prevent corruption during parallel trials
+        temp_file = self.wisdom_file + ".tmp"
+        try:
+            with open(temp_file, "w") as f:
+                json.dump(updated, f, indent=2)
+            os.replace(temp_file, self.wisdom_file)
+        except Exception as e:
+            print(f"Error saving wisdom: {e}")
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
 
     def solve(
         self, env: Env, task_index: Optional[int] = None, max_num_steps: int = 30
@@ -78,8 +96,9 @@ class MultiAgentStrategy(Agent):
         # Initialize our PEV State for this specific conversation
         state = PevState()
         
-        # Load and inject persistent wisdom (the cross-task knowledge base)
+        # Setup initial state with persistent wisdom and tool knowledge
         state.global_wisdom = self._load_wisdom()
+        state.tools_wiki = self.tools_wiki
         
         # Seed the initial user conversation turn
         state.user_conversation.append({"role": "system", "content": self.wiki})
