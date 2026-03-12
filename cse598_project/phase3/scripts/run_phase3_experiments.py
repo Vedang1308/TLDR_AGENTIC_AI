@@ -123,10 +123,14 @@ def get_existing_completed_tasks(output_path):
 
 def run_experiment(domain, model, strategy, user_model, user_strategy, trial,
                    start_index=0, max_concurrency=1, results_dir="results/phase3"):
+    # Force absolute results path anchored to phase3_root
+    # This ensures consistency regardless of where the script is called from
+    if not os.path.isabs(results_dir):
+        results_dir = os.path.abspath(os.path.join(phase3_root, results_dir))
+
     print(f"Running Experiment: Domain={domain}, Model={model}, Strategy={strategy}, "
           f"Trial={trial}, ResumeFrom={start_index}, Concurrency={max_concurrency}")
-
-    # Construct output path
+    print(f"Results Directory: {results_dir}")
     model_safe_name = model.replace("/", "_")
     output_path = os.path.join(results_dir, domain, model_safe_name, strategy, f"trial_{trial}")
     os.makedirs(output_path, exist_ok=True)
