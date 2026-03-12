@@ -46,9 +46,9 @@ if [ "$DEVICE_TYPE" = "cuda" ]; then
     EXTRA_VLLM_ARGS="--quantization bitsandbytes --load-format bitsandbytes"
 elif [ "$DEVICE_TYPE" = "hpu" ]; then
     if [ "$GPU_COUNT" -ge 2 ]; then
-        echo "Detected $GPU_COUNT HPUs → DUAL-HPU mode: agent on HPU 0 (dedicated)"
-        export HABANA_VISIBLE_DEVICES=0
-        GPU_MEM_UTIL=0.90
+        echo "Detected $GPU_COUNT HPUs → DUAL-HPU mode: agent on HPU 5 (dedicated)"
+        export HABANA_VISIBLE_DEVICES=5
+        GPU_MEM_UTIL=0.85
     else
         echo "Detected $GPU_COUNT HPU → SINGLE-HPU mode: agent shares HPU 0 with user model"
         GPU_MEM_UTIL=0.45

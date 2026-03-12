@@ -48,7 +48,7 @@ elif [ "$DEVICE_TYPE" = "hpu" ]; then
     if [ "$GPU_COUNT" -ge 2 ]; then
         echo "Detected $GPU_COUNT HPUs → DUAL-HPU mode: user model on HPU 1 (dedicated)"
         export HABANA_VISIBLE_DEVICES=1
-        GPU_MEM_UTIL=0.90
+        GPU_MEM_UTIL=0.85
     else
         echo "Detected $GPU_COUNT HPU → SINGLE-HPU mode: user model shares HPU 0 with agent"
         GPU_MEM_UTIL=0.50
