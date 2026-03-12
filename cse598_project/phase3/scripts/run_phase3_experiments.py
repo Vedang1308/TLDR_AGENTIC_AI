@@ -190,8 +190,9 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial,
         else:
             env["AGENT_REASONING_MODE"] = "fc"
 
+    run_py = os.path.join(phase3_root, "run.py")
     cmd = [
-        sys.executable, "run.py",
+        sys.executable, run_py,
         "--agent-strategy", "tool-calling" if base_strategy == "fc" else base_strategy,
         "--env", domain,
         "--model", model,
@@ -206,7 +207,8 @@ def run_experiment(domain, model, strategy, user_model, user_strategy, trial,
     ] + needed_ids
 
     try:
-        subprocess.run(cmd, check=True, env=env)
+        # Run from the phase3 root so run.py can resolve the local tau_bench copy
+        subprocess.run(cmd, check=True, env=env, cwd=phase3_root)
         print(f"Experiment finished successfully. Results in {output_path}")
     except subprocess.CalledProcessError as e:
         print(f"Experiment failed with error: {e}")
