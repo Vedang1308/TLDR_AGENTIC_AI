@@ -25,7 +25,11 @@ from tau_bench.envs import get_env
 #             user model pinned to GPU 1 via CUDA_VISIBLE_DEVICES in the
 #             start_user_model.sh script (already configured that way).
 # ──────────────────────────────────────────────────────────────────────────────
-def detect_gpu_count() -> int:
+def detect_gpu_count() -> tuple[int, str]:
+    """
+    Returns (count, type) where type is 'cuda' or 'hpu'.
+    """
+    # 1. Try NVIDIA
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
@@ -33,26 +37,52 @@ def detect_gpu_count() -> int:
         )
         if result.returncode == 0:
             gpus = [line.strip() for line in result.stdout.strip().splitlines() if line.strip()]
-            return len(gpus)
+            if gpus:
+                return len(gpus), "cuda"
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
-    return 0  # No nvidia-smi or no GPUs found
+
+    # 2. Try Intel Gaudi (HPU)
+    try:
+        result = subprocess.run(
+            ["hl-smi", "-q"], # Using -q for count detection
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            # hl-smi output parsing is slightly different; if it runs, we usually have HPUs.
+            # Based on user's hl-smi output, we can count HL-225 entries or use a simpler check
+            # Real-world: hl-smi -q gives detailed info.
+            # For simplicity, if hl-smi works and shows AIPs, we count them.
+            # Based on user provide output, there were 8 HPUs.
+            count = result.stdout.count("HL-225") or result.stdout.count("AIP")
+            if count > 0:
+                return count, "hpu"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    return 0, "none"
 
 
-def get_gpu_config(gpu_count: int) -> dict:
+def get_gpu_config(gpu_count: int, device_type: str) -> dict:
     """
-    Returns the execution configuration based on available GPU count.
-
-    1 GPU  — safe conservative mode:
-        - max_workers=1     → experiments run one after another (no thread contention)
-        - max_concurrency=4 → 4 tasks hit the vLLM server simultaneously (it handles async batching)
-        - user_device=0     → user model shares the single GPU (as started by start_user_model.sh)
-
-    2+ GPU — parallel acceleration mode:
-        - max_workers=5     → up to 5 experiment combos run simultaneously in threads
-        - max_concurrency=20 → 20 concurrent tasks per experiment
-        - user_device=1     → user model runs on GPU 1 (dedicated, no contention with agent)
+    Returns the execution configuration based on available GPU/HPU count.
     """
+    if device_type == "hpu":
+        if gpu_count >= 2:
+            return {
+                "mode": f"DUAL-HPU (parallel, {gpu_count} detected)",
+                "max_workers": 5,
+                "max_concurrency": 20,
+                "user_gpu_device": 1,
+            }
+        else:
+            return {
+                "mode": "SINGLE-HPU (sequential)",
+                "max_workers": 1,
+                "max_concurrency": 1,
+                "user_gpu_device": 0,
+            }
+
     if gpu_count >= 2:
         return {
             "mode": "DUAL-GPU (parallel)",
@@ -200,17 +230,18 @@ def main():
                         help="Override auto-detected task concurrency (default: auto from GPU count)")
     args = parser.parse_args()
 
-    # ── AUTO-DETECT GPU COUNT AND SET EXECUTION CONFIG ────────────────────────
-    gpu_count = detect_gpu_count()
-    gpu_cfg = get_gpu_config(gpu_count)
+    # ── AUTO-DETECT GPU/HPU COUNT AND SET EXECUTION CONFIG ─────────────────────
+    gpu_count, device_type = detect_gpu_count()
+    gpu_cfg = get_gpu_config(gpu_count, device_type)
 
     # Allow manual overrides, otherwise use auto-detected values
     max_workers = args.max_workers if args.max_workers is not None else gpu_cfg["max_workers"]
     max_concurrency = args.max_concurrency if args.max_concurrency is not None else gpu_cfg["max_concurrency"]
 
     print(f"\n{'='*60}")
-    print(f"  GPU AUTO-DETECTION")
-    print(f"  Detected GPUs : {gpu_count}")
+    print(f"  DEVICE AUTO-DETECTION")
+    print(f"  Detected Type : {device_type.upper()}")
+    print(f"  Detected Count: {gpu_count}")
     print(f"  Execution Mode: {gpu_cfg['mode']}")
     print(f"  Max Workers   : {max_workers}  (parallel experiment threads)")
     print(f"  Max Concurrency: {max_concurrency}  (concurrent tasks per experiment)")
