@@ -7,6 +7,13 @@ The LangGraph-based PEV (Plan-Execute-Validate) Multi-Agent architecture has bee
 
 Do **NOT** try to run these locally. They are designed to query the local `vLLM` servers configured for the SOL cluster.
 
+### Hardware Support
+The evaluation scripts and startup commands now support **automatic device detection**:
+- **NVIDIA GPU (CUDA)**: Standard setup using `nvidia-smi` and `CUDA_VISIBLE_DEVICES`.
+- **Intel Gaudi HPU**: Optimized setup using `hl-smi`, `HABANA_VISIBLE_DEVICES`, and `bfloat16` precision.
+
+The scripts will prioritize NVIDIA GPUs if found, otherwise they will fallback to Intel Gaudi HPUs if the `habana-torch` environment is available.
+
 ### 1. Start the vLLM Backends
 Open separate terminal sessions or use `tmux`/`screen` on SOL to spawn the required LLM endpoints.
 
