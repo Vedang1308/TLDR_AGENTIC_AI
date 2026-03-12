@@ -7,7 +7,7 @@ module load cuda-12.4.1-gcc-12.1.0 2>/dev/null || true
 
 # Activate conda
 eval "$(conda shell.bash hook)"
-conda activate phase3_env
+conda activate phase3_gaudi_env
 
 # Force cache to scratch to prevent home directory quota limits
 export HF_HOME=/scratch/vavaghad/huggingface_cache
