@@ -123,7 +123,7 @@ orjson==3.11.7
 ormsgpack==1.12.2
 outlines==0.1.11
 outlines_core==0.1.26
-packaging @ file:///home/task_176104885106445/conda-bld/packaging_1761049078006/work
+packaging==24.2
 pandas==3.0.0
 parameterized==0.9.0
 partial-json-parser==0.2.1.1.post7
