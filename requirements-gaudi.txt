@@ -57,9 +57,9 @@ grpcio==1.78.0
 grpcio-status==1.71.2
 h11==0.16.0
 habana-pyhlml==1.23.0.695
-habana-torch-dataloader==1.23.0.695
-habana-torch-plugin==1.23.0.695
-habana_gpu_migration==1.23.0.695
+habana-torch-dataloader
+habana-torch-plugin
+habana_gpu_migration
 hf-xet==1.2.0
 httpcore==1.0.9
 httplib2==0.31.2
@@ -68,7 +68,7 @@ httpx==0.28.1
 huggingface_hub==1.4.1
 idna==3.11
 importlib_metadata==8.7.1
-intel_transformer_engine==1.23.0.695
+intel_transformer_engine
 interegular==0.3.3
 Jinja2==3.1.6
 jiter==0.13.0
@@ -104,7 +104,7 @@ multidict==6.7.1
 multiprocess==0.70.18
 nest-asyncio==1.6.0
 networkx==3.6.1
-neural_compressor_pt==3.5
+neural_compressor_pt
 ninja==1.13.0
 numpy==2.4.2
 nvidia-ml-py==12.575.51
@@ -186,7 +186,7 @@ termcolor==3.3.0
 tiktoken==0.12.0
 tokenizers==0.22.2
 torch==2.9.0+hpu.1.23.0.695
-torch_tb_profiler==0.4.0
+torch_tb_profiler
 tqdm==4.67.3
 transformers==5.1.0
 triton==3.1.0
@@ -199,8 +199,8 @@ urllib3==2.6.3
 uuid_utils==0.14.1
 uvicorn==0.40.0
 uvloop==0.22.1
-vllm @ git+https://github.com/HabanaAI/vllm-fork.git@v0.9.0.1+Gaudi-1.23.0
-vllm-hpu-extension @ git+https://github.com/HabanaAI/vllm-hpu-extension.git@f1d92758ce66aaf7267e6b7e57690e99ecc4e6d5
+-e vllm-fork
+-e vllm-hpu-extension
 watchfiles==1.1.1
 wcwidth==0.6.0
 websockets==16.0
