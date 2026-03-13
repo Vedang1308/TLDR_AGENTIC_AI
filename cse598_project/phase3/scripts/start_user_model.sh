@@ -45,13 +45,20 @@ if [ "$DEVICE_TYPE" = "cuda" ]; then
     DTYPE="float16"
     EXTRA_VLLM_ARGS="--quantization bitsandbytes --load-format bitsandbytes"
 elif [ "$DEVICE_TYPE" = "hpu" ]; then
-    if [ "$GPU_COUNT" -ge 2 ]; then
+    if [ "$GPU_COUNT" -ge 4 ]; then
+        echo "Detected $GPU_COUNT HPUs → 4-HPU mode: user model on HPUs 2,3 (dedicated)"
+        export HABANA_VISIBLE_DEVICES=2,3
+        GPU_MEM_UTIL=0.90
+        TP_SIZE=2
+    elif [ "$GPU_COUNT" -ge 2 ]; then
         echo "Detected $GPU_COUNT HPUs → DUAL-HPU mode: user model on HPU 1 (dedicated)"
         export HABANA_VISIBLE_DEVICES=1
         GPU_MEM_UTIL=0.85
+        TP_SIZE=1
     else
         echo "Detected $GPU_COUNT HPU → SINGLE-HPU mode: user model shares HPU 0 with agent"
         GPU_MEM_UTIL=0.50
+        TP_SIZE=1
     fi
     DTYPE="bfloat16"
     EXTRA_VLLM_ARGS="--device hpu"
@@ -74,6 +81,6 @@ python3 -m vllm.entrypoints.openai.api_server \
     --dtype $DTYPE \
     --max-model-len 30000 \
     --max-num-batched-tokens 30000 \
-    --tensor-parallel-size 1 \
+    --tensor-parallel-size ${TP_SIZE:-1} \
     --gpu-memory-utilization $GPU_MEM_UTIL \
     $EXTRA_VLLM_ARGS
