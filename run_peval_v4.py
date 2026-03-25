@@ -6,7 +6,6 @@ from datetime import datetime
 
 # Ensure the local directory and peval_v4 are at the VERY FRONT of the path
 # This prevents conflicts with older versions of 'tau_bench' in the conda environment
-sys.path.insert(0, os.path.join(os.getcwd(), "cse598_project", "original_tau_bench"))
 sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), "peval_v4"))
 
