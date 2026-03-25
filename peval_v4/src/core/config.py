@@ -26,7 +26,7 @@ class PEVConfig:
     # --- External Summarizer (OpenAI API - No local VRAM cost) ---
     # Using GPT-4o-mini for fast, high-quality distillation
     SUMMARIZER_MODEL = "gpt-4o-mini"
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "") 
     
     # --- Architecture Limits ---
     MAX_STEPS = 30
