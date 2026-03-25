@@ -20,11 +20,11 @@ echo "Serving on Port: $PORT"
 # Memory Management for Single vs Multi GPU
 if [ "$NUM_GPUS" -eq 1 ]; then
     echo "!!! Detected Single-GPU mode: Lowering memory footprint for sharing !!!"
-    GPU_MEM_UTIL=0.35
-    MAX_LEN=16384
+    GPU_MEM_UTIL=0.30
+    MAX_LEN=4096
 else
     GPU_MEM_UTIL=0.90
-    MAX_LEN=32768
+    MAX_LEN=16384
 fi
 
 python3 -m vllm.entrypoints.openai.api_server \
@@ -34,4 +34,5 @@ python3 -m vllm.entrypoints.openai.api_server \
     --tensor-parallel-size $NUM_GPUS \
     --gpu-memory-utilization $GPU_MEM_UTIL \
     --max-model-len $MAX_LEN \
+    --enforce-eager \
     --trust-remote-code
