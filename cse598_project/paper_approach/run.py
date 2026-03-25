@@ -6,8 +6,11 @@ from datetime import datetime
 
 # Ensure project root is in path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+phase3_path = os.path.join(project_root, "cse598_project", "phase3")
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+if phase3_path not in sys.path:
+    sys.path.insert(0, phase3_path)
 
 # Import from the original tau_bench
 from cse598_project.phase3.tau_bench.run import run as original_run, RunConfig

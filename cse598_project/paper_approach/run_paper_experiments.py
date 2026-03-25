@@ -59,6 +59,7 @@ def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1
     
     # Construct Command
     run_script = os.path.join(os.path.dirname(__file__), "run.py")
+    
     cmd = [
         sys.executable, run_script, # Local override
         "--env", domain,
@@ -73,8 +74,11 @@ def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1
         "--agent-strategy", "multi-agent" # This triggers the override in run.py
     ]
     
-    # Force the PEVAL strategy specifically
+    # Inject PYTHONPATH to ensure tau_bench is discoverable
     env = os.environ.copy()
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    phase3_path = os.path.join(project_root, "cse598_project", "phase3")
+    env["PYTHONPATH"] = f"{project_root}:{phase3_path}" + (f":{env['PYTHONPATH']}" if "PYTHONPATH" in env else "")
     env["AGENT_STRATEGY"] = strategy # [ReAct, FC, Self-Reflection]
     
     try:
