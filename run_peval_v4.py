@@ -9,8 +9,8 @@ from datetime import datetime
 sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), "peval_v4"))
 
-from tau_bench.envs.retail import RetailEnv
-from tau_bench.envs.airline import AirlineEnv
+from tau_bench.envs.retail.env import MockRetailDomainEnv
+from tau_bench.envs.airline.env import MockAirlineDomainEnv
 from peval_v4.src.graph.agent import PEVALAgent
 from peval_v4.src.core.config import PEVConfig
 
@@ -28,9 +28,9 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
     
     # 1. Setup Environment
     if domain == "retail":
-        env = RetailEnv()
+        env = MockRetailDomainEnv()
     else:
-        env = AirlineEnv()
+        env = MockAirlineDomainEnv()
         
     # 2. Initialize the Multi-Agent Architecture
     # We pass the tools_info and wiki from the environment directly
