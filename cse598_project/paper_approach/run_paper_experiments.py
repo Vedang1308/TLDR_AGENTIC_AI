@@ -74,14 +74,11 @@ def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1
         "--agent-strategy", "multi-agent"
     ]
     
-    env = os.environ.copy()
-    env["AGENT_STRATEGY"] = strategy
-    
     try:
         subprocess.run(cmd, check=True, env=env)
-        print(f"--- [GAUDI SUCCESS]: {output_dir} ---")
+        print(f"\n--- [GAUDI SUCCESS]: {output_dir} ---")
     except subprocess.CalledProcessError as e:
-        print(f"--- [GAUDI FAILED]: {output_dir} | {e} ---")
+        print(f"\n--- [GAUDI FAILED]: {output_dir} | {e} ---")
 
 def main():
     parser = argparse.ArgumentParser(description="Run Research Paper (PEVAL) Experiments on Gaudi")
