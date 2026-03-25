@@ -30,10 +30,12 @@ def detect_hpu_count() -> int:
 
 def get_hpu_config(hpu_count: int) -> dict:
     if hpu_count >= 2:
+        # Optimized for SOL: 5 parallel trials with 8 tasks each = 40 total load.
+        # 100 total load (5x20) was causing connection errors on the 2-HPU server.
         return {
-            "mode": "DUAL-HPU (parallel Gaudi benchmarks)",
-            "max_workers": 5,
-            "max_concurrency": 20,
+            "mode": "MULTI-HPU (Parallel trials with balanced concurrency)",
+            "max_workers": 5, 
+            "max_concurrency": 8, 
         }
     else:
         return {
