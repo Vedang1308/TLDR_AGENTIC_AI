@@ -2,6 +2,8 @@ import sys
 import os
 import argparse
 import json
+import time
+import requests
 from datetime import datetime
 
 # Ensure the local directory and peval_v4 are at the VERY FRONT of the path
@@ -28,12 +30,28 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
     
     # 1. Setup Environment
     print(f"--- [INIT] Powering up Environment: {domain} ---")
-    print(f"--- [INFO] Connecting User Simulator at {PEVConfig.USER_ENDPOINT} ---")
     
     # We must tell LiteLLM (used by tau-bench) where our User Simulator is
     os.environ["OPENAI_API_BASE"] = PEVConfig.USER_ENDPOINT
     os.environ["OPENAI_BASE_URL"] = PEVConfig.USER_ENDPOINT
     os.environ["OPENAI_API_KEY"] = PEVConfig.OPENAI_API_KEY or "none"
+
+    # Pre-flight Health Checks (Prevents hanging if vLLM is still warming up)
+    def wait_for_server(url, name):
+        print(f"--- [CHECK] Waiting for {name} ({url})... ---")
+        while True:
+            try:
+                # vLLM is ready when /v1/models returns 200
+                requests.get(f"{url}/models", timeout=2)
+                print(f"--- [SUCCESS] {name} is LIVE! ---")
+                return
+            except:
+                time.sleep(5)
+
+    wait_for_server(PEVConfig.USER_ENDPOINT, "User Simulator (Port 8223)")
+    wait_for_server(PEVConfig.AGENT_ENDPOINT, "Agent Server (Port 8222)")
+
+    print(f"--- [INFO] Environment connecting to User Simulator at {PEVConfig.USER_ENDPOINT} ---")
 
     if domain == "retail":
         env = MockRetailDomainEnv(
