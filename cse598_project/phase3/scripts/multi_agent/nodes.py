@@ -188,7 +188,8 @@ Do NOT write any text, conversational filler, or <think> tags. Just output the m
 
 def load_live_wisdom(state: PevState):
     """Refreshes state.global_wisdom from disk for real-time parallel learning."""
-    wisdom_file = "results/phase3/persistent_wisdom.json"
+    # Silenced for paper_approach
+    wisdom_file = os.getenv("PHASE3_WISDOM_FILE", ".results_phase3/persistent_wisdom.json")
     if os.path.exists(wisdom_file):
         try:
             with open(wisdom_file, "r") as f:
