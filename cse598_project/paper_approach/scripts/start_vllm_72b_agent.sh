@@ -7,7 +7,7 @@ module load habana 2>/dev/null || true
 
 # Activate conda
 eval "$(conda shell.bash hook)"
-conda activate vllm_gaudi
+conda activate gaudi_paperenv
 
 # Force cache to scratch
 export HF_HOME=/scratch/vavaghad/huggingface_cache
