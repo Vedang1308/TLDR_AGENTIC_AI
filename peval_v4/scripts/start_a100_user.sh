@@ -12,11 +12,19 @@ echo "--- Starting PEVAL User Simulator on $NUM_GPUS x A100 GPUs ---"
 echo "Model: $MODEL_PATH"
 echo "Serving on Port: $PORT"
 
+# Memory Management for Single vs Multi GPU
+if [ "$NUM_GPUS" -eq 1 ]; then
+    echo "!!! Detected Single-GPU mode: Lowering memory footprint for sharing !!!"
+    GPU_MEM_UTIL=0.45
+else
+    GPU_MEM_UTIL=0.95
+fi
+
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL_PATH \
     --served-model-name qwen2.5-72b-simulator \
     --port $PORT \
     --tensor-parallel-size $NUM_GPUS \
-    --gpu-memory-utilization 0.95 \
+    --gpu-memory-utilization $GPU_MEM_UTIL \
     --max-model-len 16384 \
     --trust-remote-code

@@ -17,11 +17,21 @@ echo "Serving on Port: $PORT"
 # - tensor-parallel-size distributes the model across multiple GPUs
 # - gpu-memory-utilization prevents OOMs when handling long contexts
 # - max-model-len ensures we have enough space for the PEVAL Memory Kernel
+# Memory Management for Single vs Multi GPU
+if [ "$NUM_GPUS" -eq 1 ]; then
+    echo "!!! Detected Single-GPU mode: Lowering memory footprint for sharing !!!"
+    GPU_MEM_UTIL=0.40
+    MAX_LEN=16384
+else
+    GPU_MEM_UTIL=0.90
+    MAX_LEN=32768
+fi
+
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL_PATH \
     --served-model-name qwen-32b-agent \
     --port $PORT \
     --tensor-parallel-size $NUM_GPUS \
-    --gpu-memory-utilization 0.90 \
-    --max-model-len 32768 \
+    --gpu-memory-utilization $GPU_MEM_UTIL \
+    --max-model-len $MAX_LEN \
     --trust-remote-code
