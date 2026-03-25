@@ -61,7 +61,7 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
         }
         try:
             start_time = time.time()
-            res = requests.post(f"{url}/chat/completions", json=payload, timeout=60)
+            res = requests.post(f"{url}/chat/completions", json=payload, timeout=120)
             res.raise_for_status()
             print(f"--- [SUCCESS] {name} inference is LIVE ({time.time()-start_time:.1f}s) ---")
         except Exception as e:

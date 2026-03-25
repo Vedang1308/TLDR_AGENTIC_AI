@@ -19,12 +19,14 @@ echo "Serving on Port: $PORT"
 # - max-model-len ensures we have enough space for the PEVAL Memory Kernel
 # Memory Management for Single vs Multi GPU
 if [ "$NUM_GPUS" -eq 1 ]; then
-    echo "!!! Detected Single-GPU mode: Lowering memory footprint for sharing !!!"
-    GPU_MEM_UTIL=0.30
-    MAX_LEN=4096
+    echo "!!! Detected Single-GPU mode: Enabling BitsAndBytes 8-bit Quantization !!!"
+    GPU_MEM_UTIL=0.50 # Now we can afford more cache space!
+    MAX_LEN=8192      # And more context
+    QUANT="bitsandbytes"
 else
     GPU_MEM_UTIL=0.90
     MAX_LEN=16384
+    QUANT="none"
 fi
 
 python3 -m vllm.entrypoints.openai.api_server \
@@ -34,5 +36,6 @@ python3 -m vllm.entrypoints.openai.api_server \
     --tensor-parallel-size $NUM_GPUS \
     --gpu-memory-utilization $GPU_MEM_UTIL \
     --max-model-len $MAX_LEN \
+    --quantization $QUANT \
     --enforce-eager \
     --trust-remote-code
