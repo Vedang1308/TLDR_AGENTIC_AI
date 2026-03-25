@@ -2,7 +2,7 @@ import os
 import json
 from typing import List, Dict, Any, Optional
 from tau_bench.agents.base import Agent
-from tau_bench.types import AgentRunResult
+from tau_bench.types import SolveResult
 from cse598_project.paper_approach.peval_graph import create_peval_graph
 
 class PevalStrategy(Agent):
@@ -30,7 +30,7 @@ class PevalStrategy(Agent):
                     self.global_wisdom = json.load(f)
             except: pass
 
-    def solve(self, env: Any, task_index: int) -> AgentRunResult:
+    def solve(self, env: Any, task_index: int) -> SolveResult:
         state = {
             "messages": [],
             "user_utterance": env.reset(),
@@ -78,4 +78,4 @@ class PevalStrategy(Agent):
                     json.dump(self.global_wisdom, f, indent=2)
                 os.replace(self.wisdom_file + ".tmp", self.wisdom_file)
 
-        return AgentRunResult(messages=state["messages"], reward=reward, info={"turn_count": turn_count})
+        return SolveResult(messages=state["messages"], reward=reward, info={"turn_count": turn_count})
