@@ -51,6 +51,27 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
     wait_for_server(PEVConfig.USER_ENDPOINT, "User Simulator (Port 8223)")
     wait_for_server(PEVConfig.AGENT_ENDPOINT, "Agent Server (Port 8222)")
 
+    # Completion Heartbeat (Verifies that inference actually works and isn't deadlocked)
+    def heartbeat_server(url, model_name, name):
+        print(f"--- [HEARTBEAT] Testing inference for {name}... ---")
+        payload = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 1
+        }
+        try:
+            start_time = time.time()
+            res = requests.post(f"{url}/chat/completions", json=payload, timeout=60)
+            res.raise_for_status()
+            print(f"--- [SUCCESS] {name} inference is LIVE ({time.time()-start_time:.1f}s) ---")
+        except Exception as e:
+            print(f"--- [FAIL] {name} inference UNREACHABLE: {e} ---")
+            print(f"--- [TIP] Check Terminal logs for {name} for errors or OOM. ---")
+            sys.exit(1)
+
+    heartbeat_server(PEVConfig.USER_ENDPOINT, PEVConfig.USER_MODEL, "User Simulator")
+    heartbeat_server(PEVConfig.AGENT_ENDPOINT, model_name, "Agent Server")
+
     print(f"--- [INFO] Environment connecting to User Simulator at {PEVConfig.USER_ENDPOINT} ---")
     print(f"--- [WAIT] Initializing Tau-Bench Environment (This calls the User Simulator)... ---")
     if domain == "retail":
