@@ -27,10 +27,21 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
     PEVConfig.AGENT_MODEL = model_name
     
     # 1. Setup Environment
+    # We must tell LiteLLM (used by tau-bench) where our User Simulator is
+    os.environ["OPENAI_API_BASE"] = PEVConfig.USER_ENDPOINT
+    os.environ["OPENAI_BASE_URL"] = PEVConfig.USER_ENDPOINT
+    os.environ["OPENAI_API_KEY"] = PEVConfig.OPENAI_API_KEY or "none"
+
     if domain == "retail":
-        env = MockRetailDomainEnv()
+        env = MockRetailDomainEnv(
+            user_model=PEVConfig.USER_MODEL,
+            user_provider="openai"
+        )
     else:
-        env = MockAirlineDomainEnv()
+        env = MockAirlineDomainEnv(
+            user_model=PEVConfig.USER_MODEL,
+            user_provider="openai"
+        )
         
     # 2. Initialize the Multi-Agent Architecture
     # We pass the tools_info and wiki from the environment directly
