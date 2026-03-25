@@ -35,4 +35,4 @@ class PEVConfig:
     
     # --- Storage ---
     LOG_DIR = "results/harshith_new"
-    WISDOM_FILENAME = "persistent_wisdom.json"
+    WISDOM_FILENAME = os.path.join(LOG_DIR, "persistent_wisdom.json")

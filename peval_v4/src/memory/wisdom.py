@@ -11,7 +11,9 @@ class WisdomStore:
     """
     def __init__(self, wisdom_file: str):
         self.wisdom_file = wisdom_file
-        os.makedirs(os.path.dirname(self.wisdom_file), exist_ok=True)
+        dirname = os.path.dirname(self.wisdom_file)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:
         print("--- [NODE] Wisdom Store (Retrieving) ---")
