@@ -32,8 +32,8 @@ def calculate_pass_hat_metrics(results_dir="results/phase3"):
         domain = "airline" if "airline" in fpath else "retail" if "retail" in fpath else "unknown"
         trial_match = re.search(r'trial_(\d+)', fpath)
         trial_idx = int(trial_match.group(1)) if trial_match else 0
-        model = "Qwen-4B" if "Qwen3-4B" in fpath else "Qwen-32B"
-        strategy = "multi-agent" if "multi-agent" in fpath else "react" if "react" in fpath else "fc"
+        model = "Qwen_Qwen3-4B" if "Qwen_Qwen3-4B" in fpath else "Qwen_Qwen3-8B" if "Qwen_Qwen3-8B" in fpath else "Qwen_Qwen3-14B" if "Qwen_Qwen3-14B" in fpath else "Qwen_Qwen3-32B"
+        strategy = "multi-agent-react" if "multi-agent-react" in fpath else "multi-agent-act" if "multi-agent-act" in fpath else "multi-agent-fc"
         
         try:
             with open(fpath, "r") as f:
