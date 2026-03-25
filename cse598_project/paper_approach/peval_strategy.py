@@ -3,7 +3,7 @@ import json
 from typing import List, Dict, Any, Optional
 from tau_bench.agents.base import Agent
 from tau_bench.types import AgentRunResult
-from .peval_graph import create_peval_graph
+from cse598_project.paper_approach.peval_graph import create_peval_graph
 
 class PevalStrategy(Agent):
     def __init__(

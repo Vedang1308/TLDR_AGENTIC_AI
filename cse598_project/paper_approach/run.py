@@ -13,7 +13,7 @@ if phase3_path not in sys.path:
 
 # Import from the original tau_bench
 from cse598_project.phase3.tau_bench.run import run as original_run, RunConfig
-from .peval_strategy import PevalStrategy
+from cse598_project.paper_approach.peval_strategy import PevalStrategy
 
 def paper_agent_factory(tools_info, wiki, config):
     strategy = os.getenv("AGENT_STRATEGY", "ReAct")
