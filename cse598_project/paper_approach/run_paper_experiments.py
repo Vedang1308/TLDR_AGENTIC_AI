@@ -51,8 +51,9 @@ def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1
     output_dir = f"cse598_project/paper_approach/results/{domain}/{model_safe}/{strategy}/trial_{trial}"
     os.makedirs(output_dir, exist_ok=True)
     
+    run_script = os.path.join(os.path.dirname(__file__), "run.py")
     cmd = [
-        sys.executable, "cse598_project/paper_approach/run.py",
+        sys.executable, run_script,
         "--env", domain,
         "--model", model,
         "--model-provider", "openai",
