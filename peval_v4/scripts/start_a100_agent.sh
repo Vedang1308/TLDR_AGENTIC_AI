@@ -20,7 +20,7 @@ echo "Serving on Port: $PORT"
 # Memory Management for Single vs Multi GPU
 if [ "$NUM_GPUS" -eq 1 ]; then
     echo "!!! Detected Single-GPU mode: Lowering memory footprint for sharing !!!"
-    GPU_MEM_UTIL=0.40
+    GPU_MEM_UTIL=0.35
     MAX_LEN=16384
 else
     GPU_MEM_UTIL=0.90

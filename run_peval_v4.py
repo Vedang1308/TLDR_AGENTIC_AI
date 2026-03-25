@@ -52,7 +52,7 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
     wait_for_server(PEVConfig.AGENT_ENDPOINT, "Agent Server (Port 8222)")
 
     print(f"--- [INFO] Environment connecting to User Simulator at {PEVConfig.USER_ENDPOINT} ---")
-
+    print(f"--- [WAIT] Initializing Tau-Bench Environment (This calls the User Simulator)... ---")
     if domain == "retail":
         env = MockRetailDomainEnv(
             user_model=PEVConfig.USER_MODEL,
@@ -63,7 +63,7 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
             user_model=PEVConfig.USER_MODEL,
             user_provider="openai"
         )
-    print(f"--- [SUCCESS] Environment Loaded ---")
+    print(f"--- [SUCCESS] Environment Loaded Successfully! ---")
         
     # 2. Initialize the Multi-Agent Architecture
     print(f"--- [INIT] Assembling PEVAL Architecture (13 Nodes) ---")
