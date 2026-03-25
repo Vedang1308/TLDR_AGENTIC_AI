@@ -1,6 +1,8 @@
 import sys
 import os
 import argparse
+import json
+from datetime import datetime
 
 # Ensure the new peval_v4 src is in the path
 sys.path.append(os.path.join(os.getcwd(), "peval_v4"))
@@ -10,9 +12,9 @@ from tau_bench.envs.airline import AirlineEnv
 from peval_v4.src.graph.agent import PEVALAgent
 from peval_v4.src.core.config import PEVConfig
 
-def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc"):
+def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", num_tasks=5, trials=1):
     print(f"=== PEVAL Phase 4 Experiment: {domain} ===")
-    print(f"Model: {model_name} | Strategy: {strategy.upper()}")
+    print(f"Model: {model_name} | Strategy: {strategy.upper()} | Tasks: {num_tasks} | Trials: {trials}")
     
     # Update Configuration
     PEVConfig.TOOL_STRATEGY = strategy
@@ -31,19 +33,54 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc"):
         wiki=env.wiki
     )
     
-    # 3. Solve a task
-    result = agent.solve(env, task_index=0)
+    # 3. Create Results Directory
+    os.makedirs(PEVConfig.LOG_DIR, exist_ok=True)
+    results_file = os.path.join(PEVConfig.LOG_DIR, f"{domain}_{strategy}_{model_name}_results.json")
+    
+    # 4. Storage for Pass^k calculation
+    consistency_results = {}
+    
+    # 5. Run the Benchmark Loop
+    for t_idx in range(num_tasks):
+        print(f"\n--- Starting Evaluation for Task {t_idx} ---")
+        consistency_results[f"task_{t_idx}"] = {"rewards": []}
+        
+        for trial in range(trials):
+            print(f"  > Trial {trial + 1}/{trials}")
+            result = agent.solve(env, task_index=t_idx)
+            consistency_results[f"task_{t_idx}"]["rewards"].append(result.reward)
+            
+            # Explicit Terminal Output for Pass/Fail
+            if result.reward == 1.0:
+                print(f"  >>> RESULT: \033[92m[PASSED]\033[0m")
+            else:
+                print(f"  >>> RESULT: \033[91m[FAILED]\033[0m")
+            
+        # Save atomically after every task to prevent data loss on HPC timeout
+        with open(results_file, 'w') as f:
+            json.dump(consistency_results, f, indent=4)
     
     print(f"\n--- EXPERIMENT CONCLUDED ---")
-    print(f"Reward: {result.reward}")
-    print(f"Final Path Length: {len(result.messages)}")
+    print(f"Results saved to: {results_file}")
+    
+    # Calculate simple total average
+    all_rewards = [r for task in consistency_results.values() for r in task["rewards"]]
+    avg_reward = sum(all_rewards) / len(all_rewards) if all_rewards else 0
+    print(f"Overall Average Reward: {avg_reward:.2f}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run PEVAL Phase 4 Experiments")
+    parser = argparse.ArgumentParser(description="Run PEVAL Phase 4 Experiments for pass^k calculation")
     parser.add_argument("--domain", type=str, default="retail", choices=["retail", "airline"], help="Tau-Bench domain")
     parser.add_argument("--model", type=str, default="qwen-32b-agent", help="The vLLM served model name to use")
-    parser.add_argument("--strategy", type=str, default="fc", choices=["fc", "react", "reflection", "irma"], 
-                        help="Tool calling strategy to use")
+    parser.add_argument("--strategy", type=str, default="fc", choices=["fc", "react", "reflection", "irma"], help="Tool calling strategy to use")
+    parser.add_argument("--num_tasks", type=int, default=5, help="Number of tasks to evaluate (for retail: max 115)")
+    parser.add_argument("--trials", type=int, default=1, help="Number of times to run each task to calculate pass^k (e.g., 5)")
     
     args = parser.parse_args()
-    run_experiment(domain=args.domain, model_name=args.model, strategy=args.strategy)
+    run_experiment(
+        domain=args.domain, 
+        model_name=args.model, 
+        strategy=args.strategy, 
+        num_tasks=args.num_tasks, 
+        trials=args.trials
+    )
