@@ -1,0 +1,72 @@
+graph TD
+    %% 1. TAU-BENCH DETAILS & POLICIES
+    subgraph TauBench ["Tau-Bench Environment"]
+        Env[("fa:fa-database Env State<br>(Retail/Airline)")]
+        Specs["fa:fa-file-alt System Specs<br>(Domains & Policies)"]
+    end
+
+    %% 3. ORIGINAL PHASE 3 FEATURES & 2. SUMMARIZER
+    subgraph DataHub ["Central Hub"]
+        State[("fa:fa-server PevState<br>(Memory Kernel)")]
+        Wisdom[("fa:fa-brain Global Wisdom")]
+        
+        %% The Summarizer is here per your request
+        Summ[["fa:fa-cut OpenAI Summarizer<br>(Context Distiller)"]]
+    end
+
+    %% 4. COMPONENTS SOLVING PHASE 2 ERRORS
+    subgraph PEVAL ["PEVAL Graph (Orchestration)"]
+        direction TB
+        Plan["fa:fa-sitemap Strategist<br>(Planner)"]
+        
+        subgraph Tech ["Tactical Engine"]
+            Exec["fa:fa-bolt Tactician"]
+            Trans[["Semantic Translator"]]
+        end
+        
+        subgraph Guard ["Deterministic Guardrails"]
+            Mon[["Outcome Monitor"]]
+            Val["fa:fa-shield-alt Validator"] 
+        end
+    end
+
+    %% External
+    User(["fa:fa-user User Simulator"])
+
+    %% THE FLOW (1-11)
+    Wisdom -- "1. Insights" --> State
+    Specs -- "Policies" --> State
+    
+    User == "2. Utterance" ==> State
+    
+    %% Summarizer Placement: Between State and Planner
+    State -- "Raw Logs" --> Summ
+    Summ -- "3. Compressed Strategic Kernel" --> Plan
+    
+    Plan -- "4. Instructions" --> Exec
+    Exec -- "Draft" --> Trans
+    Trans -- "5. Normalized Action" --> Mon
+    
+    Mon -- "6. Verified Schema" --> Val
+    Val == "7. Dispatch" ==> Env
+    
+    Env -- "8. Observation" --> State
+    
+    Env == "9. Rewards" ==> Learn["fa:fa-history Learning Node"]
+    Learn -- "10. Heuristics" --> Wisdom
+    Plan -- "11. Final Response" --> User
+
+    %% FEEDBACK (Solving Loops/Policies)
+    Mon -. "Loop Reject" .-> Plan
+    Val -. "Policy Reject" .-> Plan
+
+    %% Paper Styling
+    classDef LLM fill:#e1f5fe,stroke:#01579b,stroke-width:1px
+    classDef Logic fill:#fff3e0,stroke:#e65100,stroke-width:1px
+    classDef Env fill:#f1f8e9,stroke:#33691e,stroke-width:1px
+    classDef Policy fill:#fce4ec,stroke:#880e4f,stroke-width:1px
+    
+    class Plan,Exec,Val,Learn LLM
+    class Mon,Trans,Summ Logic
+    class Env,Wisdom Env
+    class Specs Policy
