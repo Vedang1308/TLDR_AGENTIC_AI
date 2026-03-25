@@ -27,7 +27,7 @@ python3 -m vllm.entrypoints.openai.api_server \
     --port $PORT \
     --dtype bfloat16 \
     --enable-auto-tool-choice \
-    --tool-call-parser qwen \
+    --tool-call-parser hermes \
     --enforce-eager \
     --max-model-len 32768 \
     --tensor-parallel-size 1
