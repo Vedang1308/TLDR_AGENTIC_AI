@@ -47,7 +47,7 @@ def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1
     """
     Runs a single research paper experiment configuration.
     """
-    print(f"\n--- [PAPER EXP]: {domain} | {model} | {strategy} | Trial {trial} ---")
+    print(f"\n--- [PAPER EXP]: {model} | {domain} | {strategy} | Trial {trial} ---")
     
     # Setup environment
     setup_paper_env(model, user_model)
@@ -55,7 +55,8 @@ def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1
     
     # Output path
     model_safe = model.replace("/", "_")
-    output_dir = f"results/paper_approach/{domain}/{model_safe}/{strategy}/trial_{trial}"
+    # New user-preferred structure: model -> domain -> strategy -> trial
+    output_dir = f"results/paper_approach/{model_safe}/{domain}/{strategy}/trial_{trial}"
     os.makedirs(output_dir, exist_ok=True)
     
     # Construct Command
