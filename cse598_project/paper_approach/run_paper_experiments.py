@@ -29,23 +29,11 @@ def detect_hpu_count() -> int:
     return 0
 
 def get_hpu_config(hpu_count: int) -> dict:
-    if hpu_count >= 8:
-        return {
-            "mode": "OCTO-HPU (high-performance Gaudi benchmarks)",
-            "max_workers": 5,
-            "max_concurrency": 20,
-        }
-    elif hpu_count >= 4:
-        return {
-            "mode": "QUAD-HPU (parallel Gaudi benchmarks)",
-            "max_workers": 4,
-            "max_concurrency": 16,
-        }
-    elif hpu_count >= 2:
+    if hpu_count >= 2:
         return {
             "mode": "DUAL-HPU (parallel Gaudi benchmarks)",
-            "max_workers": 2, # Slightly more conservative for Gaudi memory
-            "max_concurrency": 8,
+            "max_workers": 5,
+            "max_concurrency": 20,
         }
     else:
         return {
