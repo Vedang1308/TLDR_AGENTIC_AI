@@ -12,7 +12,11 @@ from tau_bench.envs.airline import AirlineEnv
 from peval_v4.src.graph.agent import PEVALAgent
 from peval_v4.src.core.config import PEVConfig
 
-def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", num_tasks=5, trials=1):
+def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", num_tasks=-1, trials=5):
+    # Determine actual task count if -1
+    if num_tasks == -1:
+        num_tasks = 115 if domain == "retail" else 50
+
     print(f"=== PEVAL Phase 4 Experiment: {domain} ===")
     print(f"Model: {model_name} | Strategy: {strategy.upper()} | Tasks: {num_tasks} | Trials: {trials}")
     
@@ -73,8 +77,8 @@ if __name__ == "__main__":
     parser.add_argument("--domain", type=str, default="retail", choices=["retail", "airline"], help="Tau-Bench domain")
     parser.add_argument("--model", type=str, default="qwen-32b-agent", help="The vLLM served model name to use")
     parser.add_argument("--strategy", type=str, default="fc", choices=["fc", "react", "reflection", "irma"], help="Tool calling strategy to use")
-    parser.add_argument("--num_tasks", type=int, default=5, help="Number of tasks to evaluate (for retail: max 115)")
-    parser.add_argument("--trials", type=int, default=1, help="Number of times to run each task to calculate pass^k (e.g., 5)")
+    parser.add_argument("--num_tasks", type=int, default=-1, help="Number of tasks to evaluate (-1 for all: 115 retail / 50 airline)")
+    parser.add_argument("--trials", type=int, default=5, help="Number of times to run each task (default: 5 for pass^5)")
     
     args = parser.parse_args()
     run_experiment(
