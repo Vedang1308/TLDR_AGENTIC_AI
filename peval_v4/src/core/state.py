@@ -11,6 +11,7 @@ class PEVState(BaseModel):
         default_factory=list,
         description="Raw conversation history with current distilled summary."
     )
+    summary: str = "" # Distilled version of history
     memory_kernel: List[Dict[str, Any]] = Field(
         default_factory=list,
         description="Atomic extracted facts from API observations."
@@ -19,8 +20,8 @@ class PEVState(BaseModel):
     
     # --- Tactical Outputs ---
     reformulated_observation: str = "" # Used for IRMA strategy
-    current_plan: str = ""
-    drafted_tool_call: Dict[str, Any] = Field(default_factory=dict)
+    strategic_instruction: str = ""    # Output from Strategist
+    current_action_draft: Dict[str, Any] = Field(default_factory=dict) # Output from Tactician
     
     # --- Verification & Loops ---
     is_loop: bool = False

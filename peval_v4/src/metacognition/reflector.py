@@ -22,7 +22,7 @@ class ErrorReflector:
         print("--- [NODE] Error Reflector (Diagnosing) ---")
         prompt = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"Last Observation: {state.last_observation}\nFailed Call: {state.drafted_tool_call}"}
+            {"role": "user", "content": f"Last Observation: {state.last_observation}\nFailed Call: {state.current_action_draft}"}
         ]
         
         diagnosis = self.client.chat(prompt)
