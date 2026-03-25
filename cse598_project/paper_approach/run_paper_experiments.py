@@ -58,8 +58,9 @@ def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1
     os.makedirs(output_dir, exist_ok=True)
     
     # Construct Command
+    run_script = os.path.join(os.path.dirname(__file__), "run.py")
     cmd = [
-        sys.executable, "cse598_project/paper_approach/run.py", # Local override
+        sys.executable, run_script, # Local override
         "--env", domain,
         "--model", model,
         "--model-provider", "openai",
