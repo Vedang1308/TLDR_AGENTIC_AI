@@ -27,6 +27,9 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
     PEVConfig.AGENT_MODEL = model_name
     
     # 1. Setup Environment
+    print(f"--- [INIT] Powering up Environment: {domain} ---")
+    print(f"--- [INFO] Connecting User Simulator at {PEVConfig.USER_ENDPOINT} ---")
+    
     # We must tell LiteLLM (used by tau-bench) where our User Simulator is
     os.environ["OPENAI_API_BASE"] = PEVConfig.USER_ENDPOINT
     os.environ["OPENAI_BASE_URL"] = PEVConfig.USER_ENDPOINT
@@ -42,13 +45,16 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
             user_model=PEVConfig.USER_MODEL,
             user_provider="openai"
         )
+    print(f"--- [SUCCESS] Environment Loaded ---")
         
     # 2. Initialize the Multi-Agent Architecture
+    print(f"--- [INIT] Assembling PEVAL Architecture (13 Nodes) ---")
     # We pass the tools_info and wiki from the environment directly
     agent = PEVALAgent(
         tools_info=env.tools_info,
         wiki=env.wiki
     )
+    print(f"--- [SUCCESS] Architecture Ready ---")
     
     # 3. Create Results Directory
     os.makedirs(PEVConfig.LOG_DIR, exist_ok=True)
