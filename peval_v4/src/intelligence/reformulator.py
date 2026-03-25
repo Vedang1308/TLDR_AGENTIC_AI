@@ -1,3 +1,4 @@
+from typing import Dict, Any
 from ..core.state import PEVState
 from ..core.model_client import ModelClient
 
@@ -15,7 +16,7 @@ class InputReformulator:
             "structured format. Remove irrelevant noise. Output only the reformatted observation."
         )
 
-    def __call__(self, state: PEVState) -> dict:
+    def __call__(self, state: PEVState) -> Dict[str, Any]:
         print("--- [NODE] Input Reformulator (IRMA) ---")
         
         # Determine what to reformulate: the latest item in history

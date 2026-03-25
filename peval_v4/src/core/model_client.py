@@ -1,4 +1,5 @@
 import openai
+from typing import List
 from .config import PEVConfig
 
 class ModelClient:
@@ -36,7 +37,7 @@ class ModelClient:
                 )
                 self.model = self.config.AGENT_MODEL
 
-    def chat(self, messages: list, temperature: float = 0.0):
+    def chat(self, messages: List, temperature: float = 0.0):
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
