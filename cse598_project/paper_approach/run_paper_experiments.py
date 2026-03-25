@@ -47,8 +47,8 @@ def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1
     setup_paper_env(model, user_model)
     
     model_safe = model.replace("/", "_")
-    # Matching Phase 1/3 structure: domain -> model -> strategy -> trial
-    output_dir = f"results/paper_approach/{domain}/{model_safe}/{strategy}/trial_{trial}"
+    # Localized structure: results inside paper_approach
+    output_dir = f"cse598_project/paper_approach/results/{domain}/{model_safe}/{strategy}/trial_{trial}"
     os.makedirs(output_dir, exist_ok=True)
     
     cmd = [
