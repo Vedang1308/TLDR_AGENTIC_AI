@@ -4,8 +4,10 @@ import argparse
 import json
 from datetime import datetime
 
-# Ensure the new peval_v4 src is in the path
-sys.path.append(os.path.join(os.getcwd(), "peval_v4"))
+# Ensure the local directory and peval_v4 are at the VERY FRONT of the path
+# This prevents conflicts with older versions of 'tau_bench' in the conda environment
+sys.path.insert(0, os.getcwd())
+sys.path.insert(0, os.path.join(os.getcwd(), "peval_v4"))
 
 from tau_bench.envs.retail import RetailEnv
 from tau_bench.envs.airline import AirlineEnv
