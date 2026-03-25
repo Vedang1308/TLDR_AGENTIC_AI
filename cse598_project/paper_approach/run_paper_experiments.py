@@ -6,6 +6,7 @@ import sys
 import concurrent.futures
 import json
 import glob
+import urllib.request
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if project_root not in sys.path:
@@ -40,6 +41,17 @@ def get_hpu_config(hpu_count: int) -> dict:
             "max_workers": 1,
             "max_concurrency": 1,
         }
+# ── vLLM AUTO-DETECTION ────────────────────────────────────────────────────────
+def detect_model(port: int) -> str:
+    try:
+        url = f"http://localhost:{port}/v1/models"
+        with urllib.request.urlopen(url, timeout=2) as response:
+            data = json.loads(response.read().decode())
+            if "data" in data and len(data["data"]) > 0:
+                return data["data"][0]["id"]
+    except Exception:
+        pass
+    return None
 # ──────────────────────────────────────────────────────────────────────────────
 
 def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1):
@@ -85,17 +97,34 @@ def main():
     parser = argparse.ArgumentParser(description="Run Research Paper (PEVAL) Experiments on Gaudi")
     parser.add_argument("--domain", choices=["retail", "airline", "all"], default="all")
     parser.add_argument("--strategy", nargs="+", default=["ReAct", "FC", "Self-Reflection"])
-    parser.add_argument("--model", nargs="+", default=[
-        "Qwen/Qwen3-4B-Instruct",
-        "Qwen/Qwen3-14B",
-        "Qwen/Qwen3-32B",
-        "Qwen/Qwen2.5-72B-Instruct"
-    ])
-    parser.add_argument("--user-model", type=str, default="Qwen/Qwen2.5-72B-Instruct-User")
+    parser.add_argument("--model", nargs="+", default=None)
+    parser.add_argument("--user-model", type=str, default=None)
     parser.add_argument("--trials", type=int, default=1)
     parser.add_argument("--max-workers", type=int, default=None)
     parser.add_argument("--concurrency", type=int, default=None)
     args = parser.parse_args()
+    
+    # Auto-detect models if not specified
+    if args.model is None:
+        active_agent = detect_model(8000)
+        if active_agent:
+            print(f"--- [AUTO-DETECT]: Found active agent model: {active_agent} ---")
+            args.model = [active_agent]
+        else:
+            args.model = [
+                "Qwen/Qwen3-4B-Instruct",
+                "Qwen/Qwen3-14B",
+                "Qwen/Qwen3-32B",
+                "Qwen/Qwen2.5-72B-Instruct"
+            ]
+
+    if args.user_model is None:
+        active_user = detect_model(8001)
+        if active_user:
+            print(f"--- [AUTO-DETECT]: Found active user model: {active_user} ---")
+            args.user_model = active_user
+        else:
+            args.user_model = "Qwen/Qwen2.5-72B-Instruct-User"
     
     hpu_count = detect_hpu_count()
     hpu_cfg = get_hpu_config(hpu_count)
