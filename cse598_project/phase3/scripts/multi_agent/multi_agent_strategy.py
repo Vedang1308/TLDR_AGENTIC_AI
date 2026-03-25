@@ -37,11 +37,11 @@ class MultiAgentStrategy(Agent):
         self.reflection_workflow = create_reflection_graph()
         self.global_reflection_workflow = create_global_reflection_graph()
         
-        # Persistent Wisdom Storage (Silenced for paper_approach)
-        self.wisdom_file = os.getenv("PHASE3_WISDOM_FILE", ".results_phase3/persistent_wisdom.json")
-        if not os.path.exists(os.path.dirname(self.wisdom_file)):
-            try: os.makedirs(os.path.dirname(self.wisdom_file), exist_ok=True)
-            except: pass
+        # Persistent Wisdom Storage (Moved to /tmp to keep workspace clean)
+        self.wisdom_file = os.getenv("PHASE3_WISDOM_FILE", "/tmp/persistent_wisdom.json")
+        if not os.path.isabs(self.wisdom_file):
+            # Fallback safety
+            os.makedirs(os.path.dirname(self.wisdom_file), exist_ok=True)
 
         # Pre-populate Tools Wiki (Technical specs for the Planner)
         tools_desc = []

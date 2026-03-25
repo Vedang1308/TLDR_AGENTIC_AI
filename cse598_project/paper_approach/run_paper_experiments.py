@@ -45,12 +45,15 @@ def get_hpu_config(hpu_count: int) -> dict:
 def detect_model(port: int) -> str:
     try:
         url = f"http://localhost:{port}/v1/models"
-        with urllib.request.urlopen(url, timeout=2) as response:
+        print(f"--- [DEBUG]: Checking for served model on port {port}... ---")
+        with urllib.request.urlopen(url, timeout=5) as response:
             data = json.loads(response.read().decode())
             if "data" in data and len(data["data"]) > 0:
-                return data["data"][0]["id"]
-    except Exception:
-        pass
+                model_id = data["data"][0]["id"]
+                print(f"--- [DEBUG]: Found active model on {port}: {model_id} ---")
+                return model_id
+    except Exception as e:
+        print(f"--- [DEBUG]: Port {port} did not respond or failed: {str(e)} ---")
     return None
 # ──────────────────────────────────────────────────────────────────────────────
 
