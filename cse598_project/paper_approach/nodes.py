@@ -2,7 +2,7 @@ import os
 import json
 import re
 from typing import Dict, Any, List
-from .state import PevState
+from cse598_project.paper_approach.state import PevState
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -29,7 +29,6 @@ def summarizer_node(state: PevState):
     if not history:
         return {"strategic_kernel": "Initial turn. No previous summary."}
     
-    # We use a smaller/faster model for summarization if available
     llm = get_llm(os.getenv("SUMMARIZER_MODEL", "Qwen/Qwen3-4B-Instruct"))
     
     prompt = f"""Summarize the following conversation history into a 'Strategic Kernel'. 
@@ -100,7 +99,6 @@ Example: {{"name": "tool_x", "arguments": {{"id": "123"}} }}
         HumanMessage(content=f"User Intent: {state['user_utterance']}")
     ])
     
-    # Simple extraction logic
     try:
         match = re.search(r'(\{.*\})', response.content, re.DOTALL)
         draft = json.loads(match.group(1)) if match else {}
@@ -115,17 +113,12 @@ def translator_node(state: PevState):
     Normalizes parameters and ensures schema compliance.
     """
     print(f"--- [TRANSLATOR] ---")
-    # This node is deterministic/logic-heavy. 
-    # For now, we normalize common ID types to strings and ensure required fields.
     draft = state.get("action_draft", {})
     normalized = draft.copy()
-    
-    # Implementation of normalization logic (IDs to uppercase, strings to strips, etc.)
     if "arguments" in normalized:
         for k, v in normalized["arguments"].items():
             if isinstance(v, str):
                 normalized["arguments"][k] = v.strip()
-    
     return {"normalized_action": normalized}
 
 def monitor_node(state: PevState):
@@ -137,13 +130,11 @@ def monitor_node(state: PevState):
     action = state.get("normalized_action", {})
     history = state.get("messages", [])
     
-    # Simplistic loop detection: check if this EXACT action and arguments were the last attempted action
     last_agent_actions = [m for m in history if m.get("role") == "assistant" and "tool_calls" in m]
     if last_agent_actions:
         last_action = last_agent_actions[-1]["tool_calls"][0]["function"]
         if last_action["name"] == action.get("name") and last_action["arguments"] == action.get("arguments"):
             print("--- [LOOP DETECTED] ---")
-            # Redirect back to Strategist with a hint (this would be handled in the graph logic)
             return {"current_node": "strategist", "metadata": {"loop_warning": True}}
             
     return {"current_node": "validator"}
@@ -155,20 +146,9 @@ def validator_node(state: PevState):
     """
     print(f"--- [VALIDATOR] ---")
     action = state.get("normalized_action", {})
-    
-    # Check for empty actions
     if not action or "name" not in action:
-        return {"env_observation": "No action provided. Please generate a valid action.", "current_node": "strategist"}
-    
-    # Here we would interface with tau_bench.envs.get_env
-    # For now, we simulate the structure
-    observation = f"Observation for {action['name']}: Action performed successfully."
-    
-    # Handle specific policy results if any (from state or mock)
-    # If policy fails -> strategist
-    # If success -> messages.append
-    
-    return {"env_observation": observation, "current_node": "env_update"}
+        return {"env_observation": "No action provided.", "current_node": "strategist"}
+    return {"current_node": "env_update"}
 
 def learning_node(state: PevState):
     """
@@ -177,17 +157,12 @@ def learning_node(state: PevState):
     """
     print(f"--- [LEARNING NODE] ---")
     if not state.get("is_finished") or (state.get("reward", 0) >= 1.0):
-        return {} # Only reflect on failures
+        return {}
         
     llm = get_llm(os.getenv("REFLECTOR_MODEL", "Qwen/Qwen3-32B"))
-    
     history = state.get("messages", [])
     
-    system_prompt = """You are a Research Analyst. Analyze the following conversation failure.
-Identify the technical 'root cause' (e.g., tool used without required precursor, wrong parameter type, policy violation).
-Formulate a ONE-LINE technical rule to prevent this specific failure in the future.
-
-Output format:
+    system_prompt = """You are a Research Analyst. Identify the technical 'root cause' and formulate a ONE-LINE RULE.
 RULE: <Technical Rule>
 """
     response = llm.invoke([
@@ -200,5 +175,4 @@ RULE: <Technical Rule>
         new_rule = match.group(1).strip()
         print(f"--- [NEW WISDOM SYNTHESIZED]: {new_rule} ---")
         return {"global_wisdom": state.get("global_wisdom", []) + [new_rule]}
-        
     return {}

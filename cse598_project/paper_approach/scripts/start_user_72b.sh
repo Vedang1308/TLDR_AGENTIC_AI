@@ -2,12 +2,12 @@
 MODEL="Qwen/Qwen2.5-72B-Instruct"
 PORT=8001
 
-# Load CUDA compiler if on SOL
-module load cuda-12.4.1-gcc-12.1.0 2>/dev/null || true
+# Load Habana environment if on SOL
+module load habana 2>/dev/null || true
 
 # Activate conda
 eval "$(conda shell.bash hook)"
-conda activate phase3_env
+conda activate gaudi_paperenv
 
 # Force cache to scratch
 export HF_HOME=/scratch/vavaghad/huggingface_cache
@@ -20,8 +20,7 @@ if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
     kill -9 $(lsof -Pi :$PORT -sTCP:LISTEN -t)
 fi
 
-# 72B REQUIRES SIGNIFICANT GPU VRAM (Use 4-bit quantization and Tensor Parallel)
-echo "Starting vLLM server for Research Paper User Simulator ($MODEL) on port $PORT..."
+echo "Starting vLLM server for Research Paper User Simulator ($MODEL) on port $PORT (GAUDI)..."
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL \
     --served-model-name "Qwen/Qwen2.5-72B-Instruct-User" \
@@ -30,6 +29,4 @@ python3 -m vllm.entrypoints.openai.api_server \
     --dtype bfloat16 \
     --tensor-parallel-size 2 \
     --max-model-len 32768 \
-    --gpu-memory-utilization 0.95 \
-    --quantization bitsandbytes \
-    --load-format bitsandbytes
+    --enforce-eager

@@ -2,12 +2,12 @@
 MODEL="Qwen/Qwen3-32B"
 PORT=8000
 
-# Load CUDA compiler if on SOL
-module load cuda-12.4.1-gcc-12.1.0 2>/dev/null || true
+# Load Habana environment if on SOL
+module load habana 2>/dev/null || true
 
 # Activate conda
 eval "$(conda shell.bash hook)"
-conda activate phase3_env
+conda activate gaudi_paperenv
 
 # Force cache to scratch
 export HF_HOME=/scratch/vavaghad/huggingface_cache
@@ -20,15 +20,14 @@ if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null ; then
     kill -9 $(lsof -Pi :$PORT -sTCP:LISTEN -t)
 fi
 
-echo "Starting vLLM server for Research Paper Agent ($MODEL) on port $PORT..."
+echo "Starting vLLM server for Research Paper Agent ($MODEL) on port $PORT (GAUDI)..."
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL \
     --trust-remote-code \
     --port $PORT \
     --dtype float16 \
     --max-model-len 32768 \
-    --gpu-memory-utilization 0.90 \
-    --quantization bitsandbytes \
-    --load-format bitsandbytes \
+    --tensor-parallel-size 1 \
     --enable-auto-tool-choice \
-    --tool-call-parser hermes
+    --tool-call-parser hermes \
+    --enforce-eager
