@@ -32,6 +32,10 @@ def setup_paper_env(agent_model: str, user_model: str = "Qwen/Qwen2.5-72B-Instru
     os.environ["USER_API_BASE"] = f"http://localhost:{user_port}/v1"
     os.environ["USER_MODEL_NAME"] = user_model
     
+    # PEVAL Specific: Ensure all nodes use the target agent model
+    os.environ["SUMMARIZER_MODEL"] = agent_model
+    os.environ["REFLECTOR_MODEL"] = agent_model
+    
     os.environ["OPENAI_API_KEY"] = "sk-1234"
     os.environ["LITELLM_API_BASE"] = os.environ["AGENT_API_BASE"]
     

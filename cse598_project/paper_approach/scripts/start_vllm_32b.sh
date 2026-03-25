@@ -22,12 +22,12 @@ fi
 
 echo "Starting vLLM server for Research Paper Agent ($MODEL) on port $PORT (GAUDI)..."
 python3 -m vllm.entrypoints.openai.api_server \
-    --model $MODEL \
+    --served-model-name "Qwen/Qwen3-32B" \
     --trust-remote-code \
     --port $PORT \
-    --dtype float16 \
-    --max-model-len 32768 \
-    --tensor-parallel-size 1 \
+    --dtype bfloat16 \
     --enable-auto-tool-choice \
-    --tool-call-parser hermes \
-    --enforce-eager
+    --tool-call-parser qwen \
+    --enforce-eager \
+    --max-model-len 32768 \
+    --tensor-parallel-size 1

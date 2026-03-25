@@ -74,6 +74,10 @@ def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     phase3_path = os.path.join(project_root, "cse598_project", "phase3")
     env["PYTHONPATH"] = f"{project_root}:{phase3_path}" + (f":{env['PYTHONPATH']}" if "PYTHONPATH" in env else "")
+    
+    # PEWAL Specific: Unify wisdom path for both new and legacy code
+    wisdom_path = os.path.join(paper_approach_dir, "results", "persistent_wisdom.json")
+    env["PHASE3_WISDOM_FILE"] = wisdom_path
     env["AGENT_STRATEGY"] = strategy # Moved from below
     
     cmd = [
