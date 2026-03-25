@@ -50,8 +50,16 @@ def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1
     # Localized structure: results inside paper_approach
     output_dir = f"cse598_project/paper_approach/results/{domain}/{model_safe}/{strategy}/trial_{trial}"
     os.makedirs(output_dir, exist_ok=True)
-    
+    # Construct Command
     run_script = os.path.join(os.path.dirname(__file__), "run.py")
+    
+    # Inject PYTHONPATH to ensure tau_bench is discoverable
+    env = os.environ.copy()
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    phase3_path = os.path.join(project_root, "cse598_project", "phase3")
+    env["PYTHONPATH"] = f"{project_root}:{phase3_path}" + (f":{env['PYTHONPATH']}" if "PYTHONPATH" in env else "")
+    env["AGENT_STRATEGY"] = strategy # Moved from below
+    
     cmd = [
         sys.executable, run_script,
         "--env", domain,
