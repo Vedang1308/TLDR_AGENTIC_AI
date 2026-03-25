@@ -29,5 +29,5 @@ python3 -m vllm.entrypoints.openai.api_server \
     --max-model-len 32768 \
     --tensor-parallel-size 1 \
     --enable-auto-tool-choice \
-    --tool-call-parser hermes \
+    --tool-call-parser qwen \
     --enforce-eager
