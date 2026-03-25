@@ -48,7 +48,8 @@ def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1
     
     model_safe = model.replace("/", "_")
     # Localized structure: results inside paper_approach
-    output_dir = f"cse598_project/paper_approach/results/{domain}/{model_safe}/{strategy}/trial_{trial}"
+    paper_approach_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.join(paper_approach_dir, "results", domain, model_safe, strategy, f"trial_{trial}")
     os.makedirs(output_dir, exist_ok=True)
     # Construct Command
     run_script = os.path.join(os.path.dirname(__file__), "run.py")

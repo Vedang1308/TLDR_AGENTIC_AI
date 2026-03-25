@@ -22,7 +22,7 @@ class PevalStrategy(Agent):
         self.temperature = temperature
         self.agent_strategy = agent_strategy
         self.graph = create_peval_graph()
-        self.wisdom_file = "cse598_project/paper_approach/results/persistent_wisdom.json"
+        self.wisdom_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "persistent_wisdom.json")
         self.global_wisdom = []
         if os.path.exists(self.wisdom_file):
             try:
