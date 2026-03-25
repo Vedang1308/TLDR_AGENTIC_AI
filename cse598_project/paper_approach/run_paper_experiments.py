@@ -43,12 +43,12 @@ def get_hpu_config(hpu_count: int) -> dict:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def run_experiment(domain, model, strategy, user_model, trial, max_concurrency=1):
-    print(f"\n--- [GAUDI PAPER EXP]: {model} | {domain} | {strategy} | Trial {trial} ---")
+    print(f"\n--- [GAUDI PAPER EXP]: {domain} | {model} | {strategy} | Trial {trial} ---")
     setup_paper_env(model, user_model)
     
     model_safe = model.replace("/", "_")
-    # New user-preferred structure: model -> domain -> strategy -> trial
-    output_dir = f"results/paper_approach/{model_safe}/{domain}/{strategy}/trial_{trial}"
+    # Matching Phase 1/3 structure: domain -> model -> strategy -> trial
+    output_dir = f"results/paper_approach/{domain}/{model_safe}/{strategy}/trial_{trial}"
     os.makedirs(output_dir, exist_ok=True)
     
     cmd = [
