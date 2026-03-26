@@ -20,8 +20,8 @@ echo "Serving on Port: $PORT"
 # Memory Management for Single vs Multi GPU
 if [ "$NUM_GPUS" -eq 1 ]; then
     echo "!!! Detected Single-GPU mode: Enabling BitsAndBytes 8-bit Quantization !!!"
-    GPU_MEM_UTIL=0.35 # Even more conservative for single-GPU stability
-    MAX_LEN=8192      # And more context
+    GPU_MEM_UTIL=0.40 # Balanced utilization
+    MAX_LEN=4096      # Sufficient for Agent reasoning
     QUANT="bitsandbytes"
 else
     GPU_MEM_UTIL=0.90
