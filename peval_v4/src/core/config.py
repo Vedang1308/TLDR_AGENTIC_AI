@@ -20,8 +20,8 @@ class PEVConfig:
     TOOL_STRATEGY = os.getenv("TOOL_STRATEGY", "fc")
     
     # --- Endpoints ---
-    AGENT_ENDPOINT = f"http://localhost:{AGENT_PORT}/v1"
-    USER_ENDPOINT = f"http://localhost:{USER_PORT}/v1"
+    AGENT_ENDPOINT = f"http://127.0.0.1:{AGENT_PORT}/v1"
+    USER_ENDPOINT = f"http://127.0.0.1:{USER_PORT}/v1"
     
     # --- External Summarizer (OpenAI API - No local VRAM cost) ---
     # Using GPT-4o-mini for fast, high-quality distillation
