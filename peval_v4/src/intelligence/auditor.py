@@ -12,10 +12,11 @@ class Auditor:
         self.client = ModelClient(mode="agent")
         self.domain_policies = domain_policies
         self.system_prompt = (
-            "You are the PEVAL Auditor. You have Zero-Trust for the proposed action. "
-            "Check the proposed action against the following domain policies and logic.\n"
+            "You are the PEVAL Auditor. The Strategist has already planned the logic. "
+            "Check the proposed action against domain policies for safety violations ONLY.\n"
             f"Policies: {self.domain_policies}\n"
-            "Output 'APPROVED' if it is safe. Otherwise, output a detailed reason for REJECTION."
+            "Be extremely concise. Do NOT repeat the agent's reasoning. "
+            "Output 'APPROVED' or 'REJECTION: [brief reason]'."
         )
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:

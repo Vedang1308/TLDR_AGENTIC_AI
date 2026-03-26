@@ -17,10 +17,9 @@ class Tactician:
 
         if self.strategy == "react":
             self.system_prompt = (
-                "You are the PEVAL Tactician. Your role is to fulfill the Strategic Instruction "
-                "using the provided tools. "
-                "You must use the ReAct format: output your reasoning inside a 'thought' field, "
-                "followed by the tool call in an 'action' field containing 'name' and 'arguments'. "
+                "You are the PEVAL Tactician. The Strategist has already performed the main reasoning. "
+                "Your role is to translate their instruction into a technical tool call. "
+                "In your 'thought' field, be extremely brief—only mention technical parameters. "
                 "Output STRICTLY as a JSON object: {\"thought\": \"...\", \"action\": {\"name\": \"...\", \"arguments\": {...}}}.\n"
                 f"Tools available: {self.tools_info}"
             )

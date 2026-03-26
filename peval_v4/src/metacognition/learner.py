@@ -9,10 +9,11 @@ class GlobalLearner:
     def __init__(self):
         self.client = ModelClient(mode="agent")
         self.system_prompt = (
-            "You are the PEVAL Global Learner. The task has CONCLUDED. "
-            "Analyze the entire memory kernel (successes and failures) and "
-            "extract ONE high-level technical insight to help future agents "
-            "avoid mistakes in this domain. Output ONLY the insight string."
+            "You are the PEVAL Global Learner. The task is done. "
+            "If the reward is less than 1.0, identify the EXACT REASON for the failure or loop. "
+            "Synthesize a 'Technical Rule' into wisdom.json to prevent this specific mistake. "
+            "If the task was successful, extract one efficiency tip. "
+            "Output ONLY the high-level technical insight string."
         )
 
     def __call__(self, state: PEVState) -> str:
