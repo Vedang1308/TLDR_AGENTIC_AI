@@ -45,7 +45,8 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
                 requests.get(f"{url}/models", timeout=30)
                 print(f"--- [SUCCESS] {name} is LIVE! ---")
                 return
-            except:
+            except Exception as e:
+                print(f"  ... {name} not ready yet (retrying in 5s)...")
                 time.sleep(5)
 
     wait_for_server(PEVConfig.USER_ENDPOINT, "User Simulator (Port 8223)")
