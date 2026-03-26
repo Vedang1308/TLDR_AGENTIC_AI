@@ -10,7 +10,7 @@ class OutcomeMonitor:
     Role: Deterministic guardrail using Hierarchical Action Fingerprinting.
     """
     def __init__(self):
-        self.action_history = set()
+        pass # History is now stored in the state for per-trial isolation
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:
         PEVLogger.node("Monitor", "Verifying loop safety...")
@@ -23,16 +23,16 @@ class OutcomeMonitor:
         # We hash the tool name and critical parameters to identify stagnation
         fingerprint = hashlib.md5(json.dumps(action, sort_keys=True).encode()).hexdigest()
         
-        # 2. Loop Detection (Stagnation Check)
-        if fingerprint in self.action_history:
+        # 2. Loop Detection (Stagnation Check) - Check state history
+        if fingerprint in state.action_fingerprints:
             PEVLogger.warn(f"Stagnation detected! Fingerprint: {fingerprint}")
             return {
                 "is_loop": True, 
                 "audit_feedback": f"Stagnation detected: Already attempted {action['name']} with these arguments."
             }
         
-        # Record this fingerprint for future turns
-        self.action_history.add(fingerprint)
+        # Record this fingerprint for future turns in current trial
+        state.action_fingerprints.append(fingerprint)
         PEVLogger.success("Action fingerprint is unique.")
         
         return {

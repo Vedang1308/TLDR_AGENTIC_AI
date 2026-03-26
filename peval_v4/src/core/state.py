@@ -21,9 +21,8 @@ class PEVState(BaseModel):
     # --- Tactical Outputs ---
     reformulated_observation: str = "" # Used for IRMA strategy
     strategic_instruction: str = ""    # Output from Strategist
-    current_action_draft: Dict[str, Any] = Field(default_factory=dict) # Output from Tactician
-    
     # --- Verification & Loops ---
+    action_fingerprints: List[str] = Field(default_factory=list)
     is_loop: bool = False
     policy_violation: Optional[str] = None
     audit_feedback: str = ""
