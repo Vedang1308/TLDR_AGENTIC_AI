@@ -32,16 +32,21 @@ class Strategist:
         else:
             context = str(state.history[-5:])
         
+        # Include feedback from the Auditor/Monitor if the previous attempt was rejected
+        feedback = f"\nPREVIOUS ATTEMPT REJECTED: {state.audit_feedback}" if state.audit_feedback else ""
+        
         prompt = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"Context: {context}\nKnowledge: {state.memory_kernel}\nStrategy requested:"}
+            {"role": "user", "content": f"Context: {context}\nKnowledge: {state.memory_kernel}{feedback}\nStrategy requested:"}
         ]
         
         objective = self.client.chat(prompt)
         PEVLogger.info(f"Objective: {objective}")
         
-        # Update State
+        # Update State (Clearing the error flags so the next turn starts fresh)
         return {
             "strategic_instruction": objective,
+            "policy_violation": None,
+            "audit_feedback": "",
             "node_logs": [{"node": "Strategist", "content": objective}]
         }
