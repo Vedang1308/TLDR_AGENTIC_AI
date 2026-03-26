@@ -20,8 +20,8 @@ sleep 2  # Allow CUDA context to fully release
 # Memory Management for Single vs Multi GPU
 if [ "$NUM_GPUS" -eq 1 ]; then
     echo "!!! Detected Single-GPU mode: Enabling BitsAndBytes 8-bit Quantization !!!"
-    GPU_MEM_UTIL=0.40
-    MAX_LEN=2048      # User Simulator only needs short context
+    GPU_MEM_UTIL=0.40 # Balanced for Dual-32B setup
+    MAX_LEN=4096      # Sufficient for User Simulator
     QUANT="bitsandbytes"
 else
     GPU_MEM_UTIL=0.95

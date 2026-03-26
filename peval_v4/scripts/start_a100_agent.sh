@@ -25,7 +25,7 @@ sleep 2  # Allow CUDA context to fully release
 # Memory Management for Single vs Multi GPU
 if [ "$NUM_GPUS" -eq 1 ]; then
     echo "!!! Detected Single-GPU mode: Enabling BitsAndBytes 8-bit Quantization !!!"
-    GPU_MEM_UTIL=0.40 # Balanced utilization
+    GPU_MEM_UTIL=0.40 # Balanced for Dual-32B setup
     MAX_LEN=8192      # Expanded for complex airline schemas
     QUANT="bitsandbytes"
 else
