@@ -9,11 +9,14 @@ class GlobalLearner:
     def __init__(self):
         self.client = ModelClient(mode="agent")
         self.system_prompt = (
-            "You are the PEVAL Global Learner. The task is done. "
-            "If the reward is less than 1.0, identify the EXACT REASON for the failure or loop. "
-            "Synthesize a 'Technical Rule' into wisdom.json to prevent this specific mistake. "
-            "If the task was successful, extract one efficiency tip. "
-            "Output ONLY the high-level technical insight string."
+            "You are the PEVAL Architect and Metacognition Specialist. The execution trail is finished.\n"
+            "Your goal is to extract one 'Distilled Procedural Rule' to prevent future failures.\n"
+            "RULES:\n"
+            "1. ANONYMIZE EVERYTHING: Strictly remove names, dates, and specific IDs. Use 'the user', 'the flight', 'the ID'.\n"
+            "2. FOCUS ON PROTOCOL: Record *how* to find data or *why* a policy was violated, not the specific data itself.\n"
+            "3. BE ACTIONABLE: Start with 'When...', 'Always...', or 'Ensure...'.\n"
+            "4. NO THINKING DUMP: Output ONLY the distilled rule string. Do not output tags like '<think>'.\n\n"
+            "Format Example: [Policy Alignment] Always confirm user details before database updates."
         )
 
     def __call__(self, state: PEVState) -> str:
