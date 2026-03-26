@@ -42,7 +42,7 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
         while True:
             try:
                 # vLLM is ready when /v1/models returns 200
-                requests.get(f"{url}/models", timeout=2)
+                requests.get(f"{url}/models", timeout=30)
                 print(f"--- [SUCCESS] {name} is LIVE! ---")
                 return
             except:
@@ -72,7 +72,6 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
     heartbeat_server(PEVConfig.USER_ENDPOINT, PEVConfig.USER_MODEL, "User Simulator")
     
     print("--- [WAIT] Giving GPU 10s to settle... ---")
-    import time
     time.sleep(10)
     
     heartbeat_server(PEVConfig.AGENT_ENDPOINT, model_name, "Agent Server")
