@@ -52,7 +52,15 @@ class PEVALAgent(Agent):
 
             # Dispatch Verified Action to Tau-Bench
             action_data = state.current_action_draft
-            action = Action(name=action_data.get("name", RESPOND_ACTION_NAME), kwargs=action_data.get("arguments", {}))
+            action_name = action_data.get("name", RESPOND_ACTION_NAME)
+            action_kwargs = action_data.get("arguments", {})
+            
+            # HARDENING: If it's a 'respond' but no content was generated, wrap it safely
+            if action_name == RESPOND_ACTION_NAME and "content" not in action_kwargs:
+                error_msg = action_data.get("error", "The agent encountered an internal processing error.")
+                action_kwargs["content"] = f"I apologize, I encountered a technical error: {error_msg}. How can I help you differently?"
+
+            action = Action(name=action_name, kwargs=action_kwargs)
             
             PEVLogger.node("Tau-Bench Environment", f"Executing tool: {action.name}")
             env_res = env.step(action)

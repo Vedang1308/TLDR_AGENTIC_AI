@@ -17,7 +17,7 @@ class ContextDistiller:
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:
         # Only distill if history is getting long (Architecture-Aware Scaling)
-        if len(str(state.history)) < 4000:
+        if len(str(state.history)) < 2000:
             return {"summary": str(state.history)}
 
         print("--- [NODE] Context Distiller (Compressing) ---")
