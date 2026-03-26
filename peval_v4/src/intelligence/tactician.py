@@ -17,9 +17,10 @@ class Tactician:
 
         if self.strategy == "react":
             self.system_prompt = (
-                "You are the PEVAL Tactician. The Strategist has already performed the main reasoning. "
-                "Your role is to translate their instruction into a technical tool call. "
-                "In your 'thought' field, be extremely brief—only mention technical parameters. "
+                "You are the PEVAL Tactician. Translate the Strategist's instruction into a technical tool call.\n"
+                "IMPORTANT: If the Strategist wants you to ask the user for information (like a Reservation ID or Date), "
+                "you MUST use the 'respond' action.\n\n"
+                "Schema for 'respond': {\"name\": \"respond\", \"arguments\": {\"content\": \"Your question to the user here...\"}}\n\n"
                 "Output STRICTLY as a JSON object: {\"thought\": \"...\", \"action\": {\"name\": \"...\", \"arguments\": {...}}}.\n"
                 f"Tools available: {self.tools_info}"
             )
