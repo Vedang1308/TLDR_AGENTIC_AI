@@ -13,6 +13,11 @@ echo "--- Starting PEVAL Agent Model on $NUM_GPUS x A100 GPUs ---"
 echo "Model: $MODEL_PATH"
 echo "Serving on Port: $PORT"
 
+# --- [CLEANUP] Kill any existing process on this port to prevent 'Address already in use' ---
+echo "--- Cleaning up any existing process on Port $PORT... ---"
+fuser -k ${PORT}/tcp 2>/dev/null || true
+sleep 2  # Allow CUDA context to fully release
+
 # Core vLLM arguments for A100
 # - tensor-parallel-size distributes the model across multiple GPUs
 # - gpu-memory-utilization prevents OOMs when handling long contexts
