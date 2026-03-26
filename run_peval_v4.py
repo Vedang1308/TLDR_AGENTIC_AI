@@ -61,7 +61,7 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
         }
         try:
             start_time = time.time()
-            res = requests.post(f"{url}/chat/completions", json=payload, timeout=120)
+            res = requests.post(f"{url}/chat/completions", json=payload, timeout=300)
             res.raise_for_status()
             print(f"--- [SUCCESS] {name} inference is LIVE ({time.time()-start_time:.1f}s) ---")
         except Exception as e:
@@ -70,6 +70,11 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
             sys.exit(1)
 
     heartbeat_server(PEVConfig.USER_ENDPOINT, PEVConfig.USER_MODEL, "User Simulator")
+    
+    print("--- [WAIT] Giving GPU 10s to settle... ---")
+    import time
+    time.sleep(10)
+    
     heartbeat_server(PEVConfig.AGENT_ENDPOINT, model_name, "Agent Server")
 
     print(f"--- [INFO] Environment connecting to User Simulator at {PEVConfig.USER_ENDPOINT} ---")
