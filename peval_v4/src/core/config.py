@@ -29,8 +29,8 @@ class PEVConfig:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "") 
     
     # --- Architecture Limits ---
-    MAX_STEPS = 30
-    RECURSION_LIMIT = 25
+    MAX_STEPS = 50
+    RECURSION_LIMIT = 50
     CONTEXT_DISTILL_THRESHOLD = 8000 # Max tokens before triggering Distiller
     
     # --- Storage ---

@@ -73,5 +73,6 @@ class PEVALAgent(Agent):
 
         return SolveResult(
             reward=state.reward,
-            messages=state.history
+            messages=state.history,
+            info={}
         )

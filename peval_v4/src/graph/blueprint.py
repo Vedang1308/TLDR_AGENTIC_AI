@@ -51,10 +51,13 @@ def create_peval_graph(tools_info: list, wiki: str):
     workflow.add_edge("execute", "translate")
     workflow.add_edge("translate", "monitor")
     
-    # Conditional Edge: The "Determinism" Loop
+    # Conditional Edge: The "Stagnation" Break
     def routing_logic(state: PEVState):
         if state.is_loop:
-            return "reflect" if PEVConfig.TOOL_STRATEGY == "reflection" else "plan"
+            # If we detect a loop, we force an EXIT from the internal graph
+            # to prevent infinite recursion. This will allow the environment 
+            # to see the repeated action and respond accordingly.
+            return END
         return "audit"
 
     workflow.add_conditional_edges("monitor", routing_logic)
