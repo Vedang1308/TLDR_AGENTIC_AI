@@ -23,19 +23,24 @@ class ModelClient:
             self.model = self.config.USER_MODEL
         elif mode == "summarizer":
             if self.config.OPENAI_API_KEY:
-                self.client = openai.OpenAI(
-                    api_key=self.config.OPENAI_API_KEY
-                )
+                self.client = openai.OpenAI(api_key=self.config.OPENAI_API_KEY)
                 self.model = self.config.SUMMARIZER_MODEL
-            else:
-                # Fallback to local vLLM Agent model for summarization
-                from .logger import PEVLogger
-                PEVLogger.warn("No OPENAI_API_KEY found. Falling back to local vLLM for summarization/IRMA.")
+            elif self.config.OPENROUTER_API_KEY:
                 self.client = openai.OpenAI(
-                    base_url=self.config.AGENT_ENDPOINT,
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=self.config.OPENROUTER_API_KEY
+                )
+                self.model = self.config.OPENROUTER_MODEL
+            else:
+                # Fallback to local 8B User Simulator for higher quality summarization 
+                # (instead of the 4B Agent)
+                from .logger import PEVLogger
+                PEVLogger.warn("No API key found. Falling back to local 8B User vLLM for summarization.")
+                self.client = openai.OpenAI(
+                    base_url=self.config.USER_ENDPOINT,
                     api_key="empty"
                 )
-                self.model = self.config.AGENT_MODEL
+                self.model = self.config.USER_MODEL
 
     def chat(self, messages: List, temperature: float = 0.0):
         try:
