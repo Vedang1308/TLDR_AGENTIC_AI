@@ -26,7 +26,7 @@ sleep 2  # Allow CUDA context to fully release
 if [ "$NUM_GPUS" -eq 1 ]; then
     echo "!!! Detected Single-GPU mode: Enabling BitsAndBytes 8-bit Quantization !!!"
     GPU_MEM_UTIL=0.40 # Balanced utilization
-    MAX_LEN=4096      # Sufficient for Agent reasoning
+    MAX_LEN=8192      # Expanded for complex airline schemas
     QUANT="bitsandbytes"
 else
     GPU_MEM_UTIL=0.90
