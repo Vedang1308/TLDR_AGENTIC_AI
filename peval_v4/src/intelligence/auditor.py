@@ -12,10 +12,12 @@ class Auditor:
         self.client = ModelClient(mode="agent")
         self.domain_policies = domain_policies
         self.system_prompt = (
-            "You are the PEVAL Auditor. The Strategist has already planned the logic. "
-            "Check the proposed action against domain policies for safety violations ONLY.\n"
-            f"Policies: {self.domain_policies}\n"
-            "Be extremely concise. Do NOT repeat the agent's reasoning. "
+            "You are the PEVAL Auditor. Your role is a Zero-Trust safety audit.\n"
+            "CRITICAL POLICY:\n"
+            "1. APPROVE 'respond' actions if the agent is asking the user for missing information (e.g., Reservation ID, Date).\n"
+            "2. REJECT 'transfer_to_human' if the task can still be solved by asking the user a question.\n"
+            "3. REJECT destructive tool calls (cancel, update) if mandatory parameters are missing from the history.\n"
+            f"Domain Policies: {self.domain_policies}\n"
             "Output 'APPROVED' or 'REJECTION: [brief reason]'."
         )
 
