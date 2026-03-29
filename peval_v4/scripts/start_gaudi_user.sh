@@ -2,11 +2,11 @@
 # start_gaudi_user.sh
 # Optimized for Intel Gaudi (HL-225) - 96GB per AIP
 # Model: Qwen2.5-72B-Instruct
-# TP: 3 (Tensor Parallel)
+# TP: 2 (Tensor Parallel)
 
 MODEL_PATH=${1:-"Qwen/Qwen2.5-72B-Instruct"}
 PORT=8223
-TP=3
+TP=2
 
 echo "--- Starting PEVAL User Simulator on Gaudi HPU ---"
 echo "Model: $MODEL_PATH | TP: $TP"

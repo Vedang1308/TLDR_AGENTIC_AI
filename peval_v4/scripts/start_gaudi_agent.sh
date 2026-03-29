@@ -2,11 +2,11 @@
 # start_gaudi_agent.sh
 # Optimized for Intel Gaudi (HL-225) 96GB per AIP
 # Model: Qwen3-14B
-# TP: 1
+# TP: 2
 
 MODEL_PATH=${1:-"Qwen/Qwen3-14B"}
 PORT=8222
-TP=1
+TP=2
 
 echo "--- Starting PEVAL Agent Model on Gaudi HPU ---"
 echo "Model: $MODEL_PATH | TP: $TP"
