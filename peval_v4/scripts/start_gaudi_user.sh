@@ -1,22 +1,20 @@
 #!/bin/bash
 # start_gaudi_user.sh
-# Optimized for Intel Gaudi (HL-225) - 96GB per AIP
-# Model: Qwen2.5-72B-Instruct
-# TP: 2 (Tensor Parallel)
+# Optimized for Qwen2.5-72B on ASU SOL
 
 MODEL_PATH=${1:-"Qwen/Qwen2.5-72B-Instruct"}
 PORT=8223
-TP=2
+TP=4  # 64 heads / 4 = 16 heads per card (Mathematically perfect)
 
 echo "--- Starting PEVAL User Simulator on Gaudi HPU ---"
 echo "Model: $MODEL_PATH | TP: $TP"
 
-# Cleanup
+# Cleanup any zombie processes
 fuser -k ${PORT}/tcp 2>/dev/null || true
-sleep 5
+sleep 2
 
-# vLLM HPU-Optimized Command
-# --block-size 128 is critical for HPU MME utilization
+# vLLM HPU Command
+# We use --gpu-memory-utilization 0.85 to leave room for system overhead
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL_PATH \
     --served-model-name qwen-72b-simulator \
@@ -24,7 +22,7 @@ python3 -m vllm.entrypoints.openai.api_server \
     --port $PORT \
     --tensor-parallel-size $TP \
     --block-size 128 \
-    --gpu-memory-utilization 0.90 \
+    --gpu-memory-utilization 0.85 \
     --max-model-len 8192 \
     --enforce-eager \
     --trust-remote-code
