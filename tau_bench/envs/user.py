@@ -50,7 +50,7 @@ class LLMUserSimulationEnv(BaseUserSimulationEnv):
             custom_llm_provider=self.provider, 
             messages=messages,
             base_url=os.getenv("OPENAI_API_BASE"),
-            timeout=60
+            timeout=300
         )
         message = res.choices[0].message
         self.messages.append(message.model_dump())
@@ -125,7 +125,7 @@ User Response:
             custom_llm_provider=self.provider, 
             messages=messages,
             base_url=os.getenv("OPENAI_API_BASE"),
-            timeout=60
+            timeout=300
         )
         message = res.choices[0].message
         self.messages.append(message.model_dump())
@@ -178,7 +178,7 @@ class VerifyUserSimulationEnv(LLMUserSimulationEnv):
                 custom_llm_provider=self.provider, 
                 messages=messages,
                 base_url=os.getenv("OPENAI_API_BASE"),
-                timeout=60
+                timeout=300
             )
             cur_message = res.choices[0].message
             self.total_cost = res._hidden_params["response_cost"]
@@ -242,7 +242,7 @@ Classification:"""
         custom_llm_provider=provider,
         messages=[{"role": "user", "content": prompt}],
         base_url=os.getenv("OPENAI_API_BASE"),
-        timeout=60
+        timeout=300
     )
     return "true" in res.choices[0].message.content.lower()
 
@@ -278,7 +278,7 @@ Response:
         custom_llm_provider=provider,
         messages=[{"role": "user", "content": prompt}],
         base_url=os.getenv("OPENAI_API_BASE"),
-        timeout=60
+        timeout=300
     )
     _, response = res.choices[0].message.content.split("Response:")
     return response.strip()

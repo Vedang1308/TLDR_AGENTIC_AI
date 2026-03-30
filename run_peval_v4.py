@@ -42,7 +42,7 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
         while True:
             try:
                 # vLLM is ready when /v1/models returns 200
-                requests.get(f"{url}/models", timeout=30)
+                requests.get(f"{url}/models", timeout=300)
                 print(f"--- [SUCCESS] {name} is LIVE! ---")
                 return
             except Exception as e:

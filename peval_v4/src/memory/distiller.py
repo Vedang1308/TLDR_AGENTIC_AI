@@ -11,8 +11,13 @@ class ContextDistiller:
         self.client = ModelClient(mode="summarizer")
         self.system_prompt = (
             "You are a Context Distiller. Your goal is to compress a long conversation history "
-            "into a dense 'Strategic Kernel'. Maintain all critical facts (IDs, dates, preferences) "
-            "but remove conversational noise."
+            "into a dense 'Strategic Kernel'. \n"
+            "CRITICAL: You MUST keep the following information intact:\n"
+            "- All Origin and Destination Cities/Airports.\n"
+            "- All Flight Numbers, Dates, and Times.\n"
+            "- All Reservation IDs and User IDs.\n"
+            "- Current User Preferences (e.g. 'after 11 AM').\n"
+            "Remove only conversational fluff and repeated error messages."
         )
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:

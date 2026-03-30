@@ -12,23 +12,26 @@ class ModelClient:
         if mode == "agent":
             self.client = openai.OpenAI(
                 base_url=self.config.AGENT_ENDPOINT,
-                api_key="empty"
+                api_key="empty",
+                timeout=300
             )
             self.model = self.config.AGENT_MODEL
         elif mode == "user":
             self.client = openai.OpenAI(
                 base_url=self.config.USER_ENDPOINT,
-                api_key="empty"
+                api_key="empty",
+                timeout=300
             )
             self.model = self.config.USER_MODEL
         elif mode == "summarizer":
             if self.config.OPENAI_API_KEY:
-                self.client = openai.OpenAI(api_key=self.config.OPENAI_API_KEY)
+                self.client = openai.OpenAI(api_key=self.config.OPENAI_API_KEY, timeout=300)
                 self.model = self.config.SUMMARIZER_MODEL
             elif self.config.OPENROUTER_API_KEY:
                 self.client = openai.OpenAI(
                     base_url="https://openrouter.ai/api/v1",
-                    api_key=self.config.OPENROUTER_API_KEY
+                    api_key=self.config.OPENROUTER_API_KEY,
+                    timeout=300
                 )
                 self.model = self.config.OPENROUTER_MODEL
             else:
@@ -38,7 +41,8 @@ class ModelClient:
                 PEVLogger.warn("No API key found. Falling back to local 8B User vLLM for summarization.")
                 self.client = openai.OpenAI(
                     base_url=self.config.USER_ENDPOINT,
-                    api_key="empty"
+                    api_key="empty",
+                    timeout=300
                 )
                 self.model = self.config.USER_MODEL
 
