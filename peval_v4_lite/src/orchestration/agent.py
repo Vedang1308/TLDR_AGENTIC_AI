@@ -35,8 +35,10 @@ class PEVALAgent(Agent):
         state = PEVState()
         state.global_wisdom = self.wisdom_store(state)["global_wisdom"]
         
-        env_res = env.reset(task_index=task_index)
         state.history.append({"role": "user", "content": env_res.observation})
+        
+        # Safe Checkpoint (The state after the last successful tool call)
+        checkpoint_state = state
         
         for i in range(max_steps):
             PEVLogger.step(i + 1)
@@ -46,6 +48,15 @@ class PEVALAgent(Agent):
             try:
                 final_state_data = self.engine.invoke(state, {"recursion_limit": self.config.RECURSION_LIMIT})
                 state = PEVState(**final_state_data)
+                
+                # Check for "Abject Failure" (Recursion Limit or Hallucination Loop)
+                if state.consecutive_errors >= 3:
+                    PEVLogger.error("CRITICAL STAGNATION: Rolling back to last safe checkpoint.")
+                    state = checkpoint_state
+                    state.audit_feedback = "SYSTEM ROLLBACK: Your previous path led to an infinite loop. You MUST take a DIFFERENT branch from this point. Review the user's base intent and history carefully."
+                    state.consecutive_errors = 0
+                    continue
+
             except Exception as e:
                 print(f"Engine Exception: {e}")
                 break
@@ -67,6 +78,11 @@ class PEVALAgent(Agent):
             
             state.last_observation = env_res.observation
             state.history.append({"role": "tool", "content": env_res.observation})
+            
+            # Update the Safe Checkpoint if we got a real result back from the environment
+            if len(env_res.observation) > 0 and not env_res.observation.startswith("Error"):
+                checkpoint_state = state
+                state.consecutive_errors = 0
             
             PEVLogger.info(f"Observation Length: {len(env_res.observation)} chars")
             

@@ -79,7 +79,7 @@ class PEVEngine:
             # 6. Monitor
             state = self._update_state(state, self.monitor(state))
             
-            # Stagnation Break (If looping the same action)
+            # Stagnation Break & Rollback Logic
             if state.is_loop:
                 PEVLogger.warn("Monitor detected a loop. Forcing Strategic Pivot.")
                 state = self._update_state(state, {
@@ -87,6 +87,8 @@ class PEVEngine:
                     "policy_violation": "REJECTED_STAGNATION",
                     "audit_feedback": "CRITICAL STAGNATION DETECTED: You drafted an action identical to a previous step. This is a redundant loop. Review the latest observation in your history to understand why you are stuck, and synthesize a DIFFERENT strategic approach."
                 })
+                # If we've hit this stagnation point repeatedly, it's a sign of context-clutter/hallucination.
+                # In a more advanced version, we would rollback here. For now, we continue and let the Strategist pivot.
                 continue
                 
             # 7. Audit
