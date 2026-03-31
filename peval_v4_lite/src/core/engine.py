@@ -1,0 +1,105 @@
+from typing import Any, Dict
+
+from ..core.state import PEVState
+from ..intelligence.strategist import Strategist
+from ..intelligence.tactician import Tactician
+from ..guardrails.monitor import OutcomeMonitor
+from ..guardrails.translator import SemanticTranslator
+from ..intelligence.auditor import Auditor
+from ..memory.distiller import ContextDistiller
+from ..intelligence.reformulator import InputReformulator
+from ..metacognition.reflector import ErrorReflector
+from ..core.config import PEVConfig
+from ..core.logger import PEVLogger
+
+class PEVEngine:
+    """
+    Native Python Orchestration Engine for Phase 4 Lite.
+    Replaces LangGraph to eliminate graph recursion errors while keeping the exact same flow.
+    """
+    def __init__(self, tools_info: list, wiki: str):
+        self.distiller = ContextDistiller()
+        self.reformulator = InputReformulator()
+        self.planner = Strategist()
+        self.tactician = Tactician(tools_info)
+        self.translator = SemanticTranslator(tools_info)
+        self.monitor = OutcomeMonitor()
+        self.auditor = Auditor(wiki)
+        self.reflector = ErrorReflector()
+
+    def _update_state(self, state: PEVState, updates: Dict[str, Any]) -> PEVState:
+        """Utility to apply node outputs to the current state."""
+        state_dict = state.model_dump()
+        
+        for k, v in updates.items():
+            # For lists like node_logs, action_fingerprints, history, memory_kernel
+            if k in ["node_logs", "action_fingerprints", "history", "memory_kernel", "global_wisdom"]:
+                if isinstance(v, list):
+                    state_dict[k].extend(v)
+                else:
+                    state_dict[k].append(v)
+            else:
+                state_dict[k] = v
+                
+        return PEVState(**state_dict)
+
+    def invoke(self, initial_state: PEVState, config: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Executes the agent's modular cycle for one turn.
+        
+        Flow:
+        Distill -> [Reformulate] -> Plan -> Execute -> Translate -> Monitor -> Audit
+        If Audit rejects -> [Reflect] -> loop back to Plan.
+        If loop limit exceeded -> break.
+        """
+        state = initial_state
+        recursion_limit = config.get("recursion_limit", PEVConfig.RECURSION_LIMIT) if config else PEVConfig.RECURSION_LIMIT
+        
+        # 1. Distiller
+        state = self._update_state(state, self.distiller(state))
+        
+        # 2. Reformulator (If IRMA)
+        if PEVConfig.TOOL_STRATEGY == "irma":
+            state = self._update_state(state, self.reformulator(state))
+            
+        # Planner -> Auditor Replanning Loop
+        attempts = 0
+        while attempts < recursion_limit:
+            attempts += 1
+            
+            # 3. Plan
+            state = self._update_state(state, self.planner(state))
+            
+            # 4. Execute (Draft action)
+            state = self._update_state(state, self.tactician(state))
+            
+            # 5. Translate
+            state = self._update_state(state, self.translator(state))
+            
+            # 6. Monitor
+            state = self._update_state(state, self.monitor(state))
+            
+            # Stagnation Break (If looping the same action)
+            if state.is_loop:
+                PEVLogger.warn("Monitor detected a loop. Breaking out to environment.")
+                break
+                
+            # 7. Audit
+            state = self._update_state(state, self.auditor(state))
+            
+            # Evaluation
+            if state.policy_violation:
+                if attempts >= recursion_limit:
+                    PEVLogger.error(f"Recursion limit {recursion_limit} reached during Replanning.")
+                    break
+                    
+                if PEVConfig.TOOL_STRATEGY == "reflection":
+                    state = self._update_state(state, self.reflector(state))
+                # Loop back to Plan
+                continue
+            else:
+                # Validated successfully
+                break
+                
+        # Return state as dictionary (to match the old graph.invoke return type)
+        return state.model_dump()
