@@ -25,13 +25,10 @@ class Strategist:
         
         from ..core.config import PEVConfig
         
-        # Build the prompt using the Distilled Summary if available, otherwise raw history
-        if PEVConfig.TOOL_STRATEGY == "irma" and state.reformulated_observation:
-            context = f"Reformulated Input: {state.reformulated_observation}"
-        elif state.summary:
-            context = state.summary
-        else:
-            context = str(state.history[-5:])
+        # HYBRID CONTEXT: Combine global archive (summary) with recent raw turns (short-term memory)
+        summary_part = f"GLOBAL ARCHIVE (Summary): {state.summary}\n" if state.summary else ""
+        recent_history = f"RECENT RAW HISTORY: {str(state.history[-10:])}"
+        context = f"{summary_part}{recent_history}"
         
         # Include feedback from the Auditor/Monitor if the previous attempt was rejected
         feedback = ""
