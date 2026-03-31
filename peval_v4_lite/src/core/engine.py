@@ -85,10 +85,12 @@ class PEVEngine:
                 state = self._update_state(state, {
                     "is_loop": False,
                     "policy_violation": "REJECTED_STAGNATION",
+                    "consecutive_errors": state.consecutive_errors + 1,
                     "audit_feedback": "CRITICAL STAGNATION DETECTED: You drafted an action identical to a previous step. This is a redundant loop. Review the latest observation in your history to understand why you are stuck, and synthesize a DIFFERENT strategic approach."
                 })
-                # If we've hit this stagnation point repeatedly, it's a sign of context-clutter/hallucination.
-                # In a more advanced version, we would rollback here. For now, we continue and let the Strategist pivot.
+                if state.consecutive_errors >= 3:
+                    PEVLogger.error("Inner reasoning loop stalled. Breaking for Rollback.")
+                    break
                 continue
                 
             # 7. Audit
@@ -96,8 +98,9 @@ class PEVEngine:
             
             # Evaluation
             if state.policy_violation:
-                if attempts >= recursion_limit:
-                    PEVLogger.error(f"Recursion limit {recursion_limit} reached during Replanning.")
+                state.consecutive_errors += 1
+                if state.consecutive_errors >= 3 or attempts >= recursion_limit:
+                    PEVLogger.error(f"Reasoning stalled after {attempts} attempts. Breaking for Rollback.")
                     break
                     
                 if PEVConfig.TOOL_STRATEGY == "reflection":
@@ -105,7 +108,8 @@ class PEVEngine:
                 # Loop back to Plan
                 continue
             else:
-                # Validated successfully
+                # Validated successfully - Reset the internal error counter
+                state.consecutive_errors = 0
                 break
                 
         # Return state as dictionary (to match the old graph.invoke return type)

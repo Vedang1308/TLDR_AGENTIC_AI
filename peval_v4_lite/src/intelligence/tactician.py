@@ -21,7 +21,7 @@ class Tactician:
                 "STEPS:\n"
                 "1. IDENTIFY: Pick the correct tool from the available list.\n"
                 "2. ANALYZE: List the REQUIRED parameters for that tool as f(arg1, arg2, ...).\n"
-                "3. EXTRACT: Find the exact values for those parameters in the provided 'Task Context' or 'Memory Kernel'.\n"
+                "3. EXTRACT: Prioritize the 'Memory Kernel' for these values. Only use history if the values are missing from the kernel.\n"
                 "4. DRAFT: Output the final JSON only after confirming all required parameters exist.\n\n"
                 "IMPORTANT: If you need to ask the user a question, you MUST use the 'respond' action.\n"
                 "Output STRICTLY as a JSON object: {\"thought\": \"Refining f(x,y,z)...\", \"action\": {\"name\": \"...\", \"arguments\": {...}}}.\n"
@@ -44,7 +44,7 @@ class Tactician:
             
         prompt = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"Task Context: {str(state.history[-5:])}\n{feedback}\n\nStrategist's Instruction: {state.strategic_instruction}"}
+            {"role": "user", "content": f"Task Context: {str(state.history[-5:])}\nMemory Kernel: {state.memory_kernel}\n{feedback}\n\nStrategist's Instruction: {state.strategic_instruction}"}
         ]
         
         response = self.client.chat(prompt)

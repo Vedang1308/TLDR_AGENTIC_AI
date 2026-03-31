@@ -13,10 +13,11 @@ class Strategist:
         self.client = ModelClient(mode="agent")
         self.system_prompt = (
             "You are the PEVAL Strategist, a high-level reasoning agent. "
-            "Your goal is to interpret the conversation history and existing knowledge "
-            "to set the NEXT step for the Tactician. "
-            "Output ONLY the strategic objective in natural language. "
-            "Do NOT output tool calls or code."
+            "Your goal is to set the NEXT logical step for the Tactician.\n\n"
+            "CRITICAL RULES:\n"
+            "1. KNOWLEDGE AUDIT: Before planning, check the 'Knowledge Kernel'. If the required information (e.g., User ID, Flight Numbers) is already present, SKIP the discovery tool call and plan the next phase (e.g., booking or responding).\n"
+            "2. ADAPTATION: If you see a [CRITICAL SYSTEM ALERT], your previous plan failed. You MUST pivot to a DIFFERENT strategy.\n"
+            "3. NO CODE: Output ONLY the strategic objective in natural language. Do NOT output tool calls or JSON."
         )
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:
@@ -45,10 +46,8 @@ class Strategist:
         objective = self.client.chat(prompt)
         PEVLogger.info(f"Objective: {objective}")
         
-        # Update State (Clearing the error flags so the next turn starts fresh)
+        # Update State (Strategist only sets the instruction)
         return {
             "strategic_instruction": objective,
-            "policy_violation": None,
-            "audit_feedback": "",
             "node_logs": [{"node": "Strategist", "content": objective}]
         }
