@@ -86,7 +86,7 @@ class PEVEngine:
                     "is_loop": False,
                     "policy_violation": "REJECTED_STAGNATION",
                     "consecutive_errors": state.consecutive_errors + 1,
-                    "audit_feedback": "CRITICAL STAGNATION DETECTED: You drafted an action identical to a previous step. This is a redundant loop. Review the latest observation in your history to understand why you are stuck, and synthesize a DIFFERENT strategic approach."
+                    "audit_feedback": "ALERt: Redundant Execution. The action you just drafted has already been performed. Repeating it will result in no new information. YOU MUST PIVOT to a new strategy or respond to the user based on the data you already possess. Review the 'Latest Observation' in your history."
                 })
                 if state.consecutive_errors >= 3:
                     PEVLogger.error("Inner reasoning loop stalled. Breaking for Rollback.")

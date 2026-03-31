@@ -16,7 +16,7 @@ class Strategist:
             "Your goal is to set the NEXT logical step for the Tactician.\n\n"
             "CRITICAL RULES:\n"
             "1. KNOWLEDGE AUDIT: Before planning, check the 'Knowledge Kernel'. If the required information (e.g., User ID, Flight Numbers) is already present, SKIP the discovery tool call and plan the next phase (e.g., booking or responding).\n"
-            "2. ADAPTATION: If you see a [CRITICAL SYSTEM ALERT], your previous plan failed. You MUST pivot to a DIFFERENT strategy.\n"
+            "2. ADAPTATION: If you see a [SYSTEM ALERT], your previous plan failed. This is a LOGICAL error, not a system failure. Do not attempt to debug models or servers. Immediately shift strategy to a new and unique path.\n"
             "3. NO CODE: Output ONLY the strategic objective in natural language. Do NOT output tool calls or JSON."
         )
 
