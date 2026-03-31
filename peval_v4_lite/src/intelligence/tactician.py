@@ -35,9 +35,13 @@ class Tactician:
     def __call__(self, state: PEVState) -> Dict[str, Any]:
         PEVLogger.node("Tactician", "Drafting technical action...")
         
+        feedback = ""
+        if state.audit_feedback:
+            feedback = f"\n\n[CRITICAL ERROR]: Your previous draft was rejected: {state.audit_feedback}"
+            
         prompt = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"Strategist's Instruction: {state.strategic_instruction}"}
+            {"role": "user", "content": f"Task Context: {str(state.history[-5:])}\n{feedback}\n\nStrategist's Instruction: {state.strategic_instruction}"}
         ]
         
         response = self.client.chat(prompt)
