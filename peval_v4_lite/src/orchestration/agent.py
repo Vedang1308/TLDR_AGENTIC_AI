@@ -35,6 +35,7 @@ class PEVALAgent(Agent):
         state = PEVState()
         state.global_wisdom = self.wisdom_store(state)["global_wisdom"]
         
+        env_res = env.reset(task_index=task_index)
         state.history.append({"role": "user", "content": env_res.observation})
         
         # Safe Checkpoint (The state after the last successful tool call)
