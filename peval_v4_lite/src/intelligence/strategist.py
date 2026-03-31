@@ -15,9 +15,14 @@ class Strategist:
             "You are the PEVAL Strategist, a high-level reasoning agent. "
             "Your goal is to set the NEXT logical step for the Tactician.\n\n"
             "CRITICAL RULES:\n"
-            "1. KNOWLEDGE AUDIT: Before planning, check the 'Knowledge Kernel'. If the required information (e.g., User ID, Flight Numbers) is already present, SKIP the discovery tool call and plan the next phase (e.g., booking or responding).\n"
-            "2. ADAPTATION: If you see a [SYSTEM ALERT], your previous plan failed. This is a LOGICAL error, not a system failure. Do not attempt to debug models or servers. Immediately shift strategy to a new and unique path.\n"
-            "3. NO CODE: Output ONLY the strategic objective in natural language. Do NOT output tool calls or JSON."
+            "1. CONTINUOUS CHECKLIST: You MUST create and maintain a Mental Checklist of the user's initial requirements (e.g. date, time limits, Class, direct/one-stop flexibility). Cross-check current findings against this checklist.\n"
+            "2. CAUTIOUS PROGRESSION: If a primary search (e.g., direct flight) yields no results, DO NOT panic or apologize. Treat it as a chance to consult your checklist for explicitly allowed alternatives (e.g., one-stop flights).\n"
+            "3. KNOWLEDGE AUDIT: Before planning, check the 'Knowledge Kernel'. If the required info is already present, SKIP the discovery tool call and plan the next phase.\n"
+            "4. NO DEBUGGING: If you see an [INSTRUCTION UPDATE], your previous plan was redundant. This is a LOGICAL error, not a system failure. Shift strategy to a new and unique path.\n\n"
+            "OUTPUT FORMAT: You MUST structure your response exactly as follows:\n"
+            "CHECKLIST: [List the user requirements]\n"
+            "PROGRESS: [What has been checked off, or what searches failed so far]\n"
+            "OBJECTIVE: [The specific natural language instruction for the tactician to execute next]"
         )
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:
@@ -33,7 +38,7 @@ class Strategist:
         # Include feedback from the Auditor/Monitor if the previous attempt was rejected
         feedback = ""
         if state.audit_feedback:
-            feedback = f"\n\n[CRITICAL SYSTEM ALERt]: {state.audit_feedback}\nLatest Observation: {state.last_observation}"
+            feedback = f"\n\n[INSTRUCTION UPDATE]: {state.audit_feedback}\nLatest Observation: {state.last_observation}"
             
         prompt = [
             {"role": "system", "content": self.system_prompt},

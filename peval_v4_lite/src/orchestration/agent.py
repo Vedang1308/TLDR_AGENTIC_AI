@@ -54,7 +54,7 @@ class PEVALAgent(Agent):
                 if state.consecutive_errors >= 3:
                     PEVLogger.error("CRITICAL STAGNATION: Rolling back to last safe checkpoint.")
                     state = checkpoint_state
-                    state.audit_feedback = "SYSTEM ROLLBACK: Your previous logical path led to a redundant loop or hallucination. You MUST take a DIFFERENT branch from this state. Review the 'Latest Observation' and the users base intent carefully."
+                    state.audit_feedback = "INSTRUCTION UPDATE: We have restored your state to the last successful action because the previous path failed to progress the task. Do not panic. Consult your CHECKLIST and cautiously try a different approach from this point forward."
                     state.consecutive_errors = 0
                     continue
 

@@ -86,7 +86,7 @@ class PEVEngine:
                     "is_loop": False,
                     "policy_violation": "REJECTED_STAGNATION",
                     "consecutive_errors": state.consecutive_errors + 1,
-                    "audit_feedback": "ALERt: Redundant Execution. The action you just drafted has already been performed. Repeating it will result in no new information. YOU MUST PIVOT to a new strategy or respond to the user based on the data you already possess. Review the 'Latest Observation' in your history."
+                    "audit_feedback": "Progress checked. Redundant action detected (you already did this). PIVOT requested: Do not panic or apologize. Cautiously consult your CHECKLIST and use your flexibility (e.g., try a different search or ask the user) to steadily progress the task."
                 })
                 if state.consecutive_errors >= 3:
                     PEVLogger.error("Inner reasoning loop stalled. Breaking for Rollback.")
