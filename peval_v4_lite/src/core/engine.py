@@ -81,8 +81,13 @@ class PEVEngine:
             
             # Stagnation Break (If looping the same action)
             if state.is_loop:
-                PEVLogger.warn("Monitor detected a loop. Breaking out to environment.")
-                break
+                PEVLogger.warn("Monitor detected a loop. Forcing Strategic Pivot.")
+                state = self._update_state(state, {
+                    "is_loop": False,
+                    "policy_violation": "REJECTED_STAGNATION",
+                    "audit_feedback": "CRITICAL STAGNATION DETECTED: You drafted an action identical to a previous step. This is a redundant loop. Review the latest observation in your history to understand why you are stuck, and synthesize a DIFFERENT strategic approach."
+                })
+                continue
                 
             # 7. Audit
             state = self._update_state(state, self.auditor(state))

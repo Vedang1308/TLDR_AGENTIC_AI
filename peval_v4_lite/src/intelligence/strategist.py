@@ -33,8 +33,10 @@ class Strategist:
             context = str(state.history[-5:])
         
         # Include feedback from the Auditor/Monitor if the previous attempt was rejected
-        feedback = f"\nPREVIOUS ATTEMPT REJECTED: {state.audit_feedback}" if state.audit_feedback else ""
-        
+        feedback = ""
+        if state.audit_feedback:
+            feedback = f"\n\n[CRITICAL SYSTEM ALERt]: {state.audit_feedback}\nLatest Observation: {state.last_observation}"
+            
         prompt = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": f"Context: {context}\nKnowledge: {state.memory_kernel}{feedback}\nStrategy requested:"}
