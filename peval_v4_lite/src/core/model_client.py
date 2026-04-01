@@ -31,7 +31,22 @@ class ModelClient:
         elif mode == "summarizer":
             if self.config.OPENAI_API_KEY:
                 self.client = openai.OpenAI(api_key=self.config.OPENAI_API_KEY, timeout=300)
-                self.model = self.config.SUMMARIZER_MODEL
+                
+                # Automated Model Discovery: Find the best GPT-4 model available
+                try:
+                    from .logger import PEVLogger
+                    PEVLogger.info("Discovering available GPT-4 models...")
+                    available_models = [m.id for m in self.client.models.list()]
+                    
+                    # Prioritization Matrix
+                    candidates = ["gpt-4o", "gpt-4o-2024-05-13", "gpt-4o-mini", "gpt-4-turbo", "gpt-4"]
+                    self.model = next((c for c in candidates if c in available_models), "gpt-3.5-turbo")
+                    
+                    PEVLogger.success(f"Handshake Complete. Using Intelligence Model: {self.model}")
+                except Exception as e:
+                    from .logger import PEVLogger
+                    PEVLogger.warn(f"Model Discovery failed: {str(e)}. Falling back to default.")
+                    self.model = self.config.SUMMARIZER_MODEL
             elif self.config.OPENROUTER_API_KEY:
                 self.client = openai.OpenAI(
                     base_url="https://openrouter.ai/api/v1",
