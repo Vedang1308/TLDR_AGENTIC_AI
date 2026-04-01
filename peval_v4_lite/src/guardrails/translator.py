@@ -19,15 +19,21 @@ class SemanticTranslator:
         tool_name = action.get("name")
         args = action.get("arguments", {})
         
-        # 1. Find the target tool schema
-        target_tool = next((t for t in self.tools_info if t.get('name') == tool_name), None)
+        # 1. Find the target tool schema (Handle both flat and wrapped definitions)
+        target_tool = None
+        for t in self.tools_info:
+            meta = t.get("function", t)
+            if meta.get("name") == tool_name:
+                target_tool = meta
+                break
+                
         if not target_tool:
             return {"current_action_draft": action} # Pass through if unknown
 
         # 2. Map known intelligence-drifts (Fuzzy Parameter Normalization)
         # e.g. models often use 'message' instead of 'content' for 'respond'
-        schema = target_tool.get('parameters', {}).get('properties', {})
-        expected_params = list(schema.keys())
+        schema_props = target_tool.get('parameters', {}).get('properties', {})
+        expected_params = list(schema_props.keys())
         
         new_args = {}
         for k, v in args.items():
