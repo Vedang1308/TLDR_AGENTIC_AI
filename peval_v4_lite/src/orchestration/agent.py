@@ -81,10 +81,16 @@ class PEVALAgent(Agent):
                 continue
                 
             # For the 'respond' tool, ensure at least one argument exists (regardless of key like 'message' or 'content')
-            if action_name == RESPOND_ACTION_NAME and not any(v for v in action_kwargs.values() if str(v).strip()):
-                PEVLogger.warn("Empty response drafted. Rolling back for retry.")
-                state = checkpoint_state
-                continue
+            if action_name == RESPOND_ACTION_NAME:
+                # Find the actual text content regardless of the key the model uses (content, message, response, etc.)
+                response_text = next((v for v in action_kwargs.values() if str(v).strip()), "")
+                if not response_text:
+                    PEVLogger.warn("Empty response drafted. Rolling back for retry.")
+                    state = checkpoint_state
+                    continue
+                # NORMALIZE: Tau-Bench base.py specifically looks for the key 'content'
+                action_kwargs = {"content": response_text}
+                
             action = Action(name=action_name, kwargs=action_kwargs)
             
             PEVLogger.node("Tau-Bench Environment", f"Executing tool: {action.name}")
