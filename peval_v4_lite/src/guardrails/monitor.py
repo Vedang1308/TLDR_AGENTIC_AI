@@ -33,11 +33,17 @@ class OutcomeMonitor:
             
         # 3. Domain-Agnostic Empty Observation Loop
         tool_obs = [msg["content"] for msg in state.history if msg.get("role") == "tool"]
-        if len(tool_obs) >= 2 and all(len(str(obs).strip()) == 0 for obs in tool_obs[-2:]):
+        if len(tool_obs) >= 3 and all(len(str(obs).strip()) == 0 for obs in tool_obs[-3:]):
+            PEVLogger.warn("CRITICAL: Empty Observation Loop stalling execution!")
+            return {
+                "is_loop": True,
+                "audit_feedback": "CRITICAL ALERT: You have performed 3 consecutive thinking/non-informative actions. You are now MANDATED to use the 'respond' tool to provide the user with the options already in your history, or ask for a choice. DO NOT attempt to 'filter' anymore internally."
+            }
+        elif len(tool_obs) >= 2 and all(len(str(obs).strip()) == 0 for obs in tool_obs[-2:]):
             PEVLogger.warn("Empty Observation Loop detected!")
             return {
                 "is_loop": True,
-                "audit_feedback": "Stagnation detected: Your last 2 actions yielded NO new information (observations were completely empty). You are stuck in a non-informative loop. You MUST shift to a tool that extracts new data or responds to the user."
+                "audit_feedback": "Stagnation detected: Your last 2 actions yielded NO new information. You are stuck in a non-informative loop. Use a tool that extracts new data or responds to the user."
             }
         
         # Record this fingerprint for future turns in current trial

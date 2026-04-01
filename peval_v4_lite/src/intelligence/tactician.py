@@ -21,10 +21,12 @@ class Tactician:
                 "STEPS:\n"
                 "1. IDENTIFY: Pick the correct tool from the available list.\n"
                 "2. ANALYZE: List the REQUIRED parameters for that tool as f(arg1, arg2, ...).\n"
-                "3. EXTRACT: Prioritize the 'INGREDIENTS (NER)' provided by the Strategist and then the 'Memory Kernel' for those values. Only use history if the values are missing from both.\n"
-                "4. DRAFT: Output the final JSON only after confirming all required parameters exist.\n\n"
-                "IMPORTANT: If you need to ask the user a question, you MUST use the 'respond' action.\n"
-                "Output STRICTLY as a JSON object: {\"thought\": \"Refining f(x,y,z)...\", \"action\": {\"name\": \"...\", \"arguments\": {...}}}.\n"
+                "3. EXTRACT: Prioritize the 'INGREDIENTS (NER)' and 'Memory Kernel' for these values. Only use history if they are missing.\n"
+                "4. DRAFT: Output the final JSON with 'thought' and 'action'.\n\n"
+                "CRITICAL: INTERNAL REASONING MUST STAY IN THE 'thought' KEY. \n"
+                "DO NOT USE THE 'think' TOOL AS AN ACTION. \n"
+                "EVERY TOOL-CALL IN 'action' MUST BE FUNCTIONAL (search, list, book, cancel, update, or respond).\n\n"
+                "Output STRICTLY as a JSON object: {\"thought\": \"[Your internal reasoning]\", \"action\": {\"name\": \"...\", \"arguments\": {...}}}.\n"
                 f"Tools available: {self.tools_info}"
             )
         else:
