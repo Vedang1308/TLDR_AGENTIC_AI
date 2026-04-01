@@ -14,15 +14,15 @@ class ContextDistiller:
             "into a dense 'Strategic Kernel'. \n"
             "CRITICAL: You MUST keep the following information intact:\n"
             "- All Origin and Destination Cities/Airports.\n"
-            "- All Flight Numbers, Dates, and Times.\n"
+            "- All Flight Numbers, Dates, and Prices (format these as a DENSE LIST: [ID, Price]).\n"
             "- All Reservation IDs and User IDs.\n"
             "- Current User Preferences (e.g. 'after 11 AM').\n"
-            "Remove only conversational fluff and repeated error messages."
+            "Remove all conversational fluff and repeated tool-call logs."
         )
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:
-        # Only distill if history is getting long (Architecture-Aware Scaling)
-        if len(str(state.history)) < 5000:
+        # Lowered threshold to manage Gaudi/72B inference latency
+        if len(str(state.history)) < 2000:
             return {"summary": str(state.history)}
 
         print("--- [NODE] Context Distiller (Compressing) ---")

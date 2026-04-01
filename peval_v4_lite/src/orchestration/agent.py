@@ -50,16 +50,23 @@ class PEVALAgent(Agent):
                 final_state_data = self.engine.invoke(state, {"recursion_limit": self.config.RECURSION_LIMIT})
                 state = PEVState(**final_state_data)
                 
+                # Check for Inference Stall (Timeout/Concurrency Error on Gaudi)
+                if state.is_stalled:
+                    PEVLogger.error("STALL DETECTED: Model timed out on HPU. Retrying turnaround privately...")
+                    state = checkpoint_state
+                    state.is_stalled = False
+                    continue
+
                 # Check for "Abject Failure" (Recursion Limit or Hallucination Loop)
                 if state.consecutive_errors >= 3:
                     PEVLogger.error("CRITICAL STAGNATION: Rolling back to last safe checkpoint.")
                     state = checkpoint_state
-                    state.audit_feedback = "INSTRUCTION UPDATE: We have restored your state to the last successful action because the previous path failed to progress the task. Do not panic. Consult your CHECKLIST and cautiously try a different approach from this point forward."
+                    state.audit_feedback = "INSTRUCTION UPDATE: We have restored your state to the last successful action because the previous path failed to progress the task. Do not panic. Consult your CHECKLIST and available tool-outputs to try a different approach."
                     state.consecutive_errors = 0
                     continue
 
             except Exception as e:
-                print(f"Engine Exception: {e}")
+                PEVLogger.error(f"Unplugging Engine Exception: {e}")
                 break
 
             # Dispatch Verified Action to Tau-Bench
@@ -67,11 +74,11 @@ class PEVALAgent(Agent):
             action_name = action_data.get("name", RESPOND_ACTION_NAME)
             action_kwargs = action_data.get("arguments", {})
             
-            # HARDENING: If it's a 'respond' but no content was generated, wrap it safely
-            if action_name == RESPOND_ACTION_NAME and "content" not in action_kwargs:
-                error_msg = action_data.get("error", "The agent encountered an internal processing error.")
-                action_kwargs["content"] = f"I apologize, I encountered a technical error: {error_msg}. How can I help you differently?"
-
+            # HARDENING: If it's an empty action, something is wrong internally. Rollback.
+            if not action_name or (action_name == RESPOND_ACTION_NAME and "content" not in action_kwargs):
+                PEVLogger.warn("Empty action drafted. Rolling back for retry.")
+                state = checkpoint_state
+                continue
             action = Action(name=action_name, kwargs=action_kwargs)
             
             PEVLogger.node("Tau-Bench Environment", f"Executing tool: {action.name}")

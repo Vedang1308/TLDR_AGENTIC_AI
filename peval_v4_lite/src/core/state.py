@@ -32,6 +32,7 @@ class PEVState(BaseModel):
     policy_violation: Optional[str] = None
     audit_feedback: str = ""
     consecutive_errors: int = 0
+    is_stalled: bool = False
     
     # --- Execution Result ---
     last_observation: str = ""

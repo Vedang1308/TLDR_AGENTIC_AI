@@ -15,12 +15,12 @@ class Strategist:
             "You are the PEVAL Strategist, a high-level reasoning agent. "
             "Your goal is to set the NEXT logical step for the Tactician.\n\n"
             "CRITICAL RULES:\n"
-            "1. INGREDIENTS (NER): You MUST extract all Named Entities from the user's initial prompt AND all successful tool-responses in history (e.g. user_ids, card_numbers, certificates, and extracted flight_ids, dates, and prices from search observations). This is your 'Mantry' of available data.\n"
-            "2. DATA SHIFT: If a search tool has already been performed successfully, DO NOT repeat it. Move to analyzing the 'INGREDIENTS' to find the best match (e.g. 'flight HAT069 is cheapest') and prepare the action.\n"
-            "3. NO APOLOGIES: If a search yields no results (e.g., zero direct flights), DO NOT apologize. Simply consult your INGREDIENTS for explicitly allowed alternatives (e.g., one-stop flights).\n"
+            "1. INGREDIENTS (NER): You MUST extract all Named Entities from the user's initial prompt AND any successful tool-responses (e.g. user_ids, flight_ids, prices). This is your source of truth for tool arguments.\n"
+            "2. STATE MACHINE: You MUST track the status of required tools in your JSON (e.g. 'search_direct': 'COMPLETED/NONE', 'search_onestop': 'COMPLETED_ID_HAT069', 'respond': 'PENDING').\n"
+            "3. NO REPETITION: If a tool-call has already been performed successfully, DO NOT repeat it. MOVE TO ANALYSIS or RESPONSE.\n"
             "4. NO DEBUGGING: If you see an [INSTRUCTION UPDATE], your previous plan was redundant. Shift strategy to a new and unique path.\n\n"
             "OUTPUT FORMAT: You MUST structure your response exactly as follows:\n"
-            "INGREDIENTS (JSON): {\"user_id\": \"...\", \"card\": \"...\", \"available_options\": [{\"id\": ..., \"price\": ...}], \"status\": \"...\"}\n"
+            "INGREDIENTS (JSON): { \"user_id\": \"...\", \"available_options\": [{\"id\": ..., \"price\": ...}], \"status\": {\"search\": \"COMPLETED\", ...} }\n"
             "PROGRESS: [What has been checked off, or what searches failed so far]\n"
             "OBJECTIVE: [The specific natural language instruction for the tactician to execute next]"
         )
@@ -30,9 +30,9 @@ class Strategist:
         
         from ..core.config import PEVConfig
         
-        # HYBRID CONTEXT: Combine global archive (summary) with recent raw turns (short-term memory)
+        # HYBRID CONTEXT: Combine global archive (summary) with very recent raw turns (to prevent timeouts)
         summary_part = f"GLOBAL ARCHIVE (Summary): {state.summary}\n" if state.summary else ""
-        recent_history = f"RECENT RAW HISTORY: {str(state.history[-10:])}"
+        recent_history = f"LATEST RAW TURNS: {str(state.history[-5:])}"
         context = f"{summary_part}{recent_history}"
         
         # Include feedback from the Auditor/Monitor if the previous attempt was rejected

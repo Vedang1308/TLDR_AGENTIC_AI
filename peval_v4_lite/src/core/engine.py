@@ -70,11 +70,17 @@ class PEVEngine:
         while attempts < recursion_limit:
             attempts += 1
             
-            # 3. Plan
-            state = self._update_state(state, self.planner(state))
-            
-            # 4. Execute (Draft action)
-            state = self._update_state(state, self.tactician(state))
+            try:
+                # 3. Plan
+                state = self._update_state(state, self.planner(state))
+                
+                # 4. Execute (Draft action)
+                state = self._update_state(state, self.tactician(state))
+            except Exception as e:
+                PEVLogger.error(f"Inference Stall in node execution: {e}")
+                state_dict = state.model_dump()
+                state_dict["is_stalled"] = True
+                return state_dict
             
             # 5. Translate
             state = self._update_state(state, self.translator(state))

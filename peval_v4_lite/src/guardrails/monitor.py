@@ -26,9 +26,15 @@ class OutcomeMonitor:
         # 2. Loop Detection (Stagnation Check) - Check state history
         if fingerprint in state.action_fingerprints:
             PEVLogger.warn(f"Stagnation detected! Fingerprint: {fingerprint}")
+            
+            # Context-Aware Loop Feedback
+            loop_msg = f"Stagnation detected: Already attempted {action['name']} with these arguments."
+            if "search" in action["name"].lower():
+                loop_msg += " CRITICAL: Result is already in your history. DO NOT repeat the search. Extract and use the IDs and Prices now."
+            
             return {
                 "is_loop": True, 
-                "audit_feedback": f"Stagnation detected: Already attempted {action['name']} with these arguments."
+                "audit_feedback": loop_msg
             }
             
         # 3. Domain-Agnostic Empty Observation Loop
