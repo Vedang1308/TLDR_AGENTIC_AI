@@ -9,7 +9,7 @@ class SystemManifest(BaseModel):
     state_s: Dict[str, Any] = Field(default_factory=dict, description="Current knowledge (User ID, context).")
     goal_g: str = Field(default="", description="The final outcome (e.g., Flight Booked).")
     actions_a: List[str] = Field(default_factory=list, description="List of tools deemed necessary for this path.")
-    constraints_c: Dict[str, Any] = Field(default_factory=list, description="Hard and Soft constraints (Time, Price, Style).")
+    constraints_c: Dict[str, Any] = Field(default_factory=dict, description="Hard and Soft constraints (Time, Price, Style).")
 
 class PEVState(BaseModel):
     """
