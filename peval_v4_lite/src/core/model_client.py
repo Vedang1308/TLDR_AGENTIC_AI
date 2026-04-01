@@ -59,6 +59,23 @@ class ModelClient:
                 temperature=temperature
             )
             return response.choices[0].message.content
+        except openai.NotFoundError as e:
+            from .logger import PEVLogger
+            PEVLogger.warn(f"Model ID '{self.model}' not found in your OpenAI account. Triggering Resilience Fallback...")
+            
+            # Resilience Chain logic
+            if self.model == "gpt-4o-mini":
+                PEVLogger.info("Falling back to gpt-3.5-turbo...")
+                self.model = "gpt-3.5-turbo"
+                return self.chat(messages, temperature)
+            elif self.model == "gpt-3.5-turbo":
+                PEVLogger.warn("OpenAI API inaccessible. Final fallback: Local 8B Gaudi Model.")
+                self.client = openai.OpenAI(base_url=self.config.USER_ENDPOINT, api_key="empty", timeout=300)
+                self.model = self.config.USER_MODEL
+                return self.chat(messages, temperature)
+            else:
+                PEVLogger.error(f"Intelligence failure: {str(e)}")
+                raise PEVInferenceError(str(e))
         except Exception as e:
             from .logger import PEVLogger
             PEVLogger.error(f"Inference failure: {str(e)}")
