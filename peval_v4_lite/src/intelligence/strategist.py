@@ -12,56 +12,66 @@ class Strategist:
     def __init__(self):
         self.client = ModelClient(mode="agent")
         self.system_prompt = (
-            "You are the PEVAL Strategist, a high-level reasoning agent. "
-            "Your goal is to set the NEXT logical step for the Tactician.\n\n"
-            "CRITICAL RULES:\n"
-            "1. INGREDIENTS (NER): You MUST extract all Named Entities from the user's initial prompt AND any successful tool-responses (e.g. user_ids, flight_ids, prices). This is your source of truth for tool arguments.\n"
-            "2. STATE MACHINE: You MUST track the status of required tools in your JSON (e.g. 'search_direct': 'COMPLETED/NONE', 'search_onestop': 'COMPLETED_ID_HAT069', 'respond': 'PENDING').\n"
-            "3. NO REPETITION: If a tool-call has already been performed successfully, DO NOT repeat it. MOVE TO ANALYSIS or RESPONSE.\n"
-            "4. NO DEBUGGING: If you see an [INSTRUCTION UPDATE], your previous plan was redundant. Shift strategy to a new and unique path.\n\n"
-            "OUTPUT FORMAT: You MUST structure your response exactly as follows:\n"
-            "INGREDIENTS (JSON): { \"user_id\": \"...\", \"available_options\": [{\"id\": ..., \"price\": ...}], \"status\": {\"search\": \"COMPLETED\", ...} }\n"
-            "PROGRESS: [What has been checked off, or what searches failed so far]\n"
-            "OBJECTIVE: [The specific natural language instruction for the tactician to execute next]"
+            "You are the High-Precision PEVAL Strategist. Your goal is to guide an agent "
+            "through a task by maintaining a persistent 'INGREDIENTS' checklist. \n\n"
+            "CRITICAL: COMPARATIVE DEEP-NER \n"
+            "1. STEP 1 (EXTRACTION): You MUST extract the `user_id`, `reservation_id`, `origin`, "
+            "`destination`, and all user constraints from the first message. \n"
+            "2. TURN-BY-TURN AUDIT: In every turn, compare your CURRENT KNOWLEDGE with the `persistent_ner` "
+            "dictionary provided. If new info appeared in the history, APPEND it. If old info (like `user_id`) "
+            "is missing from your current draft, YOU MUST RESTORE IT. Never lose data. \n"
+            "3. STATE MACHINE: Track tool status: 'search': 'COMPLETED/NONE', 'booking': 'PENDING'. \n\n"
+            "OUTPUT FORMAT (JSON ONLY):\n"
+            "{\n"
+            "  \"thought_ner\": \"Comparison: What is in Persistent Ingredients vs what is in recent history? Is user_id present?\",\n"
+            "  \"thought_strategy\": \"Step-by-step reasoning for the next objective\",\n"
+            "  \"INGREDIENTS\": { \"user_id\": \"...\", \"status\": {...}, ... },\n"
+            "  \"OBJECTIVE\": \"Instructions for the tactician\"\n"
+            "}"
         )
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:
-        PEVLogger.node("Strategist", "Planning next objective...")
+        PEVLogger.node("Strategist", "Planning next objective (Comparative NER)...")
         
         from ..core.config import PEVConfig
         
-        # HYBRID CONTEXT: Combine global archive (summary) with very recent raw turns (to prevent timeouts)
+        # HYBRID CONTEXT: Combine global summary with very recent raw history
         summary_part = f"GLOBAL ARCHIVE (Summary): {state.summary}\n" if state.summary else ""
         recent_history = f"LATEST RAW TURNS: {str(state.history[-5:])}"
         context = f"{summary_part}{recent_history}"
         
-        # Include feedback from the Auditor/Monitor if the previous attempt was rejected
+        # Include feedback from Audit if the previous attempt failed
         feedback = ""
         if state.audit_feedback:
-            feedback = f"\n\n[INSTRUCTION UPDATE]: {state.audit_feedback}\nLatest Observation: {state.last_observation}"
+            feedback = f"\n\n[INSTRUCTION UPDATE]: {state.audit_feedback}"
             
         prompt = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"Context: {context}\nKnowledge: {state.memory_kernel}\nPersistent Ingredients: {state.persistent_ner}{feedback}\nStrategy requested:"}
+            {"role": "user", "content": f"Context: {context}\nPersistent Ingredients: {state.persistent_ner}{feedback}\nIdentify missing entities and set the next objective. Output JSON."}
         ]
         
-        objective = self.client.chat(prompt)
-        PEVLogger.info(f"Objective: {objective}")
+        decision_raw = self.client.chat(prompt)
         
-        # Extract Persistent NER (JSON) from the Strategist's own output
-        import json
-        import re
-        ingredients = {}
-        ner_match = re.search(r'INGREDIENTS \(JSON\): (\{.*\})', objective)
-        if ner_match:
+        # Extract JSON from potential model conversational wrapper
+        import json, re
+        decision = {}
+        json_match = re.search(r'\{.*\}', decision_raw, re.DOTALL)
+        if json_match:
             try:
-                ingredients = json.loads(ner_match.group(1))
+                decision = json.loads(json_match.group())
             except:
                 pass
         
-        # Update State (Strategist only sets the instruction)
+        # Format the result for the Engine
+        objective = decision.get("OBJECTIVE", "Proceed with task.")
+        ner_updates = decision.get("INGREDIENTS", {})
+        ner_thought = decision.get("thought_ner", "No audit logs provided.")
+        
+        PEVLogger.info(f"NER Audit: {ner_thought}")
+        PEVLogger.info(f"Objective: {objective}")
+        
         return {
             "strategic_instruction": objective,
-            "persistent_ner": ingredients,
-            "node_logs": [{"node": "Strategist", "content": objective}]
+            "persistent_ner": ner_updates, # Triggers deep merge in engine.py
+            "node_logs": [{"node": "Strategist", "content": f"NER Comparison: {ner_thought}"}]
         }

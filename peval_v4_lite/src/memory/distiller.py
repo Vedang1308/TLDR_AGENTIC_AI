@@ -20,20 +20,30 @@ class ContextDistiller:
             "Remove all conversational fluff and repeated tool-call logs."
         )
 
+    def distill_observation(self, name: str, args: Dict[str, Any], raw_output: str) -> str:
+        """Proactively summarizes large tool outputs to prevent context bloat."""
+        print(f"--- [NODE] Observation Distiller (Summarizing {name}) ---")
+        prompt = [
+            {"role": "system", "content": (
+                "You are an Observation Architect. Your goal is to convert long, unstructured "
+                "tool outputs into a dense summary. \n"
+                "FORMAT: 'ToolName(Args) -> [Key Data Only]'. \n"
+                "CRITICAL: Keep all IDs, Prices, and Dates, but remove formatting fluff."
+            )},
+            {"role": "user", "content": f"Summarize this Tool Output:\nFunction: {name}\nArgs: {args}\nRaw Output: {raw_output}"}
+        ]
+        summary = self.client.chat(prompt)
+        return f"[OBSERVATION_SUMMARY] {name}({args}) -> {summary}"
+
     def __call__(self, state: PEVState) -> Dict[str, Any]:
-        # Lowered threshold to manage Gaudi/72B inference latency
-        if len(str(state.history)) < 2000:
+        # History-level distillation (Fallback)
+        if len(str(state.history)) < 4000:
             return {"summary": str(state.history)}
 
-        print("--- [NODE] Context Distiller (Compressing) ---")
+        print("--- [NODE] History Distiller (Compressing) ---")
         prompt = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": f"History to distill: {state.history}"}
         ]
-        
         summary = self.client.chat(prompt)
-        
-        return {
-            "summary": summary,
-            "node_logs": [{"node": "Distiller", "content": "History compressed."}]
-        }
+        return {"summary": summary}

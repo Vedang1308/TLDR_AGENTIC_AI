@@ -96,10 +96,19 @@ class PEVALAgent(Agent):
             PEVLogger.node("Tau-Bench Environment", f"Executing tool: {action.name}")
             env_res = env.step(action)
             
-            state.last_observation = env_res.observation
-            state.history.append({"role": "tool", "content": env_res.observation})
+            obs = env_res.observation
+            # Proactive Observation Distillation (Requested feature: Summarize large tool-calls)
+            if len(obs) > 500:
+                obs = self.engine.distiller.distill_observation(
+                    name=action.name,
+                    args=action.kwargs,
+                    raw_output=obs
+                )
             
-            # Update the Safe Checkpoint if we got a real result back from the environment
+            state.last_observation = obs
+            state.history.append({"role": "tool", "content": obs})
+            
+            # Update the Safe Checkpoint if we got a real result back
             if len(env_res.observation) > 0 and not env_res.observation.startswith("Error"):
                 checkpoint_state = state
                 state.consecutive_errors = 0
