@@ -28,9 +28,9 @@ class PEVConfig:
     SUMMARIZER_MODEL = "gpt-4o-mini"
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "") 
     
-    # OpenRouter (Fallback to gpt-4o-mini via API)
+    # OpenRouter (Requires 'openai/' prefix for gpt-4o-mini)
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-    OPENROUTER_MODEL = "gpt-4o-mini"
+    OPENROUTER_MODEL = "openai/gpt-4o-mini"
     
     # --- Architecture Limits ---
     MAX_STEPS = 50
