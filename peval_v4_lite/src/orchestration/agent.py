@@ -75,8 +75,14 @@ class PEVALAgent(Agent):
             action_kwargs = action_data.get("arguments", {})
             
             # HARDENING: If it's an empty action, something is wrong internally. Rollback.
-            if not action_name or (action_name == RESPOND_ACTION_NAME and "content" not in action_kwargs):
+            if not action_name:
                 PEVLogger.warn("Empty action drafted. Rolling back for retry.")
+                state = checkpoint_state
+                continue
+                
+            # For the 'respond' tool, ensure at least one argument exists (regardless of key like 'message' or 'content')
+            if action_name == RESPOND_ACTION_NAME and not any(v for v in action_kwargs.values() if str(v).strip()):
+                PEVLogger.warn("Empty response drafted. Rolling back for retry.")
                 state = checkpoint_state
                 continue
             action = Action(name=action_name, kwargs=action_kwargs)

@@ -24,17 +24,18 @@ class PEVConfig:
     USER_ENDPOINT = f"http://127.0.0.1:{USER_PORT}/v1"
     
     # --- External Summarizer (No local VRAM cost) ---
-    SUMMARIZER_MODEL = "gpt-4o-mini"
+    # Default to OpenRouter Google/Gemini or OpenAI 4o-mini
+    SUMMARIZER_MODEL = "google/gemini-2.0-flash-lite-preview-02-05:free"
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "") 
     
-    # OpenRouter (Free tier support)
+    # OpenRouter (Low cost / Free tier support)
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_MODEL = "google/gemini-2.0-flash-lite-preview-02-05:free"
     
     # --- Architecture Limits ---
     MAX_STEPS = 50
     RECURSION_LIMIT = 50
-    CONTEXT_DISTILL_THRESHOLD = 8000 # Max tokens before triggering Distiller
+    CONTEXT_DISTILL_THRESHOLD = 5000 # Max tokens before triggering Distiller
     
     # --- Storage ---
     LOG_DIR = "results/harshith_new"
