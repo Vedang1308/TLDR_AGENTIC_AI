@@ -35,23 +35,20 @@ class ModelClient:
                 
                 # Automated Precision Discovery
                 try:
-                    from .logger import PEVLogger
-                    PEVLogger.info("Discovering available GPT models in your account...")
+                    # Log discovered IDs and endpoint for debugging
+                    PEVLogger.info(f"OpenAI Discovery Endpoint: {self.client.base_url}")
                     available_ids = [m.id for m in self.client.models.list()]
-                    
-                    # Log discovered gpt-5/gpt-4s for transparency
-                    gpt_models = [m for m in available_ids if "gpt-" in m]
-                    PEVLogger.info(f"Discovered Intelligence models: {gpt_models}")
+                    PEVLogger.info(f"Discovered Intelligence models: {available_ids if available_ids else 'None Found'}")
                     
                     # Prioritization Matrix (Using literal ID matches)
-                    # Goliath Intelligence: Priority to GPT-5.4-Pro then GPT-4o
-                    candidates = ["gpt-5.4-pro", "gpt-5.4", "gpt-4o", "gpt-4o-2024-05-13", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-0125-preview", "gpt-4", "gpt-3.5-turbo-0125", "gpt-3.5-turbo"]
+                    # Goliath Intelligence: Priority to GPT-5.4-Pro
+                    candidates = ["gpt-5.4-pro", "gpt-5.4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"]
                     
                     found_model = next((c for c in candidates if c in available_ids), None)
                     if not found_model and self.config.OPENAI_API_KEY:
-                        # Intelligence Force-Push: If list is empty but key exists, try gpt-4o anyway
-                        # This bypasses potential models.list() filtering issues on the provider side
-                        self.model = "gpt-4o"
+                        # Goliath Force-Push: Target GPT-5.4-Pro directly if discovery fails
+                        self.model = "gpt-5.4-pro"
+                        PEVLogger.warn(f"Empty discovery list. Force-Pushing request to Goliath: {self.model}")
                     else:
                         self.model = found_model or "gpt-3.5-turbo"
                     
@@ -61,8 +58,8 @@ class ModelClient:
                     PEVLogger.success(f"Handshake Complete. Target: {self.model}")
                 except Exception as e:
                     from .logger import PEVLogger
-                    PEVLogger.warn(f"Model Discovery failed: {str(e)}. Falling back to default.")
-                    self.model = self.config.SUMMARIZER_MODEL
+                    PEVLogger.warn(f"Model Discovery failed: {str(e)}. Falling back to Local Gaudi Model.")
+                    self.model = self.config.USER_MODEL # Fallback to 8B/14B Gaudi simulator
             elif self.config.OPENROUTER_API_KEY:
                 self.client = openai.OpenAI(
                     base_url="https://openrouter.ai/api/v1",
