@@ -93,8 +93,10 @@ class PEVALAgent(Agent):
                 break
 
         # 10. Extract Learned Expertise (Global Reflection)
-        new_insight = self.global_learner(state)
-        self.wisdom_store.save_insight(new_insight)
+        # Only save insights if the task failed or was a loop to keep wisdom high-density
+        if state.reward < 1.0:
+            new_insight = self.global_learner(state)
+            self.wisdom_store.save_insight(new_insight)
 
         return SolveResult(
             reward=state.reward,
