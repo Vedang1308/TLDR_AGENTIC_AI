@@ -1,3 +1,7 @@
+import openai
+from typing import List
+from .config import PEVConfig
+
 class PEVInferenceError(Exception):
     """Custom error for model timeouts and connection failures."""
     pass
