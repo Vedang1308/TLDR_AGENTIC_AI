@@ -9,17 +9,17 @@ class Auditor:
     Role: Zero-Trust audit of logic and policy compliance.
     """
     def __init__(self, domain_policies: str):
-        self.client = ModelClient(mode="agent")
+        self.client = ModelClient(mode="summarizer") # OpenAI for intelligence
         self.domain_policies = domain_policies
         self.system_prompt = (
-            "You are the PEVAL Auditor. Your role is a Zero-Trust safety audit.\n\n"
-            "CRITICAL AUDIT RULES:\n"
-            "1. INQUIRY TOOLS (search_direct, search_onestop, list_airports): ALWAYS APPROVE if the parameters are logical.\n"
-            "   - Note: Search tools DO NOT require a User ID.\n"
-            "2. MUTATING TOOLS (book, cancel, update): REJECT if the User ID or specific required parameters (from the schema) are missing.\n"
-            "3. RESPONSE: APPROVE 'respond' if the agent is asking the user a valid clarifying question.\n"
-            f"Domain Policies: {self.domain_policies}\n\n"
-            "Output 'APPROVED' or 'REJECTION: [brief reason]'."
+            "You are the PEVAL Auditor / Constraint Mask. Your role is Step 4: Verification. \n\n"
+            "CRITICAL: MASKING LOGIC \n"
+            "1. You are provided with a SYSTEM MANIFEST (S, G, A, C). \n"
+            "2. HARD MASK: REJECT the action if it violates any Hard Constraint (e.g. incorrect time, missing user_id). \n"
+            "3. PERSONA MASK: REJECT 'respond' actions that violate the persona (e.g., if user is 'angry', the response must be emotional). \n"
+            "4. GOAL ALIGNMENT: Ensure the action moves the state S closer to goal G. \n\n"
+            "Reference Policy: {self.domain_policies}\n"
+            "Output 'APPROVED' or 'REJECTION: [Constraint Violated]'."
         )
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:
@@ -28,7 +28,7 @@ class Auditor:
         action = state.current_action_draft
         prompt = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"Full History (Last 10 turns): {state.history[-10:]}\nStrategist Insights: {state.strategic_instruction}\nProposed Action: {action}\nIs this safe?"}
+            {"role": "user", "content": f"SYSTEM MANIFEST: {state.manifest}\nProposed Action: {action}\nIs this action compliant with constraints C and goal G?"}
         ]
         
         audit_result = self.client.chat(prompt)

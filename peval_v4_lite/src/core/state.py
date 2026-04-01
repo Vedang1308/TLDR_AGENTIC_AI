@@ -1,12 +1,25 @@
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
+class SystemManifest(BaseModel):
+    """
+    Formal Problem Definition: P = <S, G, A, C>
+    Transfers 'Instructional Noise' into 'Systemic Constraints'.
+    """
+    state_s: Dict[str, Any] = Field(default_factory=dict, description="Current knowledge (User ID, context).")
+    goal_g: str = Field(default="", description="The final outcome (e.g., Flight Booked).")
+    actions_a: List[str] = Field(default_factory=list, description="List of tools deemed necessary for this path.")
+    constraints_c: Dict[str, Any] = Field(default_factory=list, description="Hard and Soft constraints (Time, Price, Style).")
+
 class PEVState(BaseModel):
     """
     The Single Source of Truth Context Kernel.
     Strictly typed to prevent 'Graph Failed' errors.
     """
-    model_config = ConfigDict(extra='allow') # Resilience: don't crash if extra nodes add metadata
+    model_config = ConfigDict(extra='allow')
+    
+    # --- The P=<S,G,A,C> Manifest ---
+    manifest: SystemManifest = Field(default_factory=SystemManifest)
 
     # --- Core Memories ---
     history: List[Dict[str, str]] = Field(

@@ -38,9 +38,17 @@ class PEVEngine:
                     state_dict[k].extend(v)
                 else:
                     state_dict[k].append(v)
-            # DEEP MERGE for persistent_ner so we don't lose old ingredients
-            elif k == "persistent_ner" and isinstance(v, dict):
-                state_dict[k].update(v)
+            # DEEP MERGE for manifest so we don't lose old G or C
+            elif k == "manifest" and isinstance(v, dict):
+                current_manifest = state_dict.get(k, {})
+                for sub_k, sub_v in v.items():
+                    if isinstance(sub_v, dict) and sub_k in current_manifest:
+                        current_manifest[sub_k].update(sub_v)
+                    elif isinstance(sub_v, list) and sub_k in current_manifest:
+                        current_manifest[sub_k] = list(set(current_manifest[sub_k] + sub_v))
+                    else:
+                        current_manifest[sub_k] = sub_v
+                state_dict[k] = current_manifest
             else:
                 state_dict[k] = v
                 

@@ -24,13 +24,13 @@ class PEVConfig:
     USER_ENDPOINT = f"http://127.0.0.1:{USER_PORT}/v1"
     
     # --- External Summarizer (No local VRAM cost) ---
-    # Default to OpenRouter Google/Gemini or OpenAI 4o-mini
-    SUMMARIZER_MODEL = "google/gemini-2.0-flash-lite-preview-02-05:free"
+    # User Mandate: Use gpt-4o-mini only for intelligence and NER
+    SUMMARIZER_MODEL = "gpt-4o-mini"
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "") 
     
-    # OpenRouter (Low cost / Free tier support)
+    # OpenRouter (Fallback to gpt-4o-mini via API)
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-    OPENROUTER_MODEL = "google/gemini-2.0-flash-lite-preview-02-05:free"
+    OPENROUTER_MODEL = "gpt-4o-mini"
     
     # --- Architecture Limits ---
     MAX_STEPS = 50

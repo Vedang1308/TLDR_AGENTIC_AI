@@ -10,23 +10,25 @@ class Strategist:
     Constraint: Does not perform tool calls directly.
     """
     def __init__(self):
-        self.client = ModelClient(mode="agent")
+        # User Mandate: Use gpt-4o-mini for all intelligence (Planning and NER)
+        self.client = ModelClient(mode="summarizer")
         self.system_prompt = (
-            "You are the High-Precision PEVAL Strategist. Your goal is to guide an agent "
-            "through a task by maintaining a persistent 'INGREDIENTS' checklist. \n\n"
-            "CRITICAL: COMPARATIVE DEEP-NER \n"
-            "1. STEP 1 (EXTRACTION): You MUST extract the `user_id`, `reservation_id`, `origin`, "
-            "`destination`, and all user constraints from the first message. \n"
-            "2. TURN-BY-TURN AUDIT: In every turn, compare your CURRENT KNOWLEDGE with the `persistent_ner` "
-            "dictionary provided. If new info appeared in the history, APPEND it. If old info (like `user_id`) "
-            "is missing from your current draft, YOU MUST RESTORE IT. Never lose data. \n"
-            "3. STATE MACHINE: Track tool status: 'search': 'COMPLETED/NONE', 'booking': 'PENDING'. \n\n"
+            "You are the High-Precision PEVAL Strategist / Manifest Decomposer. \n"
+            "Your goal is to convert an instruction into a System of Constraints (P = <S, G, A, C>).\n\n"
+            "CRITICAL: FORMAL MANIFEST DECOMPOSITION \n"
+            "1. S (State): What is currently known (User ID, Reservation IDs, Constants). \n"
+            "2. G (Goal): What is the final definition of success? \n"
+            "3. A (Actions): Which tools from the environment are required for this path? \n"
+            "4. C (Constraints): Identify EVERY Rule of the Road (e.g., 'after 11 AM', 'lowest price', 'persona: angry'). \n\n"
             "OUTPUT FORMAT (JSON ONLY):\n"
             "{\n"
-            "  \"thought_ner\": \"Comparison: What is in Persistent Ingredients vs what is in recent history? Is user_id present?\",\n"
-            "  \"thought_strategy\": \"Step-by-step reasoning for the next objective\",\n"
-            "  \"INGREDIENTS\": { \"user_id\": \"...\", \"status\": {...}, ... },\n"
-            "  \"OBJECTIVE\": \"Instructions for the tactician\"\n"
+            "  \"MANIFEST\": {\n"
+            "    \"state_s\": {\"user_id\": \"...\", ...},\n"
+            "    \"goal_g\": \"Definition of success\",\n"
+            "    \"actions_a\": [\"search_direct_flight\", ...],\n"
+            "    \"constraints_c\": {\"hard\": [...], \"soft\": [...], \"persona\": \"...\"}\n"
+            "  },\n"
+            "  \"objective\": \"The specific natural language instruction for the tactician\"\n"
             "}"
         )
 
@@ -62,16 +64,15 @@ class Strategist:
             except:
                 pass
         
-        # Format the result for the Engine
-        objective = decision.get("OBJECTIVE", "Proceed with task.")
-        ner_updates = decision.get("INGREDIENTS", {})
-        ner_thought = decision.get("thought_ner", "No audit logs provided.")
+        # Format the result for the Engine (P = <S, G, A, C>)
+        objective = decision.get("objective", "Execute next logical task step.")
+        manifest_data = decision.get("MANIFEST", {})
         
-        PEVLogger.info(f"NER Audit: {ner_thought}")
-        PEVLogger.info(f"Objective: {objective}")
+        PEVLogger.info(f"Goal G: {manifest_data.get('goal_g', 'Unknown')}")
+        PEVLogger.info(f"Hard Constraints: {manifest_data.get('constraints_c', {}).get('hard', 'None')}")
         
         return {
             "strategic_instruction": objective,
-            "persistent_ner": ner_updates, # Triggers deep merge in engine.py
-            "node_logs": [{"node": "Strategist", "content": f"NER Comparison: {ner_thought}"}]
+            "manifest": manifest_data, # Triggers deep merge in engine.py
+            "node_logs": [{"node": "Strategist", "content": f"Manifest Goal: {manifest_data.get('goal_g')}"}]
         }
