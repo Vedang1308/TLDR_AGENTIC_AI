@@ -28,7 +28,7 @@ class Auditor:
         action = state.current_action_draft
         prompt = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"Full History (Last 10 turns): {state.history[-10:]}\nProposed Action: {action}\nIs this safe?"}
+            {"role": "user", "content": f"Full History (Last 10 turns): {state.history[-10:]}\nStrategist Insights: {state.strategic_instruction}\nProposed Action: {action}\nIs this safe?"}
         ]
         
         audit_result = self.client.chat(prompt)

@@ -38,6 +38,9 @@ class PEVEngine:
                     state_dict[k].extend(v)
                 else:
                     state_dict[k].append(v)
+            # DEEP MERGE for persistent_ner so we don't lose old ingredients
+            elif k == "persistent_ner" and isinstance(v, dict):
+                state_dict[k].update(v)
             else:
                 state_dict[k] = v
                 

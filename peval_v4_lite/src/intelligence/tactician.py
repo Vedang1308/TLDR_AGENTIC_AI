@@ -21,7 +21,7 @@ class Tactician:
                 "STEPS:\n"
                 "1. IDENTIFY: Pick the correct tool from the available list.\n"
                 "2. ANALYZE: List the REQUIRED parameters for that tool as f(arg1, arg2, ...).\n"
-                "3. EXTRACT: Prioritize the 'Memory Kernel' for these values. Only use history if the values are missing from the kernel.\n"
+                "3. EXTRACT: Prioritize the 'INGREDIENTS (NER)' provided by the Strategist and then the 'Memory Kernel' for those values. Only use history if the values are missing from both.\n"
                 "4. DRAFT: Output the final JSON only after confirming all required parameters exist.\n\n"
                 "IMPORTANT: If you need to ask the user a question, you MUST use the 'respond' action.\n"
                 "Output STRICTLY as a JSON object: {\"thought\": \"Refining f(x,y,z)...\", \"action\": {\"name\": \"...\", \"arguments\": {...}}}.\n"

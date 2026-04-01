@@ -15,12 +15,12 @@ class Strategist:
             "You are the PEVAL Strategist, a high-level reasoning agent. "
             "Your goal is to set the NEXT logical step for the Tactician.\n\n"
             "CRITICAL RULES:\n"
-            "1. CONTINUOUS CHECKLIST (NER): You MUST extract all explicit Named Entities from the user's initial prompt (e.g., user_ids, names, locations, dates, required classes, coupons, certificates, cards, time constraints). Maintain these as a Mental Checklist and cross-check current findings against them.\n"
-            "2. CAUTIOUS PROGRESSION: If a primary search (e.g., direct flight) yields no results, DO NOT panic or apologize. Treat it as a chance to consult your checklist for explicitly allowed alternatives (e.g., one-stop flights).\n"
-            "3. KNOWLEDGE AUDIT: Before planning, check the 'Knowledge Kernel'. If the required info is already present, SKIP the discovery tool call and plan the next phase.\n"
-            "4. NO DEBUGGING: If you see an [INSTRUCTION UPDATE], your previous plan was redundant. This is a LOGICAL error, not a system failure. Shift strategy to a new and unique path.\n\n"
+            "1. INGREDIENTS (NER): You MUST extract all Named Entities from the user's initial prompt AND current context (e.g. user_ids, card_numbers, certificates, certificate_values, locations, dates, and preferences). Maintain these in your PERSISTENT CHECKLIST.\n"
+            "2. DATA SHIFT: If a search tool (e.g., search_onestop) has already been performed successfully (check the RECENT RAW HISTORY), DO NOT perform it again. Move to 'DATA ANALYSIS' (identifying price winners) or responding to the user.\n"
+            "3. NO APOLOGIES: If a search fails to find a flight, do not apologize for 'technical issues.' Simply consult your INGREDIENTS for allowed alternatives.\n"
+            "4. NO DEBUGGING: If you see an [INSTRUCTION UPDATE], your previous plan was redundant. Shift strategy to a new and unique path.\n\n"
             "OUTPUT FORMAT: You MUST structure your response exactly as follows:\n"
-            "CHECKLIST: [List the extracted entities/requirements]\n"
+            "INGREDIENTS (JSON): {\"user_id\": \"...\", \"card\": \"...\", \"certificates\": {\"id\": \"value\"}, \"search_status\": \"...\"}\n"
             "PROGRESS: [What has been checked off, or what searches failed so far]\n"
             "OBJECTIVE: [The specific natural language instruction for the tactician to execute next]"
         )
@@ -42,14 +42,26 @@ class Strategist:
             
         prompt = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"Context: {context}\nKnowledge: {state.memory_kernel}{feedback}\nStrategy requested:"}
+            {"role": "user", "content": f"Context: {context}\nKnowledge: {state.memory_kernel}\nPersistent Ingredients: {state.persistent_ner}{feedback}\nStrategy requested:"}
         ]
         
         objective = self.client.chat(prompt)
         PEVLogger.info(f"Objective: {objective}")
         
+        # Extract Persistent NER (JSON) from the Strategist's own output
+        import json
+        import re
+        ingredients = {}
+        ner_match = re.search(r'INGREDIENTS \(JSON\): (\{.*\})', objective)
+        if ner_match:
+            try:
+                ingredients = json.loads(ner_match.group(1))
+            except:
+                pass
+        
         # Update State (Strategist only sets the instruction)
         return {
             "strategic_instruction": objective,
+            "persistent_ner": ingredients,
             "node_logs": [{"node": "Strategist", "content": objective}]
         }

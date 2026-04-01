@@ -18,6 +18,7 @@ class PEVState(BaseModel):
         default_factory=list,
         description="Atomic extracted facts from API observations."
     )
+    persistent_ner: Dict[str, Any] = Field(default_factory=dict)
     global_wisdom: List[str] = Field(default_factory=list)
     
     # --- Tactical Outputs ---
