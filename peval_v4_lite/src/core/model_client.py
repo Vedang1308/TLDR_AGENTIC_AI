@@ -39,9 +39,9 @@ class ModelClient:
                     PEVLogger.info("Discovering available GPT models in your account...")
                     available_ids = [m.id for m in self.client.models.list()]
                     
-                    # Log discovered gpt-4s for transparency
-                    gpt4_models = [m for m in available_ids if "gpt-4" in m]
-                    PEVLogger.info(f"Discovered GPT-4 models: {gpt4_models}")
+                    # Log discovered gpt-5/gpt-4s for transparency
+                    gpt_models = [m for m in available_ids if "gpt-" in m]
+                    PEVLogger.info(f"Discovered Intelligence models: {gpt_models}")
                     
                     # Prioritization Matrix (Using literal ID matches)
                     # Goliath Intelligence: Priority to GPT-5.4-Pro then GPT-4o

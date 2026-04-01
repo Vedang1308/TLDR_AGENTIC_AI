@@ -14,10 +14,16 @@ class Strategist:
         self.client = ModelClient(mode="summarizer")
         
         # Generation: Function Mapping (Name, Inputs, Outputs/Goal)
-        self.function_mapping = "\n".join([
-            f"- {t['name']}({', '.join(t['parameters']['required']) if 'required' in t['parameters'] else ''}): {t['description']}"
-            for t in tools_info
-        ])
+        # Handle both flat and OpenAI-wrapped tool definitions (tau-bench compatible)
+        self.function_mapping = []
+        for t in tools_info:
+            target = t.get("function", t) # Support OpenAI-style wrapping
+            name = target.get("name", "Unknown")
+            desc = target.get("description", "No description")
+            params = target.get("parameters", {}).get("required", [])
+            self.function_mapping.append(f"- {name}({', '.join(params)}): {desc}")
+        
+        self.function_mapping = "\n".join(self.function_mapping)
 
         self.system_prompt = (
             "You are the High-Precision PEVAL Strategist / Manifest Decomposer. \n"
