@@ -44,8 +44,8 @@ class ModelClient:
                     PEVLogger.info(f"Discovered GPT-4 models: {gpt4_models}")
                     
                     # Prioritization Matrix (Using literal ID matches)
-                    # We prefer gpt-4o, then specific versions, then turbo
-                    candidates = ["gpt-4o", "gpt-4o-2024-05-13", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-0125-preview", "gpt-4", "gpt-3.5-turbo-0125", "gpt-3.5-turbo"]
+                    # Goliath Intelligence: Priority to GPT-5.4-Pro then GPT-4o
+                    candidates = ["gpt-5.4-pro", "gpt-5.4", "gpt-4o", "gpt-4o-2024-05-13", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-0125-preview", "gpt-4", "gpt-3.5-turbo-0125", "gpt-3.5-turbo"]
                     self.model = next((c for c in candidates if c in available_ids), "gpt-3.5-turbo")
                     
                     # Cache the discovery

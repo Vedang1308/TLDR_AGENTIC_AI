@@ -15,9 +15,10 @@ class Auditor:
             "You are the PEVAL Auditor / Constraint Mask. Your role is Step 4: Verification. \n\n"
             "CRITICAL: MASKING LOGIC \n"
             "1. You are provided with a SYSTEM MANIFEST (S, G, A, C). \n"
-            "2. HARD MASK: REJECT the action if it violates any Hard Constraint (e.g. incorrect time, missing user_id). \n"
-            "3. PERSONA MASK: REJECT 'respond' actions that violate the persona (e.g., if user is 'angry', the response must be emotional). \n"
-            "4. GOAL ALIGNMENT: Ensure the action moves the state S closer to goal G. \n\n"
+            "2. SAFETY MASK: APPROVE all standard tool calls. Let the environment handle parameter validation. \n"
+            "   - DO NOT reject an action for minor parameter mismatches (like JFK vs New York) or missing IDs. Let the 'tau-bench' environment catch these. \n"
+            "   - ONLY reject if the action is wildly unsafe or hallucinated. Always default to 'APPROVED' so the agent can learn from real environment feedback. \n"
+            "3. PERSONA MASK: REJECT 'respond' actions ONLY if they directly violate an explicit persona constraint (e.g., if user is 'angry', response must be appropriate). \n\n"
             "Reference Policy: {self.domain_policies}\n"
             "Output 'APPROVED' or 'REJECTION: [Constraint Violated]'."
         )

@@ -26,7 +26,8 @@ class PEVConfig:
     # --- External Summarizer (No local VRAM cost) ---
     # User Mandate: Use gpt-4o-mini only for intelligence and NER
     SUMMARIZER_MODEL = "gpt-4o-mini"
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "") 
+    # Goliath Intelligence (sk-proj... confirmed GPT-5.4-Pro)
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     
     # OpenRouter (Requires 'openai/' prefix for gpt-4o-mini)
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")

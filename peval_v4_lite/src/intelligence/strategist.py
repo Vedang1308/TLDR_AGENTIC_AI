@@ -9,17 +9,27 @@ class Strategist:
     Role: Sets high-level objectives in natural language.
     Constraint: Does not perform tool calls directly.
     """
-    def __init__(self):
-        # User Mandate: Use gpt-4o-mini for all intelligence (Planning and NER)
+    def __init__(self, tools_info: list):
+        # User Mandate: Use gpt-5.4-pro / gpt-4o for all intelligence
         self.client = ModelClient(mode="summarizer")
+        
+        # Generation: Function Mapping (Name, Inputs, Outputs/Goal)
+        self.function_mapping = "\n".join([
+            f"- {t['name']}({', '.join(t['parameters']['required']) if 'required' in t['parameters'] else ''}): {t['description']}"
+            for t in tools_info
+        ])
+
         self.system_prompt = (
             "You are the High-Precision PEVAL Strategist / Manifest Decomposer. \n"
-            "Your goal is to convert an instruction into a System of Constraints (P = <S, G, A, C>).\n\n"
+            "Your goal is to convert an instruction into a System of Constraints (P = <S, G, A, C>) using your Tool Map.\n\n"
+            "AVAILABLE TOOL MAP (Function Mapping):\n"
+            f"{self.function_mapping}\n\n"
             "CRITICAL: FORMAL MANIFEST DECOMPOSITION \n"
-            "1. S (State): What is currently known (User ID, Reservation IDs, Constants). \n"
-            "2. G (Goal): What is the final definition of success? \n"
-            "3. A (Actions): Which tools from the environment are required for this path? \n"
-            "4. C (Constraints): Identify EVERY Rule of the Road (e.g., 'after 11 AM', 'lowest price', 'persona: angry'). \n\n"
+            "1. S (State): identify User ID (MANDATORY), birth_date, and current knowledge. DO NOT use generic placeholders like 'unknown'. Extract the exact string from the user's prompt or leave it out. \n"
+            "2. G (Goal): Define the final definition of success. \n"
+            "3. A (Actions): Which tools from the map above ARE actually needed for this path? \n"
+            "4. C (Constraints): Identify EVERY Rule of the Road. \n"
+            "   - DOMAIN NOTE: Airport codes (JFK, EWR, LGA) ARE valid for New York. Do not reject them. \n\n"
             "OUTPUT FORMAT (JSON ONLY):\n"
             "{\n"
             "  \"MANIFEST\": {\n"

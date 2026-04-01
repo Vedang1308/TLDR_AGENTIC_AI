@@ -20,7 +20,7 @@ class PEVEngine:
     def __init__(self, tools_info: list, wiki: str):
         self.distiller = ContextDistiller()
         self.reformulator = InputReformulator()
-        self.planner = Strategist()
+        self.planner = Strategist(tools_info)
         self.tactician = Tactician(tools_info)
         self.translator = SemanticTranslator(tools_info)
         self.monitor = OutcomeMonitor()
