@@ -11,38 +11,47 @@ class ModelClient:
     Shared synchronous interface to model endpoints.
     Ensures sequential execution to prevent VRAM over-saturation.
     """
+    # Class-level cache to prevent 'Excess Info' and redundant handshaking
+    _discovered_model = None
+    _cached_client = None
+
     def __init__(self, mode: str = "agent"):
         self.config = PEVConfig()
         if mode == "agent":
-            self.client = openai.OpenAI(
-                base_url=self.config.AGENT_ENDPOINT,
-                api_key="empty",
-                timeout=300
-            )
+            self.client = openai.OpenAI(base_url=self.config.AGENT_ENDPOINT, api_key="empty", timeout=300)
             self.model = self.config.AGENT_MODEL
         elif mode == "user":
-            self.client = openai.OpenAI(
-                base_url=self.config.USER_ENDPOINT,
-                api_key="empty",
-                timeout=300
-            )
-            # Fix: Ensure USER_MODEL is used
+            self.client = openai.OpenAI(base_url=self.config.USER_ENDPOINT, api_key="empty", timeout=300)
             self.model = self.config.USER_MODEL
         elif mode == "summarizer":
             if self.config.OPENAI_API_KEY:
+                # Use cached results if available
+                if ModelClient._discovered_model:
+                    self.client = ModelClient._cached_client
+                    self.model = ModelClient._discovered_model
+                    return
+
                 self.client = openai.OpenAI(api_key=self.config.OPENAI_API_KEY, timeout=300)
                 
-                # Automated Model Discovery: Find the best GPT-4 model available
+                # Automated Precision Discovery
                 try:
                     from .logger import PEVLogger
-                    PEVLogger.info("Discovering available GPT-4 models...")
-                    available_models = [m.id for m in self.client.models.list()]
+                    PEVLogger.info("Discovering available GPT models in your account...")
+                    available_ids = [m.id for m in self.client.models.list()]
                     
-                    # Prioritization Matrix
-                    candidates = ["gpt-4o", "gpt-4o-2024-05-13", "gpt-4o-mini", "gpt-4-turbo", "gpt-4"]
-                    self.model = next((c for c in candidates if c in available_models), "gpt-3.5-turbo")
+                    # Log discovered gpt-4s for transparency
+                    gpt4_models = [m for m in available_ids if "gpt-4" in m]
+                    PEVLogger.info(f"Discovered GPT-4 models: {gpt4_models}")
                     
-                    PEVLogger.success(f"Handshake Complete. Using Intelligence Model: {self.model}")
+                    # Prioritization Matrix (Using literal ID matches)
+                    # We prefer gpt-4o, then specific versions, then turbo
+                    candidates = ["gpt-4o", "gpt-4o-2024-05-13", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-0125-preview", "gpt-4", "gpt-3.5-turbo-0125", "gpt-3.5-turbo"]
+                    self.model = next((c for c in candidates if c in available_ids), "gpt-3.5-turbo")
+                    
+                    # Cache the discovery
+                    ModelClient._discovered_model = self.model
+                    ModelClient._cached_client = self.client
+                    PEVLogger.success(f"Handshake Complete. Target: {self.model}")
                 except Exception as e:
                     from .logger import PEVLogger
                     PEVLogger.warn(f"Model Discovery failed: {str(e)}. Falling back to default.")
