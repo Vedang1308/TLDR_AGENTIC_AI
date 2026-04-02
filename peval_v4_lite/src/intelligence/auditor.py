@@ -29,18 +29,13 @@ class Auditor:
         action = state.current_action_draft
         action_name = action.get("name", "")
         
-        # MEL Architecture: Fast-Track Heuristic Audit
-        FAST_WHITELIST = [
-            "search_direct_flight", 
-            "search_onestop_flight", 
-            "list_all_airports", 
-            "list_all_flights",
-            "get_payment_methods",
-            "get_baggage_policy"
-        ]
+        # AGNOSTIC HEURISTIC: Fast-Track all "Read-Only" discovery tools.
+        # These are safe as they do not mutate state in most Tau-Bench domains.
+        READ_ONLY_PREFIXES = ["get_", "list_", "search_", "calculate_", "think"]
+        is_read_only = any(action_name.lower().startswith(p) for p in READ_ONLY_PREFIXES)
         
-        if action_name in FAST_WHITELIST:
-            PEVLogger.success(f"Fast-Track Audit: '{action_name}' auto-approved.")
+        if is_read_only:
+            PEVLogger.success(f"Fast-Track Audit: '{action_name}' auto-approved (Read-Only).")
             return {
                 "policy_violation": None,
                 "node_logs": [{"node": "Auditor", "content": f"Fast-Track APPROVED: {action_name}"}]
