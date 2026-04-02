@@ -21,7 +21,7 @@ class Tactician:
                 "Your ONLY role is to map the 'refined_tactical_plan' to actual tool schema.\n\n"
                 "RULES:\n"
                 "1. DO NOT reason. Extract parameter values from the 'world_snapshot' (Entities/Constraints).\n"
-                "2. If the roadmap step says 'Call respond', you MUST draft a 'respond' action.\n"
+                "2. If the roadmap step asks to retrieve information from the user (e.g. 'Ask user for ID'), you MUST draft a 'respond' action to ask for it.\n"
                 "3. Output STRICTLY as a JSON object with 'action'.\n\n"
                 "OUTPUT FORMAT:\n"
                 "{\"action\": {\"name\": \"tool_name\", \"arguments\": {\"key\": \"value\"}}}\n\n"
