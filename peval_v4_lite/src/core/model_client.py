@@ -31,7 +31,11 @@ class ModelClient:
                     self.model = ModelClient._discovered_model
                     return
 
-                self.client = openai.OpenAI(api_key=self.config.OPENAI_API_KEY, timeout=300)
+                self.client = openai.OpenAI(
+                    base_url="https://api.openai.com/v1",
+                    api_key=self.config.OPENAI_API_KEY, 
+                    timeout=300
+                )
                 
                 # Automated Precision Discovery
                 try:
