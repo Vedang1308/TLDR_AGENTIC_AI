@@ -107,9 +107,12 @@ class PEVALAgent(Agent):
             
             state.last_observation = obs
             state.history.append({"role": "tool", "content": obs})
+            # Checkpoint Memory Classifier for Coordinator Mode (3-Tier Status)
             obs_lower = obs.lower()
-            if obs_lower.startswith("error") or "invalid" in obs_lower or "[]" in obs or obs_lower == "false":
-                status = "FAILURE"
+            if obs_lower.startswith("error") or "invalid" in obs_lower:
+                status = "ERROR"
+            elif obs == "[]" or obs_lower == "false" or obs_lower == "none":
+                status = "DATA_MISSING"
             else:
                 status = "SUCCESS"
                 
@@ -125,8 +128,8 @@ class PEVALAgent(Agent):
             trace_entry = f"f({action.name}({action.kwargs})) -> {obs[:250]}..."
             state.manifest.functional_trace.append(trace_entry)
             
-            # Update the Safe Checkpoint if we got a real result back
-            if status == "SUCCESS":
+            # Update the Safe Checkpoint if we got a real result back (including DATA_MISSING)
+            if status in ["SUCCESS", "DATA_MISSING"]:
                 checkpoint_state = state
                 state.consecutive_errors = 0
             
