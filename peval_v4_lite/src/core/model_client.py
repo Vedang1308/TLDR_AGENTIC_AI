@@ -47,9 +47,9 @@ class ModelClient:
                     
                     found_model = next((c for c in candidates if c in available_ids), None)
                     if not found_model and self.config.OPENAI_API_KEY:
-                        # Goliath Force-Push: Target GPT-5.4-Pro directly if discovery fails
-                        self.model = "gpt-5.4-pro"
-                        PEVLogger.warn(f"Empty discovery list. Force-Pushing request to Goliath: {self.model}")
+                        # Intelligence Force-Push: Target GPT-4o directly if discovery fails
+                        self.model = "gpt-4o"
+                        PEVLogger.warn(f"Empty discovery list. Force-Pushing request to Intelligence Tier: {self.model}")
                     else:
                         self.model = found_model or "gpt-3.5-turbo"
                     
