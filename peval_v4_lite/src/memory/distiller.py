@@ -13,11 +13,11 @@ class ContextDistiller:
             "You are a Context Distiller. Your goal is to compress a long conversation history "
             "into a dense 'Strategic Kernel'. \n"
             "CRITICAL: You MUST keep the following information intact:\n"
-            "- All Origin and Destination Cities/Airports.\n"
-            "- All Flight Numbers, Dates, and Prices (format these as a DENSE LIST: [ID, Price]).\n"
-            "- All Reservation IDs and User IDs.\n"
-            "- Current User Preferences (e.g. 'after 11 AM').\n"
-            "Remove all conversational fluff and repeated tool-call logs."
+            "- Task-Relevant Entities and Value-Attribute pairs.\n"
+            "- All Unique Identifiers (IDs, Codes, References) and associated numerical values (Prices, Costs, Quantities).\n"
+            "- Explicitly flag 'Information Provided in Task' versus 'Information to be Discovered'.\n"
+            "- Current User Preferences or constraints (e.g., specific times, limits, requested items).\n"
+            "Remove all conversational fluff and repeated tool-call logs. The output MUST be domain-agnostic."
         )
 
     def distill_observation(self, name: str, args: Dict[str, Any], raw_output: str) -> str:
@@ -28,7 +28,7 @@ class ContextDistiller:
                 "You are an Observation Architect. Your goal is to convert long, unstructured "
                 "tool outputs into a dense summary. \n"
                 "FORMAT: 'ToolName(Args) -> [Key Data Only]'. \n"
-                "CRITICAL: Keep all IDs, Prices, and Dates, but remove formatting fluff."
+                "CRITICAL: Keep all Unique Identifiers, numerical values, and actionable data points, but remove formatting fluff and boilerplate."
             )},
             {"role": "user", "content": f"Summarize this Tool Output:\nFunction: {name}\nArgs: {args}\nRaw Output: {raw_output}"}
         ]

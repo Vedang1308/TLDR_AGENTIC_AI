@@ -44,6 +44,11 @@ class PEVALAgent(Agent):
         for i in range(max_steps):
             PEVLogger.step(i + 1)
             
+            # Step-Budget Management: Closure Mode
+            if i >= max_steps - 5:
+                PEVLogger.warn(f"STEP BUDGET CRITICAL ({i+1}/{max_steps}). Forcing CLOSURE MODE.")
+                state.audit_feedback = "CLOSURE MODE: You are out of turns. Immediately wrap up the interaction using what you know."
+
             # INVOKE THE NATIVE ENGINE
             # This handles Distillation -> Planning -> Execution -> Verification
             try:
