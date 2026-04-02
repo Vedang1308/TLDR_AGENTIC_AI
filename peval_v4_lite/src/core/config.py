@@ -29,9 +29,9 @@ class PEVConfig:
     # Goliath Intelligence (sk-proj... confirmed GPT-5.4-Pro)
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     
-    # OpenRouter (Requires 'openai/' prefix for gpt-4o-mini)
+    # OpenRouter (Goliath Backup)
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-    OPENROUTER_MODEL = "openai/gpt-4o-mini"
+    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.7-sonnet")
     
     # --- Architecture Limits ---
     MAX_STEPS = 50
