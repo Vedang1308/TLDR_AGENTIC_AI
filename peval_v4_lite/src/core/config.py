@@ -29,6 +29,9 @@ class PEVConfig:
     # Goliath Intelligence (sk-proj... confirmed GPT-5.4-Pro)
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     
+    # Toggle for Cost Saving: Use the local 72B-Instruct for summarization
+    USE_LOCAL_SUMMARIZER = True 
+    
     # OpenRouter (Goliath Backup)
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.7-sonnet")

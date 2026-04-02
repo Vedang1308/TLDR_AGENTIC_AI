@@ -24,6 +24,18 @@ class ModelClient:
             self.client = openai.OpenAI(base_url=self.config.USER_ENDPOINT, api_key="empty", timeout=300)
             self.model = self.config.USER_MODEL
         elif mode == "summarizer":
+            if self.config.USE_LOCAL_SUMMARIZER:
+                # Use local 72B model for summarization to save OpenAI costs
+                from .logger import PEVLogger
+                PEVLogger.info(f"Using local {self.config.USER_MODEL} at {self.config.USER_PORT} for summarization (Cost Saving Mode).")
+                self.client = openai.OpenAI(
+                    base_url=self.config.USER_ENDPOINT,
+                    api_key="empty",
+                    timeout=300
+                )
+                self.model = self.config.USER_MODEL
+                return
+            
             if self.config.OPENAI_API_KEY:
                 # Use cached results if available
                 if ModelClient._discovered_model:
