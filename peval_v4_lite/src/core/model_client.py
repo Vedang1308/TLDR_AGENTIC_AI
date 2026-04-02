@@ -32,7 +32,7 @@ class ModelClient:
                     return
                 
                 from .logger import PEVLogger
-                PEVLogger.info("OpenAI Key Found. Prioritizing Intelligence Tier (GPT-4o) over cost-saving local models.")
+                PEVLogger.info("OpenAI Key Found. Prioritizing Intelligence Tier (GPT-4o) for all internal reasoning.")
                 self.client = openai.OpenAI(
                     base_url="https://api.openai.com/v1",
                     api_key=self.config.OPENAI_API_KEY,
@@ -53,64 +53,16 @@ class ModelClient:
                     self.model = "gpt-4o"
                 return
 
-            if self.config.USE_LOCAL_SUMMARIZER:
-                # COST SAVING MODE: Fallback to local 72B if no key
-                from .logger import PEVLogger
-                PEVLogger.info(f"Prioritizing local {self.config.USER_MODEL} at {self.config.USER_PORT} (Cost Saving Mode).")
-                self.client = openai.OpenAI(
-                    base_url=self.config.USER_ENDPOINT,
-                    api_key="empty",
-                    timeout=300
-                )
-                self.model = self.config.USER_MODEL
-                return
-                
-                # Automated Precision Discovery
-                try:
-                    from .logger import PEVLogger
-                    # Log discovered IDs and endpoint for debugging
-                    PEVLogger.info(f"OpenAI Discovery Endpoint: {self.client.base_url}")
-                    available_ids = [m.id for m in self.client.models.list()]
-                    PEVLogger.info(f"Discovered Intelligence models: {available_ids if available_ids else 'None Found'}")
-                    
-                    # Prioritization Matrix (Using literal ID matches)
-                    # Unified Logic: Prioritize GPT-4o for speed and reliability
-                    candidates = ["gpt-4o", "gpt-4-turbo", "gpt-5.4-pro", "gpt-5.4", "gpt-4o-mini", "gpt-4", "gpt-3.5-turbo"]
-                    
-                    found_model = next((c for c in candidates if c in available_ids), None)
-                    if not found_model and self.config.OPENAI_API_KEY:
-                        # Intelligence Force-Push: Target GPT-4o directly if discovery fails
-                        self.model = "gpt-4o"
-                        PEVLogger.warn(f"Empty discovery list. Force-Pushing request to Intelligence Tier: {self.model}")
-                    else:
-                        self.model = found_model or "gpt-3.5-turbo"
-                    
-                    # Cache the discovery
-                    ModelClient._discovered_model = self.model
-                    ModelClient._cached_client = self.client
-                    PEVLogger.success(f"Handshake Complete. Target: {self.model}")
-                except Exception as e:
-                    from .logger import PEVLogger
-                    PEVLogger.warn(f"Model Discovery failed: {str(e)}. Falling back to Local Gaudi Model.")
-                    self.model = self.config.USER_MODEL # Fallback to 8B/14B Gaudi simulator
-            elif self.config.OPENROUTER_API_KEY:
-                self.client = openai.OpenAI(
-                    base_url="https://openrouter.ai/api/v1",
-                    api_key=self.config.OPENROUTER_API_KEY,
-                    timeout=300
-                )
-                self.model = self.config.OPENROUTER_MODEL
-            else:
-                # Fallback to local 8B User Simulator for higher quality summarization 
-                # (instead of the 4B Agent)
-                from .logger import PEVLogger
-                PEVLogger.warn("No API key found. Falling back to local 8B User vLLM for summarization.")
-                self.client = openai.OpenAI(
-                    base_url=self.config.USER_ENDPOINT,
-                    api_key="empty",
-                    timeout=300
-                )
-                self.model = self.config.USER_MODEL
+            # UNIFIED AGENT MODEL: If no OpenAI key, use the primary Agent model for EVERYTHING.
+            # This removes the 'Third LLM' (72B Summarizer) complexity.
+            from .logger import PEVLogger
+            PEVLogger.info(f"Unified Intelligence: Using primary Agent model ({self.config.AGENT_MODEL}) for internal checks & summarization.")
+            self.client = openai.OpenAI(
+                base_url=self.config.AGENT_ENDPOINT,
+                api_key="empty",
+                timeout=300
+            )
+            self.model = self.config.AGENT_MODEL
 
     def chat(self, messages: List, temperature: float = 1.0):
         try:

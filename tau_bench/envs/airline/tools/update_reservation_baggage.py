@@ -5,7 +5,7 @@ from typing import Any, Dict
 from tau_bench.envs.tool import Tool
 
 
-class UpdateReservationBaggages(Tool):
+class UpdateReservationBaggage(Tool):
     @staticmethod
     def invoke(
         data: Dict[str, Any],
@@ -51,7 +51,7 @@ class UpdateReservationBaggages(Tool):
         return {
             "type": "function",
             "function": {
-                "name": "update_reservation_baggages",
+                "name": "update_reservation_baggage",
                 "description": "Update the baggage information of a reservation.",
                 "parameters": {
                     "type": "object",

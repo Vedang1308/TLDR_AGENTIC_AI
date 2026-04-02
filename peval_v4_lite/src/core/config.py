@@ -29,8 +29,9 @@ class PEVConfig:
     # Goliath Intelligence (sk-proj... confirmed GPT-5.4-Pro)
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     
-    # Toggle for Cost Saving: Use the local 72B-Instruct for summarization
-    USE_LOCAL_SUMMARIZER = True 
+    # Unified Intelligence: Use the same model for both execution and summarization/NER
+    # Set to True only if you have a dedicated 3rd model for offloading thinking tasks.
+    USE_LOCAL_SUMMARIZER = False 
     
     # OpenRouter (Goliath Backup)
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
