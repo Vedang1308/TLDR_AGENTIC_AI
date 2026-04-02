@@ -107,13 +107,26 @@ class PEVALAgent(Agent):
             
             state.last_observation = obs
             state.history.append({"role": "tool", "content": obs})
+            obs_lower = obs.lower()
+            if obs_lower.startswith("error") or "invalid" in obs_lower or "[]" in obs or obs_lower == "false":
+                status = "FAILURE"
+            else:
+                status = "SUCCESS"
+                
+            checkpoint_entry = {
+                "step": i + 1,
+                "action": action.name,
+                "status": status,
+                "result_summary": obs[:250] + "..." if len(obs) > 250 else obs
+            }
+            state.manifest.write_ahead_memory.append(checkpoint_entry)
             
             # ASCD Requirement: Record the Functional Trace f(x)->y
             trace_entry = f"f({action.name}({action.kwargs})) -> {obs[:250]}..."
             state.manifest.functional_trace.append(trace_entry)
             
             # Update the Safe Checkpoint if we got a real result back
-            if len(env_res.observation) > 0 and not env_res.observation.startswith("Error"):
+            if status == "SUCCESS":
                 checkpoint_state = state
                 state.consecutive_errors = 0
             

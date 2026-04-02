@@ -26,20 +26,24 @@ class Strategist:
         self.function_mapping = "\n".join(self.function_mapping)
 
         self.system_prompt = (
-            "You are the Lead Systems Architect in an Abstract State-Constraint Decomposition (ASCD) network.\n"
-            "You MUST perform a 3-Stage Hierarchical Blackboard Refinement (HBR) based on the history and functional trace:\n\n"
+            "You are the Lead Systems Coordinator in an ASCD network with Coordinator-Execution Loop (CEL).\n"
+            "You MUST perform a 3-Stage Hierarchical Blackboard Refinement (HBR) and Reconcile your Plan against Ground Truth.\n\n"
             "STAGE 1: Entity/Data Scan\n"
             "Extract new facts from recent observations. Update 'state_s'. DO NOT invent values (e.g. user_id).\n\n"
             "STAGE 2: Constraint Scan\n"
             "Identify Hard limits (H) and Soft preferences (sigma). Update 'constraint_set_c'.\n\n"
-            "STAGE 3: Gap Scan (gamma)\n"
-            "Compare your 'state_s' against the required parameters of the target tool in the Function Map. "
-            "If a parameter is MISSING, append it to 'gap_manifest_y' and instruct the Tactician to call 'respond' to ask the user.\n\n"
+            "STAGE 3: Reconciliation & Gap Scan\n"
+            "1. Read the 'write_ahead_memory'. Does the latest action status say '[FAILURE]'?\n"
+            "2. If it failed or introduced new reality, set 're_plan: true' and rewrite your 'checklist'.\n"
+            "3. If 're_plan: false', proceed to the next step. If a parameter is MISSING for that step, append it to 'gap_manifest_y' and instruct the Tactician to call 'respond'.\n\n"
             "AVAILABLE TOOL MAP (Function Mapping):\n"
             f"{self.function_mapping}\n\n"
             "OUTPUT FORMAT (JSON ONLY):\n"
             "{\n"
+            "  \"extended_thinking\": \"Your hidden reasoning trace auditing the checklist against memory.\",\n"
+            "  \"re_plan\": false,\n"
             "  \"BlackboardSSO\": {\n"
+            "    \"checklist\": {\"1. Search Flights\": \"DONE\", \"2. Check Prices\": \"TODO\", ...},\n"
             "    \"state_s\": {\"user_id\": \"...\", \"origin\": \"...\"},\n"
             "    \"constraint_set_c\": {\"hard\": [...], \"soft\": [...]},\n"
             "    \"gap_manifest_y\": [\"Missing Argument 1\", ...],\n"
@@ -53,11 +57,12 @@ class Strategist:
         
         from ..core.config import PEVConfig
         
-        # HYBRID CONTEXT: Combine global summary with very recent raw history and functional trace
+        # HYBRID CONTEXT: Combine global summary with very recent raw history and memory ledger
         summary_part = f"GLOBAL ARCHIVE (Summary): {state.summary}\n" if state.summary else ""
         recent_history = f"LATEST RAW TURNS: {str(state.history[-5:])}\n"
+        write_ahead_memory = f"WRITE-AHEAD MEMORY LOG (Checkpoint Status): {str(state.manifest.write_ahead_memory[-3:])}\n"
         functional_trace = f"FUNCTIONAL TRACE f(x)->y: {str(state.manifest.functional_trace[-3:])}"
-        context = f"{summary_part}{recent_history}{functional_trace}"
+        context = f"{summary_part}{recent_history}{write_ahead_memory}{functional_trace}"
         
         # Include feedback from Audit if the previous attempt failed
         feedback = ""
@@ -85,6 +90,10 @@ class Strategist:
         blackboard_data = decision.get("BlackboardSSO", {})
         objective = blackboard_data.get("refined_tactical_plan", "Execute next logical task step.")
         
+        PEVLogger.info(f"CEL Extended Thinking: {decision.get('extended_thinking', 'None')[:150]}...")
+        if decision.get('re_plan', False):
+            PEVLogger.warn("CEL Reconciliation Triggered: RE-PLAN INITIATED")
+            
         PEVLogger.info(f"Refined Tactical Plan: {objective[:100]}...")
         if blackboard_data.get("gap_manifest_y"):
             PEVLogger.warn(f"Gaps identified: {blackboard_data.get('gap_manifest_y')}")
@@ -92,5 +101,5 @@ class Strategist:
         return {
             "strategic_instruction": objective,
             "manifest": blackboard_data, # Triggers deep merge in engine.py
-            "node_logs": [{"node": "Strategist", "content": f"Tactical Plan: {objective}"}]
+            "node_logs": [{"node": "Strategist", "content": f"Tactical Plan: {objective[:50]}..."}]
         }
