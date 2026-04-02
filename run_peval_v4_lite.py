@@ -37,19 +37,26 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
     os.environ["OPENAI_API_KEY"] = PEVConfig.OPENAI_API_KEY or "none"
 
     # Pre-flight Health Checks
-    def wait_for_server(url, name):
+    def wait_for_server(url, name, model_name=None):
         print(f"--- [CHECK] Waiting for {name} ({url})... ---")
         while True:
             try:
-                requests.get(f"{url}/models", timeout=300)
-                print(f"--- [SUCCESS] {name} is LIVE! ---")
+                res = requests.get(f"{url}/models", timeout=30).json()
+                # If a model_name is provided, check if it's in the list of available models
+                if model_name:
+                    available_models = [m["id"] for m in res.get("data", [])]
+                    if model_name not in available_models:
+                        print(f"  ... {name} is up, but model '{model_name}' is still loading (Found: {available_models})...")
+                        time.sleep(10)
+                        continue
+                print(f"--- [SUCCESS] {name} is LIVE and serving {model_name or ''}! ---")
                 return
             except Exception:
                 print(f"  ... {name} not ready yet (retrying in 5s)...")
                 time.sleep(5)
 
-    wait_for_server(PEVConfig.USER_ENDPOINT, "User Simulator (Port 8223)")
-    wait_for_server(PEVConfig.AGENT_ENDPOINT, "Agent Server (Port 8222)")
+    wait_for_server(PEVConfig.USER_ENDPOINT, "User Simulator", PEVConfig.USER_MODEL)
+    wait_for_server(PEVConfig.AGENT_ENDPOINT, "Agent Server", model_name)
 
     def heartbeat_server(url, model_name, name):
         print(f"--- [HEARTBEAT] Testing inference for {name}... ---")
@@ -58,13 +65,23 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
             "messages": [{"role": "user", "content": "Hi"}],
             "max_tokens": 1
         }
-        try:
-            res = requests.post(f"{url}/chat/completions", json=payload, timeout=300)
-            res.raise_for_status()
-            print(f"--- [SUCCESS] {name} inference is LIVE ---")
-        except Exception as e:
-            print(f"--- [FAIL] {name} inference UNREACHABLE: {e} ---")
-            sys.exit(1)
+        # Multi-attempt heartbeat for heavy vLLM loads
+        for attempt in range(5):
+            try:
+                res = requests.post(f"{url}/chat/completions", json=payload, timeout=300)
+                if res.status_code == 404:
+                    print(f"  ... Attempt {attempt+1}: {name} returned 404 (Loading weights?). Waiting 20s...")
+                    time.sleep(20)
+                    continue
+                res.raise_for_status()
+                print(f"--- [SUCCESS] {name} inference is LIVE ---")
+                return
+            except Exception as e:
+                if attempt == 4:
+                    print(f"--- [FAIL] {name} inference UNREACHABLE after 5 attempts: {e} ---")
+                    sys.exit(1)
+                print(f"  ... {name} inference failed: {e}. Retrying in 10s...")
+                time.sleep(10)
 
     heartbeat_server(PEVConfig.USER_ENDPOINT, PEVConfig.USER_MODEL, "User Simulator")
     heartbeat_server(PEVConfig.AGENT_ENDPOINT, model_name, "Agent Server")
