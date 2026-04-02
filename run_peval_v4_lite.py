@@ -93,6 +93,11 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
         
     # 2. Initialize the Multi-Agent Architecture
     print(f"--- [INIT] Assembling PEVAL Architecture (13 Nodes) ---")
+    
+    # SYSTEM AUDIT: Confirm tool registry registry before initializing agent
+    tool_names = [t.get("function", t).get("name") for t in env.tools_info]
+    print(f"--- [AUDIT] Environment Tool Registry: {tool_names} ---")
+    
     # We pass the tools_info and wiki from the environment directly
     agent = PEVALAgent(
         tools_info=env.tools_info,

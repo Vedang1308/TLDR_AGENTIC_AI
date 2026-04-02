@@ -24,10 +24,39 @@ class ModelClient:
             self.client = openai.OpenAI(base_url=self.config.USER_ENDPOINT, api_key="empty", timeout=300)
             self.model = self.config.USER_MODEL
         elif mode == "summarizer":
-            if self.config.USE_LOCAL_SUMMARIZER:
-                # Use local 72B model for summarization to save OpenAI costs
+            if self.config.OPENAI_API_KEY:
+                # PERFORMANCE PRIORITY: Always use OpenAI if key is present
+                if ModelClient._discovered_model:
+                    self.client = ModelClient._cached_client
+                    self.model = ModelClient._discovered_model
+                    return
+                
                 from .logger import PEVLogger
-                PEVLogger.info(f"Using local {self.config.USER_MODEL} at {self.config.USER_PORT} for summarization (Cost Saving Mode).")
+                PEVLogger.info("OpenAI Key Found. Prioritizing Intelligence Tier (GPT-4o) over cost-saving local models.")
+                self.client = openai.OpenAI(
+                    base_url="https://api.openai.com/v1",
+                    api_key=self.config.OPENAI_API_KEY,
+                    timeout=300
+                )
+                
+                # Discovery Handshake
+                try:
+                    available_ids = [m.id for m in self.client.models.list()]
+                    candidates = ["gpt-4o", "gpt-4-turbo", "gpt-4o-mini", "gpt-4", "gpt-3.5-turbo"]
+                    found_model = next((c for c in candidates if c in available_ids), None)
+                    self.model = found_model or "gpt-4o"
+                    ModelClient._discovered_model = self.model
+                    ModelClient._cached_client = self.client
+                    PEVLogger.success(f"Handshake Complete. Target: {self.model}")
+                except Exception as e:
+                    PEVLogger.warn(f"Discovery Failed: {e}. Defaulting to gpt-4o.")
+                    self.model = "gpt-4o"
+                return
+
+            if self.config.USE_LOCAL_SUMMARIZER:
+                # COST SAVING MODE: Fallback to local 72B if no key
+                from .logger import PEVLogger
+                PEVLogger.info(f"Prioritizing local {self.config.USER_MODEL} at {self.config.USER_PORT} (Cost Saving Mode).")
                 self.client = openai.OpenAI(
                     base_url=self.config.USER_ENDPOINT,
                     api_key="empty",
@@ -35,19 +64,6 @@ class ModelClient:
                 )
                 self.model = self.config.USER_MODEL
                 return
-            
-            if self.config.OPENAI_API_KEY:
-                # Use cached results if available
-                if ModelClient._discovered_model:
-                    self.client = ModelClient._cached_client
-                    self.model = ModelClient._discovered_model
-                    return
-
-                self.client = openai.OpenAI(
-                    base_url="https://api.openai.com/v1",
-                    api_key=self.config.OPENAI_API_KEY, 
-                    timeout=300
-                )
                 
                 # Automated Precision Discovery
                 try:
