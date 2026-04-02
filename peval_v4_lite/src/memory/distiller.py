@@ -10,9 +10,9 @@ class ContextDistiller:
     def __init__(self):
         self.client = ModelClient(mode="summarizer")
         self.system_prompt = (
-            "You are a Context Distiller. Your goal is to compress a long conversation history "
-            "into a dense 'Strategic Kernel'. \n"
-            "CRITICAL: You MUST keep the following information intact:\n"
+            "You are a Context Distiller. Your goal is to compress history into a dense 'Strategic Kernel'. \n"
+            "0. INITIAL FACT-ANCHORING: If the input is Turn 0 (Initial Task), you MUST perform a 'Fact Harvest'. Extract all IDs, names, dates, and preferences provided in the instruction and label them as 'GROUND TRUTH (STATED IN TASK)'. \n"
+            "1. WORLD SNAPSHOT: Update the following:\n"
             "- Task-Relevant Entities and Value-Attribute pairs.\n"
             "- All Unique Identifiers (IDs, Codes, References) and associated numerical values (Prices, Costs, Quantities).\n"
             "- Explicitly flag 'Information Provided in Task' versus 'Information to be Discovered'.\n"
