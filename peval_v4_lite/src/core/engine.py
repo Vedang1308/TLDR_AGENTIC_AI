@@ -72,8 +72,10 @@ class PEVEngine:
                 roadmap_progress = state.manifest.roadmap_progress
                 last_memory = state.manifest.write_ahead_memory[-1] if state.manifest.write_ahead_memory else {}
                 
-                # RE-PLAN TRIGGER: If roadmap is empty or last action failed
-                must_replan = last_memory.get("status") in ["DATA_MISSING", "ERROR"] or not roadmap
+                # RE-PLAN TRIGGER: If roadmap is empty, last action failed, or last action was interactive (respond)
+                from tau_bench.types import RESPOND_ACTION_NAME
+                was_respond = last_memory.get("action") == RESPOND_ACTION_NAME
+                must_replan = last_memory.get("status") in ["DATA_MISSING", "ERROR"] or not roadmap or was_respond
                 
                 if must_replan:
                     PEVLogger.node("Strategist", "Unified Macro-Planning (HBR Scans)...")

@@ -85,9 +85,20 @@ class PEVALAgent(Agent):
                 continue
                 
             if action_name == RESPOND_ACTION_NAME:
-                response_text = next((v for v in action_kwargs.values() if str(v).strip()), "")
+                # Find content in arguments or top-level. Support 'message', 'content', 'text'
+                candidates = [
+                    action_kwargs.get("content"),
+                    action_kwargs.get("message"),
+                    action_kwargs.get("text"),
+                    action_data.get("content"),
+                    action_data.get("message"),
+                    action_data.get("text")
+                ]
+                # Filter out None or empty strings
+                response_text = next((str(c).strip() for c in candidates if c and str(c).strip()), "")
+                
                 if not response_text:
-                    PEVLogger.warn("Empty response drafted. Rolling back.")
+                    PEVLogger.warn(f"Empty response drafted ({action_data}). Rolling back.")
                     state = checkpoint_state
                     continue
                 action_kwargs = {"content": response_text}
