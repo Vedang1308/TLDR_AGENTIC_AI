@@ -6,13 +6,8 @@ import time
 import requests
 from datetime import datetime
 
-# Path realignment: Add the official τ³-bench (V3) source to the path
-# This allows 'import tau2' and internal V3 imports to work seamlessly.
-OFFICIAL_TAU3_SRC = "/tmp/tau2-bench-official/src"
-if os.path.exists(OFFICIAL_TAU3_SRC):
-    sys.path.insert(0, OFFICIAL_TAU3_SRC)
-
 # Ensure the local directory and peval_v4 are at the VERY FRONT of the path
+# This allows 'import tau2' and internal V3 imports to work seamlessly as a local package.
 sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), "peval_v4_lite"))
 
