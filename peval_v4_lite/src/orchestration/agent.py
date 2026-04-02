@@ -57,11 +57,11 @@ class PEVALAgent(Agent):
                     state.is_stalled = False
                     continue
 
-                # Check for "Abject Failure" (Recursion Limit or Hallucination Loop)
+                # Check for "Abject Failure" (Reasoning Loop)
                 if state.consecutive_errors >= 3:
                     PEVLogger.error("CRITICAL STAGNATION: Rolling back to last safe checkpoint.")
                     state = checkpoint_state
-                    state.audit_feedback = "INSTRUCTION UPDATE: We have restored your state to the last successful action because the previous path failed to progress the task. Do not panic. Consult your CHECKLIST and available tool-outputs to try a different approach."
+                    state.audit_feedback = "INSTRUCTION UPDATE: State restored to last successful action. Please pivot your ROADMAP to avoid this redundancy."
                     state.consecutive_errors = 0
                     continue
 
@@ -74,21 +74,17 @@ class PEVALAgent(Agent):
             action_name = action_data.get("name", RESPOND_ACTION_NAME)
             action_kwargs = action_data.get("arguments", {})
             
-            # HARDENING: If it's an empty action, something is wrong internally. Rollback.
             if not action_name:
-                PEVLogger.warn("Empty action drafted. Rolling back for retry.")
+                PEVLogger.warn("Empty action drafted. Rolling back.")
                 state = checkpoint_state
                 continue
                 
-            # For the 'respond' tool, ensure at least one argument exists (regardless of key like 'message' or 'content')
             if action_name == RESPOND_ACTION_NAME:
-                # Find the actual text content regardless of the key the model uses (content, message, response, etc.)
                 response_text = next((v for v in action_kwargs.values() if str(v).strip()), "")
                 if not response_text:
-                    PEVLogger.warn("Empty response drafted. Rolling back for retry.")
+                    PEVLogger.warn("Empty response drafted. Rolling back.")
                     state = checkpoint_state
                     continue
-                # NORMALIZE: Tau-Bench base.py specifically looks for the key 'content'
                 action_kwargs = {"content": response_text}
                 
             action = Action(name=action_name, kwargs=action_kwargs)
@@ -97,17 +93,11 @@ class PEVALAgent(Agent):
             env_res = env.step(action)
             
             obs = env_res.observation
-            # Proactive Observation Distillation (Requested feature: Summarize large tool-calls)
             if len(obs) > 500:
-                obs = self.engine.distiller.distill_observation(
-                    name=action.name,
-                    args=action.kwargs,
-                    raw_output=obs
-                )
+                obs = self.engine.distiller.distill_observation(name=action.name, args=action.kwargs, raw_output=obs)
             
             state.last_observation = obs
             state.history.append({"role": "tool", "content": obs})
-            # Checkpoint Memory Classifier for Coordinator Mode (3-Tier Status)
             obs_lower = obs.lower()
             if obs_lower.startswith("error") or "invalid" in obs_lower:
                 status = "ERROR"
@@ -124,11 +114,16 @@ class PEVALAgent(Agent):
             }
             state.manifest.write_ahead_memory.append(checkpoint_entry)
             
-            # ASCD Requirement: Record the Functional Trace f(x)->y
+            # ASCD/PME Requirement: Record and Progress the Roadmap
             trace_entry = f"f({action.name}({action.kwargs})) -> {obs[:250]}..."
             state.manifest.functional_trace.append(trace_entry)
             
-            # Update the Safe Checkpoint if we got a real result back (including DATA_MISSING)
+            # Update Roadmap Progress if it was a valid attempt
+            current_plan = state.manifest.refined_tactical_plan
+            if current_plan in state.manifest.roadmap:
+                state.manifest.roadmap_progress[current_plan] = "DONE"
+            
+            # Update the Safe Checkpoint
             if status in ["SUCCESS", "DATA_MISSING"]:
                 checkpoint_state = state
                 state.consecutive_errors = 0

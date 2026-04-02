@@ -6,15 +6,12 @@ class BlackboardSSO(BaseModel):
     Abstract State-Constraint Decomposition (ASCD) Blackboard.
     The true mathematical representation of the environment.
     """
-    state_s: Dict[str, Any] = Field(default_factory=dict, description="Identified variables (User IDs, dates).")
-    constraint_set_c: Dict[str, Any] = Field(default_factory=dict, description="Hard (H) and Soft (sigma) constraints.")
-    gap_manifest_y: List[str] = Field(default_factory=list, description="Missing arguments required by tools.")
-    checklist: Dict[str, str] = Field(default_factory=dict, description="Dynamic MANIFEST plan (G1...Gn).")
-    roadmap: List[str] = Field(default_factory=list, description="Macro-Planning sequence of upcoming tactical steps.")
-    write_ahead_memory: List[Dict[str, Any]] = Field(default_factory=list, description="Persistent safety log of action->[SUCCESS/FAIL].")
+    world_snapshot: Dict[str, Any] = Field(default_factory=dict, description="Unified State: {S: variables, C: constraints, G: data_gaps}")
+    roadmap: List[str] = Field(default_factory=list, description="Macro-Planning sequence of tactical steps (MEL).")
+    roadmap_progress: Dict[str, str] = Field(default_factory=dict, description="Status of roadmap steps (DONE/TODO).")
+    write_ahead_memory: List[Dict[str, Any]] = Field(default_factory=list, description="Persistent safety log of action->[SUCCESS/DATA_MISSING/ERROR].")
     functional_trace: List[str] = Field(default_factory=list, description="f(x)->y trace cache for the Strategist.")
-    refined_tactical_plan: str = Field(default="", description="The specific, masked command for the deterministic Tactician.")
-    fast_track: bool = Field(default=False, description="Internal flag to skip LLM planning for roadmap steps.")
+    refined_tactical_plan: str = Field(default="", description="The immediate next tactical step.")
 
 class PEVState(BaseModel):
     """

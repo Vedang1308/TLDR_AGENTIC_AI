@@ -17,13 +17,12 @@ class Tactician:
 
         if self.strategy == "react":
             self.system_prompt = (
-                "You are the Deterministic Tactician in an ASCD network.\n"
-                "Your ONLY role is to map the Strategist's 'refined_tactical_plan' to actual tool schema.\n\n"
+                "You are the Deterministic Tactician in a PME network.\n"
+                "Your ONLY role is to map the 'refined_tactical_plan' to actual tool schema.\n\n"
                 "RULES:\n"
-                "1. DO NOT reason. DO NOT invent parameters.\n"
-                "2. Extract values STRICTLY from the Blackboard's 'state_s'.\n"
-                "3. If 'gap_manifest_y' has missing fields, you MUST draft a 'respond' action to ask the user for them.\n"
-                "4. Output STRICTLY as a JSON object with 'action'.\n\n"
+                "1. DO NOT reason. Extract parameter values from the 'world_snapshot' (Entities/Constraints).\n"
+                "2. If the roadmap step says 'Call respond', you MUST draft a 'respond' action.\n"
+                "3. Output STRICTLY as a JSON object with 'action'.\n\n"
                 "OUTPUT FORMAT:\n"
                 "{\"action\": {\"name\": \"tool_name\", \"arguments\": {\"key\": \"value\"}}}\n\n"
                 f"Tools available: {self.tools_info}"

@@ -32,20 +32,17 @@ class PEVEngine:
         state_dict = state.model_dump()
         
         for k, v in updates.items():
-            # For lists like node_logs, action_fingerprints, history, memory_kernel
             if k in ["node_logs", "action_fingerprints", "history", "memory_kernel", "global_wisdom"]:
                 if isinstance(v, list):
                     state_dict[k].extend(v)
                 else:
                     state_dict[k].append(v)
-            # DEEP MERGE for manifest so we don't lose old G or C
+            # DEEP MERGE for BlackboardSSO components
             elif k == "manifest" and isinstance(v, dict):
                 current_manifest = state_dict.get(k, {})
                 for sub_k, sub_v in v.items():
                     if isinstance(sub_v, dict) and sub_k in current_manifest:
                         current_manifest[sub_k].update(sub_v)
-                    elif isinstance(sub_v, list) and sub_k in current_manifest:
-                        current_manifest[sub_k] = list(set(current_manifest[sub_k] + sub_v))
                     else:
                         current_manifest[sub_k] = sub_v
                 state_dict[k] = current_manifest
@@ -56,52 +53,43 @@ class PEVEngine:
 
     def invoke(self, initial_state: PEVState, config: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Executes the agent's modular cycle for one turn.
-        
-        Flow:
-        Distill -> [Reformulate] -> Plan -> Execute -> Translate -> Monitor -> Audit
-        If Audit rejects -> [Reflect] -> loop back to Plan.
-        If loop limit exceeded -> break.
+        Unified Predictive Macro-Execution (PME) Cycle.
         """
         state = initial_state
         recursion_limit = config.get("recursion_limit", PEVConfig.RECURSION_LIMIT) if config else PEVConfig.RECURSION_LIMIT
         
         # 1. Distiller
         state = self._update_state(state, self.distiller(state))
-        
-        # 2. Reformulator (If IRMA)
-        if PEVConfig.TOOL_STRATEGY == "irma":
-            state = self._update_state(state, self.reformulator(state))
             
-        # Planner -> Auditor Replanning Loop
+        # PME Execution Loop
         attempts = 0
         while attempts < recursion_limit:
             attempts += 1
             
             try:
-                # MEL Architecture: Fast-Track Roadmap Dispatching
+                # Unified Architecture: PME Roadmapping
                 roadmap = state.manifest.roadmap
-                gaps = state.manifest.gap_manifest_y
+                roadmap_progress = state.manifest.roadmap_progress
                 last_memory = state.manifest.write_ahead_memory[-1] if state.manifest.write_ahead_memory else {}
                 
-                # RE-PLAN TRIGGER: If the last tool failed or returned empty, we MUST call the Planner
+                # RE-PLAN TRIGGER: If roadmap is empty or last action failed
                 must_replan = last_memory.get("status") in ["DATA_MISSING", "ERROR"] or not roadmap
                 
                 if must_replan:
-                    PEVLogger.node("Strategist", "Executing Macro-Planning (HBR Scans)...")
+                    PEVLogger.node("Strategist", "Unified Macro-Planning (HBR Scans)...")
                     planner_updates = self.planner(state)
                     state = self._update_state(state, planner_updates)
-                    state.fast_track = False
                 else:
-                    # Fast-Track: Skip the LLM Planner and use the next step from the roadmap
-                    PEVLogger.success(f"MEL Fast-Track: Dispatching roadmap step '{roadmap[0][:30]}...' (Skipping LLM)")
-                    state.manifest.refined_tactical_plan = roadmap[0]
-                    state.fast_track = True
+                    # Fast-Track: Follow the Roadmap
+                    # Use the first Step in Roadmap that is not marked DONE in progress
+                    active_step = next((s for s in roadmap if roadmap_progress.get(s) != "DONE"), roadmap[0])
+                    PEVLogger.success(f"PME Fast-Track: Dispatching '{active_step[:40]}...'")
+                    state.manifest.refined_tactical_plan = active_step
                 
                 # 4. Execute (Draft action)
                 state = self._update_state(state, self.tactician(state))
             except Exception as e:
-                PEVLogger.error(f"Inference Stall in node execution: {e}")
+                PEVLogger.error(f"Inference Stall: {e}")
                 state_dict = state.model_dump()
                 state_dict["is_stalled"] = True
                 return state_dict
@@ -112,20 +100,6 @@ class PEVEngine:
             # 6. Monitor
             state = self._update_state(state, self.monitor(state))
             
-            # Stagnation Break & Rollback Logic
-            if state.is_loop:
-                PEVLogger.warn("Monitor detected a loop. Forcing Strategic Pivot.")
-                state = self._update_state(state, {
-                    "is_loop": False,
-                    "policy_violation": "REJECTED_STAGNATION",
-                    "consecutive_errors": state.consecutive_errors + 1,
-                    "audit_feedback": "Progress checked. Redundant action detected (you already did this). PIVOT requested: Do not panic or apologize. Cautiously consult your CHECKLIST and use your flexibility (e.g., try a different search or ask the user) to steadily progress the task."
-                })
-                if state.consecutive_errors >= 3:
-                    PEVLogger.error("Inner reasoning loop stalled. Breaking for Rollback.")
-                    break
-                continue
-                
             # 7. Audit
             state = self._update_state(state, self.auditor(state))
             
@@ -133,15 +107,10 @@ class PEVEngine:
             if state.policy_violation:
                 state.consecutive_errors += 1
                 if state.consecutive_errors >= 3 or attempts >= recursion_limit:
-                    PEVLogger.error(f"Reasoning stalled after {attempts} attempts. Breaking for Rollback.")
+                    PEVLogger.error(f"Reasoning stalled. Breaking for Rollback.")
                     break
-                    
-                if PEVConfig.TOOL_STRATEGY == "reflection":
-                    state = self._update_state(state, self.reflector(state))
-                # Loop back to Plan
                 continue
             else:
-                # Validated successfully - Reset the internal error counter
                 state.consecutive_errors = 0
                 break
                 

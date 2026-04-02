@@ -46,8 +46,8 @@ class ModelClient:
                     PEVLogger.info(f"Discovered Intelligence models: {available_ids if available_ids else 'None Found'}")
                     
                     # Prioritization Matrix (Using literal ID matches)
-                    # Goliath Intelligence: Priority to GPT-5.4-Pro
-                    candidates = ["gpt-5.4-pro", "gpt-5.4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"]
+                    # Unified Logic: Prioritize GPT-4o for speed and reliability
+                    candidates = ["gpt-4o", "gpt-4-turbo", "gpt-5.4-pro", "gpt-5.4", "gpt-4o-mini", "gpt-4", "gpt-3.5-turbo"]
                     
                     found_model = next((c for c in candidates if c in available_ids), None)
                     if not found_model and self.config.OPENAI_API_KEY:
@@ -86,21 +86,13 @@ class ModelClient:
 
     def chat(self, messages: List, temperature: float = 1.0):
         try:
-            # Future-Proofing for OpenAI's new response endpoints
-            if "gpt-5" in self.model:
-                text_input = "\n".join([f"{m.get('role', 'user').upper()}: {m.get('content', '')}" for m in messages])
-                response = self.client.responses.create(
-                    model=self.model,
-                    input=text_input
-                )
-                return response.output_text
-            else:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=temperature
-                )
-                return response.choices[0].message.content
+            # Unified Execution: Standard completions API only
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=temperature
+            )
+            return response.choices[0].message.content
         except openai.NotFoundError as e:
             from .logger import PEVLogger
             PEVLogger.warn(f"Model ID '{self.model}' not found in your OpenAI account. Triggering Resilience Fallback...")
