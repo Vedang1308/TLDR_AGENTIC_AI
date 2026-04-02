@@ -2,7 +2,6 @@
 
 import abc
 import enum
-import os
 from litellm import completion
 
 from typing import Optional, List, Dict, Any, Union
@@ -46,11 +45,7 @@ class LLMUserSimulationEnv(BaseUserSimulationEnv):
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
         res = completion(
-            model=self.model, 
-            custom_llm_provider=self.provider, 
-            messages=messages,
-            base_url=os.getenv("OPENAI_API_BASE"),
-            timeout=300
+            model=self.model, custom_llm_provider=self.provider, messages=messages
         )
         message = res.choices[0].message
         self.messages.append(message.model_dump())
@@ -121,11 +116,7 @@ User Response:
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
         res = completion(
-            model=self.model, 
-            custom_llm_provider=self.provider, 
-            messages=messages,
-            base_url=os.getenv("OPENAI_API_BASE"),
-            timeout=300
+            model=self.model, custom_llm_provider=self.provider, messages=messages
         )
         message = res.choices[0].message
         self.messages.append(message.model_dump())
@@ -174,11 +165,7 @@ class VerifyUserSimulationEnv(LLMUserSimulationEnv):
         cur_message = None
         while attempts < self.max_attempts:
             res = completion(
-                model=self.model, 
-                custom_llm_provider=self.provider, 
-                messages=messages,
-                base_url=os.getenv("OPENAI_API_BASE"),
-                timeout=300
+                model=self.model, custom_llm_provider=self.provider, messages=messages
             )
             cur_message = res.choices[0].message
             self.total_cost = res._hidden_params["response_cost"]
@@ -241,8 +228,6 @@ Classification:"""
         model=model,
         custom_llm_provider=provider,
         messages=[{"role": "user", "content": prompt}],
-        base_url=os.getenv("OPENAI_API_BASE"),
-        timeout=300
     )
     return "true" in res.choices[0].message.content.lower()
 
@@ -277,8 +262,6 @@ Response:
         model=model,
         custom_llm_provider=provider,
         messages=[{"role": "user", "content": prompt}],
-        base_url=os.getenv("OPENAI_API_BASE"),
-        timeout=300
     )
     _, response = res.choices[0].message.content.split("Response:")
     return response.strip()
