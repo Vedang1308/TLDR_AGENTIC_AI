@@ -60,12 +60,13 @@ class Strategist:
         
         from ..core.config import PEVConfig
         
-        # HYBRID CONTEXT: Combine global summary with very recent raw history and memory ledger
+        # HYBRID CONTEXT: Include persistent facts (Snapshot) with recent history
         summary_part = f"GLOBAL ARCHIVE (Summary): {state.summary}\n" if state.summary else ""
+        world_snapshot = f"WORLD SNAPSHOT (Blackboard SSO): {str(state.manifest.world_snapshot)}\n"
         recent_history = f"LATEST RAW TURNS: {str(state.history[-5:])}\n"
         write_ahead_memory = f"WRITE-AHEAD MEMORY LOG (Checkpoint Status): {str(state.manifest.write_ahead_memory[-3:])}\n"
         functional_trace = f"FUNCTIONAL TRACE f(x)->y: {str(state.manifest.functional_trace[-3:])}"
-        context = f"{summary_part}{recent_history}{write_ahead_memory}{functional_trace}"
+        context = f"{summary_part}{world_snapshot}{recent_history}{write_ahead_memory}{functional_trace}"
         
         # Include feedback from Audit if the previous attempt failed
         feedback = ""
