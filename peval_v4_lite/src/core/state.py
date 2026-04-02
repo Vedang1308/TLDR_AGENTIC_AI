@@ -1,15 +1,16 @@
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
-class SystemManifest(BaseModel):
+class BlackboardSSO(BaseModel):
     """
-    Formal Problem Definition: P = <S, G, A, C>
-    Transfers 'Instructional Noise' into 'Systemic Constraints'.
+    Abstract State-Constraint Decomposition (ASCD) Blackboard.
+    The true mathematical representation of the environment.
     """
-    state_s: Dict[str, Any] = Field(default_factory=dict, description="Current knowledge (User ID, context).")
-    goal_g: str = Field(default="", description="The final outcome (e.g., Flight Booked).")
-    actions_a: List[str] = Field(default_factory=list, description="List of tools deemed necessary for this path.")
-    constraints_c: Dict[str, Any] = Field(default_factory=dict, description="Hard and Soft constraints (Time, Price, Style).")
+    state_s: Dict[str, Any] = Field(default_factory=dict, description="Identified variables (User IDs, dates).")
+    constraint_set_c: Dict[str, Any] = Field(default_factory=dict, description="Hard (H) and Soft (sigma) constraints.")
+    gap_manifest_y: List[str] = Field(default_factory=list, description="Missing arguments required by tools.")
+    functional_trace: List[str] = Field(default_factory=list, description="f(x)->y trace cache for the Strategist.")
+    refined_tactical_plan: str = Field(default="", description="The specific, masked command for the deterministic Tactician.")
 
 class PEVState(BaseModel):
     """
@@ -18,8 +19,8 @@ class PEVState(BaseModel):
     """
     model_config = ConfigDict(extra='allow')
     
-    # --- The P=<S,G,A,C> Manifest ---
-    manifest: SystemManifest = Field(default_factory=SystemManifest)
+    # --- The Source of Truth Blackboard ---
+    manifest: BlackboardSSO = Field(default_factory=BlackboardSSO)
 
     # --- Core Memories ---
     history: List[Dict[str, str]] = Field(

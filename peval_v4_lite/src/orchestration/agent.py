@@ -108,6 +108,10 @@ class PEVALAgent(Agent):
             state.last_observation = obs
             state.history.append({"role": "tool", "content": obs})
             
+            # ASCD Requirement: Record the Functional Trace f(x)->y
+            trace_entry = f"f({action.name}({action.kwargs})) -> {obs[:250]}..."
+            state.manifest.functional_trace.append(trace_entry)
+            
             # Update the Safe Checkpoint if we got a real result back
             if len(env_res.observation) > 0 and not env_res.observation.startswith("Error"):
                 checkpoint_state = state

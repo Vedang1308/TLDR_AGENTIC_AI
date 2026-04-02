@@ -35,6 +35,7 @@ class ModelClient:
                 
                 # Automated Precision Discovery
                 try:
+                    from .logger import PEVLogger
                     # Log discovered IDs and endpoint for debugging
                     PEVLogger.info(f"OpenAI Discovery Endpoint: {self.client.base_url}")
                     available_ids = [m.id for m in self.client.models.list()]

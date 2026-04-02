@@ -17,37 +17,36 @@ class Tactician:
 
         if self.strategy == "react":
             self.system_prompt = (
-                "You are the PEVAL Tactician. Your role is to fulfill the Strategic Instruction using a FUNCTIONAL ARGUMENT AUDIT.\n"
-                "STEPS:\n"
-                "1. IDENTIFY: Pick the correct tool from the available list.\n"
-                "2. ANALYZE: List the REQUIRED parameters for that tool as f(arg1, arg2, ...).\n"
-                "3. EXTRACT: Prioritize the 'INGREDIENTS (NER)' and 'Memory Kernel' for these values. Only use history if they are missing.\n"
-                "4. ANTI-HALLUCINATION: Do not pass 'unknown' or placeholder values to tools. If a required parameter is truly missing, use the 'respond' tool to ask the user.\n"
-                "5. DRAFT: Output the final JSON with 'thought' and 'action'.\n\n"
-                "CRITICAL: INTERNAL REASONING MUST STAY IN THE 'thought' KEY. \n"
-                "DO NOT USE THE 'think' TOOL AS AN ACTION. \n"
-                "EVERY TOOL-CALL IN 'action' MUST BE FUNCTIONAL (search, list, book, cancel, update, or respond).\n\n"
-                "Output STRICTLY as a JSON object: {\"thought\": \"[Your internal reasoning]\", \"action\": {\"name\": \"...\", \"arguments\": {...}}}.\n"
+                "You are the Deterministic Tactician in an ASCD network.\n"
+                "Your ONLY role is to map the Strategist's 'refined_tactical_plan' to actual tool schema.\n\n"
+                "RULES:\n"
+                "1. DO NOT reason. DO NOT invent parameters.\n"
+                "2. Extract values STRICTLY from the Blackboard's 'state_s'.\n"
+                "3. If 'gap_manifest_y' has missing fields, you MUST draft a 'respond' action to ask the user for them.\n"
+                "4. Output STRICTLY as a JSON object with 'action'.\n\n"
+                "OUTPUT FORMAT:\n"
+                "{\"action\": {\"name\": \"tool_name\", \"arguments\": {\"key\": \"value\"}}}\n\n"
                 f"Tools available: {self.tools_info}"
             )
         else:
             self.system_prompt = (
-                "You are the PEVAL Tactician. Your role is to fulfill the Strategic Instruction "
-                "provided by the Strategist using the following tools. "
+                "You are the PEVAL Tactician. Map the instruction to a tool. "
                 "Output your response STRICTLY as a JSON object with 'name' and 'arguments'.\n"
                 f"Tools available: {self.tools_info}"
             )
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:
-        PEVLogger.node("Tactician", "Drafting technical action...")
+        PEVLogger.node("Tactician", "Mapping tactical plan to schema...")
         
         feedback = ""
         if state.audit_feedback:
             feedback = f"\n\n[CRITICAL ERROR]: Your previous draft was rejected: {state.audit_feedback}"
             
+        blackboard_data = str(state.manifest.model_dump())
+        
         prompt = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"Task Context: {str(state.history[-5:])}\nMemory Kernel: {state.memory_kernel}\n{feedback}\n\nStrategist's Instruction: {state.strategic_instruction}"}
+            {"role": "user", "content": f"Blackboard SSO: {blackboard_data}\n{feedback}"}
         ]
         
         response = self.client.chat(prompt)
@@ -61,8 +60,7 @@ class Tactician:
             
             if self.strategy == "react" and "action" in parsed_json:
                 drafted_call = parsed_json["action"]
-                thought = parsed_json.get("thought", "")
-                node_log_content = f"Thought: {thought} | Drafted: {drafted_call}"
+                node_log_content = f"Drafted: {drafted_call}"
             else:
                 drafted_call = parsed_json
                 node_log_content = f"Drafted: {drafted_call}"

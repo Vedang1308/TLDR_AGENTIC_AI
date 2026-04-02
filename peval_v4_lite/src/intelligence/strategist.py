@@ -26,38 +26,38 @@ class Strategist:
         self.function_mapping = "\n".join(self.function_mapping)
 
         self.system_prompt = (
-            "You are the High-Precision PEVAL Strategist / Manifest Decomposer. \n"
-            "Your goal is to convert an instruction into a System of Constraints (P = <S, G, A, C>) using your Tool Map.\n\n"
+            "You are the Lead Systems Architect in an Abstract State-Constraint Decomposition (ASCD) network.\n"
+            "You MUST perform a 3-Stage Hierarchical Blackboard Refinement (HBR) based on the history and functional trace:\n\n"
+            "STAGE 1: Entity/Data Scan\n"
+            "Extract new facts from recent observations. Update 'state_s'. DO NOT invent values (e.g. user_id).\n\n"
+            "STAGE 2: Constraint Scan\n"
+            "Identify Hard limits (H) and Soft preferences (sigma). Update 'constraint_set_c'.\n\n"
+            "STAGE 3: Gap Scan (gamma)\n"
+            "Compare your 'state_s' against the required parameters of the target tool in the Function Map. "
+            "If a parameter is MISSING, append it to 'gap_manifest_y' and instruct the Tactician to call 'respond' to ask the user.\n\n"
             "AVAILABLE TOOL MAP (Function Mapping):\n"
             f"{self.function_mapping}\n\n"
-            "CRITICAL: FORMAL MANIFEST DECOMPOSITION \n"
-            "1. S (State): identify User ID (MANDATORY), birth_date, and current knowledge. DO NOT use generic placeholders like 'unknown'. Extract the exact string from the user's prompt or leave it out. \n"
-            "2. G (Goal): Define the final definition of success. \n"
-            "3. A (Actions): Which tools from the map above ARE actually needed for this path? \n"
-            "4. C (Constraints): Identify EVERY Rule of the Road. \n"
-            "   - AMNESIA CHECK: Do not repeat a tool call (like search) if the result is already in the context. \n\n"
             "OUTPUT FORMAT (JSON ONLY):\n"
             "{\n"
-            "  \"MANIFEST\": {\n"
-            "    \"checklist\": {\"1. Find flights\": \"DONE/TODO\", \"2. Select option\": \"TODO\", ...},\n"
-            "    \"state_s\": {\"user_id\": \"...\", ...},\n"
-            "    \"goal_g\": \"Definition of success\",\n"
-            "    \"actions_a\": [\"search_direct_flight\", ...],\n"
-            "    \"constraints_c\": {\"hard\": [...], \"soft\": [...], \"persona\": \"...\"}\n"
-            "  },\n"
-            "  \"objective\": \"The specific natural language instruction for the tactician\"\n"
+            "  \"BlackboardSSO\": {\n"
+            "    \"state_s\": {\"user_id\": \"...\", \"origin\": \"...\"},\n"
+            "    \"constraint_set_c\": {\"hard\": [...], \"soft\": [...]},\n"
+            "    \"gap_manifest_y\": [\"Missing Argument 1\", ...],\n"
+            "    \"refined_tactical_plan\": \"Specific masked command for the deterministic Tactician (e.g. Call book_reservation with ID X or Call respond to ask for Y)\"\n"
+            "  }\n"
             "}"
         )
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:
-        PEVLogger.node("Strategist", "Planning next objective (Comparative NER)...")
+        PEVLogger.node("Strategist", "Abstract State-Constraint Decomposition (HBR Scans)...")
         
         from ..core.config import PEVConfig
         
-        # HYBRID CONTEXT: Combine global summary with very recent raw history
+        # HYBRID CONTEXT: Combine global summary with very recent raw history and functional trace
         summary_part = f"GLOBAL ARCHIVE (Summary): {state.summary}\n" if state.summary else ""
-        recent_history = f"LATEST RAW TURNS: {str(state.history[-5:])}"
-        context = f"{summary_part}{recent_history}"
+        recent_history = f"LATEST RAW TURNS: {str(state.history[-5:])}\n"
+        functional_trace = f"FUNCTIONAL TRACE f(x)->y: {str(state.manifest.functional_trace[-3:])}"
+        context = f"{summary_part}{recent_history}{functional_trace}"
         
         # Include feedback from Audit if the previous attempt failed
         feedback = ""
@@ -66,7 +66,7 @@ class Strategist:
             
         prompt = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"Context: {context}\nPersistent Ingredients: {state.persistent_ner}{feedback}\nIdentify missing entities and set the next objective. Output JSON."}
+            {"role": "user", "content": f"Context: {context}\nIdentify missing entities, resolve gaps, and update the Blackboard. Output JSON."}
         ]
         
         decision_raw = self.client.chat(prompt)
@@ -81,15 +81,16 @@ class Strategist:
             except:
                 pass
         
-        # Format the result for the Engine (P = <S, G, A, C>)
-        objective = decision.get("objective", "Execute next logical task step.")
-        manifest_data = decision.get("MANIFEST", {})
+        # Format the result for the Engine updating the BlackboardSSO
+        blackboard_data = decision.get("BlackboardSSO", {})
+        objective = blackboard_data.get("refined_tactical_plan", "Execute next logical task step.")
         
-        PEVLogger.info(f"Goal G: {manifest_data.get('goal_g', 'Unknown')}")
-        PEVLogger.info(f"Hard Constraints: {manifest_data.get('constraints_c', {}).get('hard', 'None')}")
+        PEVLogger.info(f"Refined Tactical Plan: {objective[:100]}...")
+        if blackboard_data.get("gap_manifest_y"):
+            PEVLogger.warn(f"Gaps identified: {blackboard_data.get('gap_manifest_y')}")
         
         return {
             "strategic_instruction": objective,
-            "manifest": manifest_data, # Triggers deep merge in engine.py
-            "node_logs": [{"node": "Strategist", "content": f"Manifest Goal: {manifest_data.get('goal_g')}"}]
+            "manifest": blackboard_data, # Triggers deep merge in engine.py
+            "node_logs": [{"node": "Strategist", "content": f"Tactical Plan: {objective}"}]
         }
