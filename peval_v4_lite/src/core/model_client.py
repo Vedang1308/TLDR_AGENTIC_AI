@@ -47,8 +47,8 @@ class ModelClient:
                     
                     found_model = next((c for c in candidates if c in available_ids), None)
                     if not found_model and self.config.OPENAI_API_KEY:
-                        # Intelligence Force-Push: Target GPT-4o directly if discovery fails
-                        self.model = "gpt-4o"
+                        # Intelligence Force-Push: Target GPT-5.4 natively using the responses API if discovery fails
+                        self.model = "gpt-5.4"
                         PEVLogger.warn(f"Empty discovery list. Force-Pushing request to Intelligence Tier: {self.model}")
                     else:
                         self.model = found_model or "gpt-3.5-turbo"
@@ -82,12 +82,21 @@ class ModelClient:
 
     def chat(self, messages: List, temperature: float = 1.0):
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature
-            )
-            return response.choices[0].message.content
+            # Future-Proofing for OpenAI's new response endpoints
+            if "gpt-5" in self.model:
+                text_input = "\n".join([f"{m.get('role', 'user').upper()}: {m.get('content', '')}" for m in messages])
+                response = self.client.responses.create(
+                    model=self.model,
+                    input=text_input
+                )
+                return response.output_text
+            else:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature
+                )
+                return response.choices[0].message.content
         except openai.NotFoundError as e:
             from .logger import PEVLogger
             PEVLogger.warn(f"Model ID '{self.model}' not found in your OpenAI account. Triggering Resilience Fallback...")
