@@ -7,59 +7,12 @@ import requests
 from datetime import datetime
 
 # Ensure the local directory and peval_v4 are at the VERY FRONT of the path
-# This allows 'import tau2' and internal V3 imports to work seamlessly as a local package.
+# This ensures we import our local 'tau_bench' and PEVAL source code
 sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), "peval_v4_lite"))
 
-# Updated Official V3 Imports
-# Updated Official V3 Imports
-from tau_bench.envs.retail.environment import get_environment as get_retail_env, get_tasks as get_retail_tasks
-from tau_bench.envs.airline.environment import get_environment as get_airline_env, get_tasks as get_airline_tasks
-
-# Official τ³-bench (V3) Shim to maintain PEVALAgent compatibility without touching the tau_bench folder
-class Tau3EnvShim:
-    def __init__(self, env, tasks):
-        self.env = env
-        self.tasks = tasks
-        # Provide tools_info and wiki for PEVALAgent
-        info = env.get_info(include_tool_info=True)
-        self.tools_info = []
-        if info.tool_defs:
-            for name, sig in info.tool_defs.items():
-                self.tools_info.append({
-                    "type": "function",
-                    "function": {
-                        "name": name,
-                        "description": sig.doc,
-                        "parameters": sig.params
-                    }
-                })
-        self.wiki = env.get_policy()
-
-    def reset(self, task_index):
-        task = self.tasks[task_index]
-        # Reset the environment state for the specific task
-        self.env.set_state(
-            initialization_data=task.initial_state.initialization_data if task.initial_state else None,
-            initialization_actions=task.initial_state.initialization_actions if task.initial_state else None,
-            message_history=[]
-        )
-        # Return object with observation attribute
-        class EnvRes:
-            def __init__(self, obs): self.observation = obs
-        return EnvRes(str(task.user_scenario.instructions))
-
-    def step(self, action):
-        from tau2.data_model.message import ToolCall
-        import uuid
-        tc = ToolCall(id=str(uuid.uuid4()), name=action.name, arguments=action.arguments)
-        response = self.env.get_response(tc)
-        class EnvRes:
-            def __init__(self, obs, done): 
-                self.observation = obs
-                self.done = done
-        return EnvRes(response.content, response.error)
-
+from tau_bench.envs.retail.env import MockRetailDomainEnv
+from tau_bench.envs.airline.env import MockAirlineDomainEnv
 from peval_v4_lite.src.orchestration.agent import PEVALAgent
 from peval_v4_lite.src.core.config import PEVConfig
 
@@ -76,7 +29,7 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
     PEVConfig.AGENT_MODEL = model_name
     
     # 1. Setup Environment
-    print(f"--- [INIT] Powering up Official τ³-bench Environment: {domain} ---")
+    print(f"--- [INIT] Powering up Environment: {domain} ---")
     
     # We must tell LiteLLM (used by tau-bench) where our User Simulator is
     os.environ["OPENAI_API_BASE"] = PEVConfig.USER_ENDPOINT
@@ -116,26 +69,31 @@ def run_experiment(domain="retail", model_name="qwen-32b-agent", strategy="fc", 
     heartbeat_server(PEVConfig.USER_ENDPOINT, PEVConfig.USER_MODEL, "User Simulator")
     heartbeat_server(PEVConfig.AGENT_ENDPOINT, model_name, "Agent Server")
 
-    # Official V3 Functional Initialization
+    print(f"--- [INFO] Environment connecting to User Simulator at {PEVConfig.USER_ENDPOINT} ---")
+    print(f"--- [WAIT] Initializing Tau-Bench Environment (This calls the User Simulator)... ---")
     if domain == "retail":
-        base_env = get_retail_env()
-        tasks = get_retail_tasks()
+        env = MockRetailDomainEnv(
+            user_model=PEVConfig.USER_MODEL,
+            user_provider="openai"
+        )
     else:
-        base_env = get_airline_env()
-        tasks = get_airline_tasks()
-    
-    # Wrap in compatibility shim for PEVALAgent
-    env = Tau3EnvShim(base_env, tasks)
-    print(f"--- [SUCCESS] Environment and {len(tasks)} Tasks Loaded! ---")
+        env = MockAirlineDomainEnv(
+            user_model=PEVConfig.USER_MODEL,
+            user_provider="openai"
+        )
+    print(f"--- [SUCCESS] Environment Loaded Successfully! ---")
         
     # 2. Initialize the Multi-Agent Architecture
     print(f"--- [INIT] Assembling PEVAL Architecture (13 Nodes) ---")
-    agent = PEVALAgent(tools_info=env.tools_info, wiki=env.wiki)
     
     # SYSTEM AUDIT: Confirm tool registry registry before initializing agent
-    tool_names = [t["function"]["name"] for t in env.tools_info]
+    tool_names = [t.get("function", t).get("name") for t in env.tools_info]
     print(f"--- [AUDIT] Environment Tool Registry: {tool_names} ---")
     
+    agent = PEVALAgent(
+        tools_info=env.tools_info,
+        wiki=env.wiki
+    )
     print(f"--- [SUCCESS] Architecture Ready ---")
     
     # 3. Create Results Directory
