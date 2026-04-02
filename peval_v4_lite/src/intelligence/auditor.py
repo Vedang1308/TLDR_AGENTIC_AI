@@ -27,6 +27,25 @@ class Auditor:
         PEVLogger.node("Auditor", "Zero-Trust policy check...")
         
         action = state.current_action_draft
+        action_name = action.get("name", "")
+        
+        # MEL Architecture: Fast-Track Heuristic Audit
+        FAST_WHITELIST = [
+            "search_direct_flight", 
+            "search_onestop_flight", 
+            "list_all_airports", 
+            "list_all_flights",
+            "get_payment_methods",
+            "get_baggage_policy"
+        ]
+        
+        if action_name in FAST_WHITELIST:
+            PEVLogger.success(f"Fast-Track Audit: '{action_name}' auto-approved.")
+            return {
+                "policy_violation": None,
+                "node_logs": [{"node": "Auditor", "content": f"Fast-Track APPROVED: {action_name}"}]
+            }
+            
         prompt = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": f"SYSTEM MANIFEST: {state.manifest}\nProposed Action: {action}\nIs this action compliant with constraints C and goal G?"}

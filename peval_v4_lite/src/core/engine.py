@@ -79,8 +79,24 @@ class PEVEngine:
             attempts += 1
             
             try:
-                # 3. Plan
-                state = self._update_state(state, self.planner(state))
+                # MEL Architecture: Fast-Track Roadmap Dispatching
+                roadmap = state.manifest.roadmap
+                gaps = state.manifest.gap_manifest_y
+                last_memory = state.manifest.write_ahead_memory[-1] if state.manifest.write_ahead_memory else {}
+                
+                # RE-PLAN TRIGGER: If the last tool failed or returned empty, we MUST call the Planner
+                must_replan = last_memory.get("status") in ["DATA_MISSING", "ERROR"] or not roadmap
+                
+                if must_replan:
+                    PEVLogger.node("Strategist", "Executing Macro-Planning (HBR Scans)...")
+                    planner_updates = self.planner(state)
+                    state = self._update_state(state, planner_updates)
+                    state.fast_track = False
+                else:
+                    # Fast-Track: Skip the LLM Planner and use the next step from the roadmap
+                    PEVLogger.success(f"MEL Fast-Track: Dispatching roadmap step '{roadmap[0][:30]}...' (Skipping LLM)")
+                    state.manifest.refined_tactical_plan = roadmap[0]
+                    state.fast_track = True
                 
                 # 4. Execute (Draft action)
                 state = self._update_state(state, self.tactician(state))
