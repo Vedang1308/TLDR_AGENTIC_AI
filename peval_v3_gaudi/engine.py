@@ -1,13 +1,13 @@
 import os
 import json
 from typing import List, Dict, Any, Optional
-from .state import PevState
-from .nodes import (
+from peval_v3_gaudi.state import PevState
+from peval_v3_gaudi.nodes import (
     planner_node, executor_node, validator_node, 
     error_reflection_node, global_reflector_node,
     proactive_prefetch
 )
-from ..peval_v4_lite.src.core.logger import PEVLogger
+from peval_v4_lite.src.core.logger import PEVLogger
 from tau_bench.types import SolveResult, Action, RESPOND_ACTION_NAME
 
 class PEVEngine:

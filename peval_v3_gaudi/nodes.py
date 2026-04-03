@@ -2,10 +2,10 @@ import os
 import re
 import json
 from typing import Dict, Any, List, Tuple
-from .state import PevState
-# Import the existing ModelClient (adjusting path as needed for the final structure)
-from ..peval_v4_lite.src.core.model_client import ModelClient
-from ..peval_v4_lite.src.core.logger import PEVLogger
+from peval_v3_gaudi.state import PevState
+# Import the existing ModelClient (using absolute paths)
+from peval_v4_lite.src.core.model_client import ModelClient
+from peval_v4_lite.src.core.logger import PEVLogger
 
 def format_memory(memory_list: List[Dict]) -> str:
     """Converts the raw memory array into a clean, structural markdown trace."""
