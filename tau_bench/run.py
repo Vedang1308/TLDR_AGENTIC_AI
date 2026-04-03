@@ -21,7 +21,7 @@ def run(config: RunConfig) -> List[EnvRunResult]:
     assert config.env in ["retail", "airline"], "Only retail and airline envs are supported"
     assert config.model_provider in provider_list, "Invalid model provider"
     assert config.user_model_provider in provider_list, "Invalid user model provider"
-    assert config.agent_strategy in ["tool-calling", "act", "react", "few-shot", "multi-agent"], "Invalid agent strategy"
+    assert config.agent_strategy in ["tool-calling", "act", "react", "few-shot"], "Invalid agent strategy"
     assert config.task_split in ["train", "test", "dev"], "Invalid task split"
     assert config.user_strategy in [item.value for item in UserStrategy], "Invalid user strategy"
 
@@ -124,33 +124,57 @@ def run(config: RunConfig) -> List[EnvRunResult]:
 def agent_factory(
     tools_info: List[Dict[str, Any]], wiki, config: RunConfig
 ) -> Agent:
-    # --- PHASE 3 OVERRIDE ---
-    # We intercept all baseline strategies and route them to our Multi-Agent system
-    # but pass the specific strategy flag so the Planner prompt is constrained
-    # to behave like react, act, or fc.
-    from scripts.multi_agent.multi_agent_strategy import MultiAgentStrategy
-    
-    # Map 'tool-calling' back to 'fc' for consistency in our planner logic
-    target_strategy = "multi-agent-fc" if config.agent_strategy == "tool-calling" else f"multi-agent-{config.agent_strategy}"
-    if config.agent_strategy == "multi-agent": 
-        target_strategy = "multi-agent-react" # Default
-        
-    # We need to set env vars so the nodes know which base URL and model to use
-    os.environ["AGENT_MODEL_NAME"] = config.model
-    os.environ["AGENT_API_BASE"] = "http://localhost:8000/v1"
+    if config.agent_strategy == "tool-calling":
+        # native tool calling
+        from tau_bench.agents.tool_calling_agent import ToolCallingAgent
 
-    # User Simulator is hardcoded to 8001 in our architecture
-    os.environ["USER_MODEL_NAME"] = config.user_model
-    os.environ["USER_API_BASE"] = "http://localhost:8001/v1"
+        return ToolCallingAgent(
+            tools_info=tools_info,
+            wiki=wiki,
+            model=config.model,
+            provider=config.model_provider,
+            temperature=config.temperature,
+        )
+    elif config.agent_strategy == "act":
+        # `act` from https://arxiv.org/abs/2210.03629
+        from tau_bench.agents.chat_react_agent import ChatReActAgent
 
-    return MultiAgentStrategy(
-        tools_info=tools_info,
-        wiki=wiki,
-        model=config.model,
-        provider=config.model_provider,
-        temperature=config.temperature,
-        agent_strategy=target_strategy
-    )
+        return ChatReActAgent(
+            tools_info=tools_info,
+            wiki=wiki,
+            model=config.model,
+            provider=config.model_provider,
+            use_reasoning=False,
+            temperature=config.temperature,
+        )
+    elif config.agent_strategy == "react":
+        # `react` from https://arxiv.org/abs/2210.03629
+        from tau_bench.agents.chat_react_agent import ChatReActAgent
+
+        return ChatReActAgent(
+            tools_info=tools_info,
+            wiki=wiki,
+            model=config.model,
+            provider=config.model_provider,
+            use_reasoning=True,
+            temperature=config.temperature,
+        )
+    elif config.agent_strategy == "few-shot":
+        from tau_bench.agents.few_shot_agent import FewShotToolCallingAgent
+        assert config.few_shot_displays_path is not None, "Few shot displays path is required for few-shot agent strategy"
+        with open(config.few_shot_displays_path, "r") as f:
+            few_shot_displays = [json.loads(line)["messages_display"] for line in f]
+
+        return FewShotToolCallingAgent(
+            tools_info=tools_info,
+            wiki=wiki,
+            model=config.model,
+            provider=config.model_provider,
+            few_shot_displays=few_shot_displays,
+            temperature=config.temperature,
+        )
+    else:
+        raise ValueError(f"Unknown agent strategy: {config.agent_strategy}")
 
 
 def display_metrics(results: List[EnvRunResult]) -> None:

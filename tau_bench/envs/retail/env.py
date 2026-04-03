@@ -18,14 +18,15 @@ class MockRetailDomainEnv(Env):
         task_split: str = "test",
         task_index: Optional[int] = None,
     ):
-        if task_split == "test":
-            from tau_bench.envs.retail.tasks_test import TASKS_TEST as tasks
-        elif task_split == "train":
-            from tau_bench.envs.retail.tasks_train import TASKS_TRAIN as tasks
-        elif task_split == "dev":
-            from tau_bench.envs.retail.tasks_dev import TASKS_DEV as tasks
-        else:
-            raise ValueError(f"Unknown task split: {task_split}")
+        match task_split:
+            case "test":
+                from tau_bench.envs.retail.tasks_test import TASKS_TEST as tasks
+            case "train":
+                from tau_bench.envs.retail.tasks_train import TASKS_TRAIN as tasks
+            case "dev":
+                from tau_bench.envs.retail.tasks_dev import TASKS_DEV as tasks
+            case _:
+                raise ValueError(f"Unknown task split: {task_split}")
         super().__init__(
             data_load_func=load_data,
             tools=ALL_TOOLS,

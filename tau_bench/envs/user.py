@@ -5,19 +5,7 @@ import enum
 from litellm import completion
 
 from typing import Optional, List, Dict, Any, Union
-import os
-import json
 
-def get_model_api_base(model: str) -> Optional[str]:
-    port_map_str = os.getenv("TAUBENCH_PORT_MAP")
-    if port_map_str:
-        try:
-            port_map = json.loads(port_map_str)
-            if model in port_map:
-                return f"http://localhost:{port_map[model]}/v1"
-        except json.JSONDecodeError:
-            pass
-    return None
 
 class BaseUserSimulationEnv(abc.ABC):
     metadata = {}
@@ -56,18 +44,13 @@ class LLMUserSimulationEnv(BaseUserSimulationEnv):
         self.reset()
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
-        import re
         res = completion(
-            model=self.model, custom_llm_provider=self.provider, messages=messages,
-            api_base=get_model_api_base(self.model),
-            max_tokens=200,  # User sim messages are short; prevents Qwen3 reasoning model from spending 3 min on <think> chains
+            model=self.model, custom_llm_provider=self.provider, messages=messages
         )
         message = res.choices[0].message
         self.messages.append(message.model_dump())
         self.total_cost = res._hidden_params["response_cost"]
-        # Strip Qwen3 reasoning tags from user simulator output
-        content = re.sub(r'<think>.*?</think>', '', message.content or '', flags=re.DOTALL).strip()
-        return content
+        return message.content
 
     def build_system_prompt(self, instruction: Optional[str]) -> str:
         instruction_display = (
@@ -133,7 +116,7 @@ User Response:
 
     def generate_next_message(self, messages: List[Dict[str, Any]]) -> str:
         res = completion(
-            model=self.model, custom_llm_provider=self.provider, messages=messages, api_base=get_model_api_base(self.model)
+            model=self.model, custom_llm_provider=self.provider, messages=messages
         )
         message = res.choices[0].message
         self.messages.append(message.model_dump())
@@ -182,7 +165,7 @@ class VerifyUserSimulationEnv(LLMUserSimulationEnv):
         cur_message = None
         while attempts < self.max_attempts:
             res = completion(
-                model=self.model, custom_llm_provider=self.provider, messages=messages, api_base=get_model_api_base(self.model)
+                model=self.model, custom_llm_provider=self.provider, messages=messages
             )
             cur_message = res.choices[0].message
             self.total_cost = res._hidden_params["response_cost"]
@@ -245,7 +228,6 @@ Classification:"""
         model=model,
         custom_llm_provider=provider,
         messages=[{"role": "user", "content": prompt}],
-        api_base=get_model_api_base(model)
     )
     return "true" in res.choices[0].message.content.lower()
 
@@ -280,7 +262,6 @@ Response:
         model=model,
         custom_llm_provider=provider,
         messages=[{"role": "user", "content": prompt}],
-        api_base=get_model_api_base(model)
     )
     _, response = res.choices[0].message.content.split("Response:")
     return response.strip()

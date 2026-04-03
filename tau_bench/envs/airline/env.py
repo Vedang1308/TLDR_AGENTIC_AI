@@ -18,10 +18,11 @@ class MockAirlineDomainEnv(Env):
         task_split: str = "test",
         task_index: Optional[int] = None,
     ):
-        if task_split == "test":
-            from tau_bench.envs.airline.tasks_test import TASKS as tasks
-        else:
-            raise ValueError(f"Unknown task split: {task_split}")
+        match task_split:
+            case "test":
+                from tau_bench.envs.airline.tasks_test import TASKS as tasks
+            case _:
+                raise ValueError(f"Unknown task split: {task_split}")
         super().__init__(
             data_load_func=load_data,
             tools=ALL_TOOLS,
