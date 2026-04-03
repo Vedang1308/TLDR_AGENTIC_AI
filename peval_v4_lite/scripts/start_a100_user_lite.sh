@@ -4,7 +4,7 @@
 # Usage:
 #   For Multi A100 (72B): ./start_a100_user.sh Qwen/Qwen2.5-72B-Instruct 4
 
-MODEL_PATH=${1:-"Qwen/Qwen3-32B"}
+MODEL_PATH=${1:-"Qwen/Qwen2.5-72B-Instruct"}
 NUM_GPUS=${2:-4} # 72B realistically needs 4x A100s 
 PORT=8225
 

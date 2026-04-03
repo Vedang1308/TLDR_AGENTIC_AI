@@ -2,10 +2,10 @@
 # Script to launch the PEVAL Agent Model on NVIDIA A100 GPU(s)
 # 
 # Usage:
-#   For Single A100 (4B, 8B, 14B): ./start_a100_agent.sh Qwen/Qwen3-14B 1
-#   For Multi A100 (32B, 72B-Instruct): ./start_a100_agent.sh Qwen/Qwen3-32B 4
+#   For Single A100 (4B, 8B, 14B): ./start_a100_agent.sh Qwen/Qwen2.5-14B-Instruct 1
+#   For Multi A100 (32B, 72B-Instruct): ./start_a100_agent.sh Qwen/Qwen2.5-32B-Instruct 2
 
-MODEL_PATH=${1:-"Qwen/Qwen3-32B"}
+MODEL_PATH=${1:-"Qwen/Qwen2.5-32B-Instruct"}
 NUM_GPUS=${2:-2} # Default to 2 GPUs for the 32B model
 PORT=8224
 

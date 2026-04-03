@@ -1,11 +1,11 @@
 #!/bin/bash
 # start_gaudi_agent.sh
 # Optimized for Intel Gaudi (HL-225) 96GB per AIP
-# Model: Qwen3-14B (Default)
+# Model: Qwen2.5-32B-Instruct (Default)
 # TP: 2 (Optimized for 14B/32B/72B)
 
 # Defaults
-MODEL_PATH="Qwen/Qwen3-14B"
+MODEL_PATH="Qwen/Qwen2.5-32B-Instruct"
 PORT=8224
 TP=2
 
