@@ -17,21 +17,19 @@ class Tactician:
 
         if self.strategy == "react":
             self.system_prompt = (
-                "You are the Deterministic Tactician. Your goal is to map a strategic intent to a technical tool call.\n\n"
-                "AGNOSTIC SCHEMA MAPPING RULES:\n"
-                "1. SCHEMA VALIDATION: Scan the 'AVAILABLE TOOLS' (self.tools_info) to find the tool for 'refined_tactical_plan'.\n"
-                "2. PARAMETER RESOLUTION (PRE-EXECUTION CHECK): Scan the 'world_snapshot' FIRST to fulfill every REQUIRED parameter. If a value is missing from the instruction but exists in the snapshot (Variable Storage), you MUST inject it automatically.\n"
-                "3. MULTI-VALUE HANDLING: If multiple candidates exist for a variable, prioritize the one that matches ground-truth constraints from the task (e.g., origin city, dates).\n"
-                "4. NO HALLUCINATION: You are FORBIDDEN from using names not in the 'AVAILABLE TOOLS' list.\n"
-                "5. INTERACTION LOCK: Use the 'respond' tool if the intent is to 'Ask the user'.\n"
-                "6. OUTPUT: JSON object with 'action' (name, arguments).\n\n"
+                "You are the Deterministic Tactician (MAPPING_ENGINE). Your ONLY OUTPUT must be a valid JSON object.\n\n"
+                "### CRITICAL CONSTRAINTS:\n"
+                "1. NO CONVERSATIONAL FILLER. Do not say 'Certainly', 'However', or 'Here is the plan'.\n"
+                "2. NO META-COMMENTARY. Do not explain why you are choosing a tool or acknowledge previous errors.\n"
+                "3. SCHEMA VALIDATION: Map the Instruction to 'AVAILABLE TOOLS'.\n"
+                "4. VARIABLE INJECTION: Scan the 'world_snapshot' for missing parameters. If found, use them automatically.\n"
+                "5. OUTPUT FORMAT: A single JSON block. Use ```json ... ``` tags if needed, but NOTHING ELSE.\n\n"
                 f"AVAILABLE TOOLS: {self.tools_info}"
             )
         else:
             self.system_prompt = (
-                "You are the PEVAL Tactician. Map instruction to tool. Check 'world_snapshot' for missing parameters before asks. "
-                "Output STRICTLY as a JSON object with 'name' and 'arguments'.\n"
-                f"Tools available: {self.tools_info}"
+                "STRICT JSON MAPPING ENGINE. Output only JSON. No chat.\n"
+                f"Tools: {self.tools_info}"
             )
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:

@@ -46,11 +46,15 @@ class ContextDistiller:
         # We task the model with returning JSON of all discovered entities
         extraction_prompt = [
             {"role": "system", "content": (
-                "You are a Variable Extraction Engine. Scan the history and extract all discrete 'Task Variables' into a JSON dictionary. \n"
-                "VARIABLES TO TRACK: user_id, reservation_id, flight_id, origin, destination, date, price, status. \n"
-                "CRITICAL: Only output the JSON dictionary. Do not provide explanations."
+                "You are an Advanced Variable Extraction Engine. Scan the history and ARCHIVE all discovered 'Task Variables' into a JSON dictionary. \n"
+                "VARIABLES TO TRACK: user_id, reservation_id, flight_id, origin, destination, date, price, status, available_options. \n\n"
+                "### EXTRACTION RULES:\n"
+                "1. If a search tool (e.g., search_direct_flight) was called, harvest ALL unique flight_ids/prices into 'available_options' as an array of objects.\n"
+                "2. Prioritize ground-truth facts over candidate data.\n"
+                "3. Preserve all identifier strings exactly as they appear.\n"
+                "4. ONLY OUTPUT RAW JSON. NO CHAT."
             )},
-            {"role": "user", "content": f"History: {state.history[-5:]}"}
+            {"role": "user", "content": f"History: {state.history[-10:]}"}
         ]
         
         extracted_raw = self.client.chat(extraction_prompt)
