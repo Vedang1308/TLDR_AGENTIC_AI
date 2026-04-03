@@ -70,6 +70,7 @@ class PEVEngine:
         messages_log = state.user_conversation.copy()
 
         for step in range(max_steps):
+            state.rejection_feedback = None # Clear for fresh step
             PEVLogger.info(f"=== STEP {step+1} ===")
             
             # INNER LOOP: Planner -> Executor -> Validator (Retry up to 3 times if rejected)
@@ -100,6 +101,12 @@ class PEVEngine:
                 
                 PEVLogger.warn(f"Rejection: {state.rejection_feedback}")
                 inner_retries += 1
+            
+            # --- ELITE: 3-STRIKE FALLBACK ---
+            if state.rejection_feedback and inner_retries >= 3:
+                PEVLogger.error("CRITICAL: Inner loop failed to resolve rejection. Falling back to Respond.")
+                state.drafted_tool_call = {"name": "respond", "arguments": {"content": f"I'm having difficulty finalizing a valid next step. Let me step back and reassess the task."}}
+                state.rejection_feedback = None # Clear after fallback
             
             if state.task_completed:
                 PEVLogger.success("Planner marked task as completed.")

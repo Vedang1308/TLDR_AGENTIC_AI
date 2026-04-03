@@ -97,6 +97,9 @@ def planner_node(state: PevState) -> Dict:
     # 3. Wisdom Check
     wisdom_section = "\nGLOBAL EXPERTISE:\n" + "\n".join([f"- {w}" for w in state.global_wisdom[-10:]]) if state.global_wisdom else ""
 
+    # 4. Rejection Check (Inner Loop Feedback)
+    rejection_section = f"\n### PREVIOUS ATTEMPT REJECTED:\n{state.rejection_feedback}\n" if state.rejection_feedback else ""
+
     sys_prompt = f"""You are the HIERARCHICAL PLANNER. 
 Your ONLY tool is 'submit_plan'. Use it to set the objective for the Executor.
 
@@ -116,6 +119,8 @@ MEMORY KERNEL:
 
 FAILURE HISTORY:
 {failure_history}
+
+{rejection_section}
 
 ### ELITE PLANNING MANDATE:
 In your 'Thought:' block, ALWAYS include:
@@ -156,6 +161,9 @@ def executor_node(state: PevState) -> Dict:
     """PORTED: Phase 3 Executor."""
     PEVLogger.node("Executor", "Mapping plan to tool schema...")
     client = ModelClient(mode="agent")
+
+    # Rejection Check (Inner Loop Feedback)
+    rejection_section = f"\n### PREVIOUS ATTEMPT REJECTED:\n{state.rejection_feedback}\n" if state.rejection_feedback else ""
     
     sys_prompt = f"""You are the EXECUTOR. Select the EXACT tool call for the PLAN.
 
@@ -163,6 +171,8 @@ PLAN: {state.current_plan}
 
 MEMORY:
 {format_memory(state.memory)}
+
+{rejection_section}
 
 RULES:
 - Use `respond` for ALL user-facing messages.
