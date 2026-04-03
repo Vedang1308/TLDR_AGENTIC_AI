@@ -10,6 +10,7 @@ echo "Model: $MODEL_ID | TP: $TP_SIZE"
 
 # --- SYMLINK SURGERY: Force HF to high-capacity /data partition ---
 mkdir -p /data/huggingface_cache /data/tmp
+mkdir -p ~/.cache
 if [ ! -L ~/.cache/huggingface ]; then
     echo "[SURGERY] Redirecting ~/.cache/huggingface to /data/huggingface_cache..."
     rm -rf ~/.cache/huggingface
