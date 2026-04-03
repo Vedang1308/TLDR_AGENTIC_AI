@@ -66,7 +66,9 @@ Action:
                 return json.loads(match.group(0)), resp
             except:
                 pass
-        return None, resp
+        
+        # --- SIERRA HACK: Fallback to 'respond' if no JSON is found ---
+        return {"name": "respond", "arguments": {"content": resp}}, resp
     else:
         # Default to strict JSON attempt
         resp = client.chat([{"role": "system", "content": sys_prompt}] + user_msgs)
@@ -114,6 +116,12 @@ MEMORY KERNEL:
 
 FAILURE HISTORY:
 {failure_history}
+
+### ELITE PLANNING MANDATE:
+In your 'Thought:' block, ALWAYS include:
+1. KNOWN VARIABLES: (e.g. user_id, flight_id already in memory)
+2. MISSING VARIABLES: (e.g. what you still need to find)
+3. STRATEGY: (how you will get the missing data)
 """
     user_msgs = []
     if state.user_conversation:
@@ -160,6 +168,9 @@ RULES:
 - Use `respond` for ALL user-facing messages.
 - Use `transfer_to_human_agents` only as a last resort.
 - NO conversational filler. JSON only.
+
+### ELITE EXECUTION MANDATE:
+Before outputting the 'Action:', confirm that every argument value is present in the MEMORY. If it is not, call a search tool instead.
 """
     # Build tool list including virtual tools
     tools = state.tools_info.copy()
@@ -195,6 +206,19 @@ REJECT if:
 
 Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
 """
+    # --- ELITE LOOP DETECTION ---
+    drafted_name = state.drafted_tool_call.get("name")
+    drafted_args = state.drafted_tool_call.get("arguments", {})
+    
+    for m in state.memory:
+        if m.get("action_taken") == drafted_name and m.get("arguments_used") == drafted_args:
+            msg = f"REDUNDANCY: You already tried {drafted_name} with these arguments and got: {m.get('api_observation')}. Try a DIFFERENT search parameter or strategy."
+            return {
+                "rejection_feedback": msg,
+                "rejection_source": "validator",
+                "node_logs": [{"node": "validator", "rejection": msg}]
+            }
+
     parsed, raw = invoke_with_paradigm(client, sys_prompt, [], [], "json")
     if parsed and parsed.get("decision") == "REJECT":
         return {

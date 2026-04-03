@@ -7,6 +7,7 @@ from peval_v3_gaudi.nodes import (
     error_reflection_node, global_reflector_node,
     proactive_prefetch
 )
+from peval_v4_lite.src.core.model_client import ModelClient
 from peval_v4_lite.src.core.logger import PEVLogger
 from tau_bench.types import SolveResult, Action, RESPOND_ACTION_NAME
 
@@ -114,6 +115,10 @@ class PEVEngine:
             else:
                 action = Action(name=drafted["name"], kwargs=drafted.get("arguments", {}))
 
+            # --- ELITE LOGGING: ACTION ---
+            readable_args = json.dumps(action.kwargs, indent=None)
+            PEVLogger.success(f"Action: {action.name} | Args: {readable_args}")
+
             # Log to messages
             if action.name == RESPOND_ACTION_NAME:
                 messages_log.append({"role": "assistant", "content": action.kwargs.get("content", "")})
@@ -125,12 +130,18 @@ class PEVEngine:
 
             # Env Step
             env_res = env.step(action)
+            
+            # --- ELITE LOGGING: OBSERVATION ---
+            obs_clean = str(env_res.observation)[:500] + "..." if len(str(env_res.observation)) > 500 else str(env_res.observation)
+            PEVLogger.info(f"Observation: {obs_clean}")
+
             reward = env_res.reward
             info = {**info, **env_res.info.model_dump()}
 
             # Memory Kernel Update
             if action.name != RESPOND_ACTION_NAME:
-                obs = env_res.observation
+                # --- ELITE PREFIXING ---
+                obs = "API output: " + str(env_res.observation)
                 messages_log.append({"role": "tool", "tool_call_id": f"call_{step}", "name": action.name, "content": obs})
                 
                 is_error = any(kw in obs.lower() for kw in ["error", "invalid", "fail", "not found"])
@@ -152,6 +163,18 @@ class PEVEngine:
             else:
                 messages_log.append({"role": "user", "content": env_res.observation})
                 state.user_conversation.append({"role": "user", "content": env_res.observation})
+
+            # --- ELITE: CONTEXT DISTILLATION (Every 10 steps) ---
+            if (step + 1) % 10 == 0 and len(state.memory) > 5:
+                PEVLogger.warn("Context Distillation: Compressing memory into Situational Report...")
+                summarizer = ModelClient(mode="summarizer")
+                history_text = "\n".join([f"Step {i}: {m.get('action_taken')} -> {str(m.get('api_observation'))[:200]}" for i, m in enumerate(state.memory)])
+                sys_summary = f"Summarize the progress so far. What is the current status of the task? What IDs have been found? Current History:\n{history_text}"
+                report = summarizer.chat([{"role": "system", "content": sys_summary}])
+                
+                # Prepend the report to the tool wiki or as a special memory entry
+                state.tools_wiki = f"### SITUATIONAL REPORT (Steps 1-{step+1}):\n{report}\n\n" + self.tools_wiki
+                PEVLogger.info(f"SitRep Generated: {report[:100]}...")
 
             if env_res.done:
                 break
