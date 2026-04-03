@@ -30,9 +30,8 @@ python3 -m vllm.entrypoints.openai.api_server \
     --served-model-name qwen-72b-simulator \
     --host 127.0.0.1 \
     --port $PORT \
-    --tensor-parallel-size $TP \
     --block-size 128 \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.90 \
     --max-model-len 8192 \
     --enforce-eager \
     --trust-remote-code \

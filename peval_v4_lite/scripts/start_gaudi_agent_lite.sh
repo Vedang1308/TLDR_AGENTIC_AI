@@ -27,12 +27,11 @@ sleep 2
 # vLLM HPU-Optimized Command
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL_PATH \
-    --served-model-name qwen-agent \
+    --served-model-name qwen-32b-agent \
     --host 127.0.0.1 \
     --port $PORT \
-    --tensor-parallel-size $TP \
     --block-size 128 \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.90 \
     --max-model-len 16384 \
     --enforce-eager \
     --trust-remote-code \
