@@ -36,14 +36,45 @@ class ContextDistiller:
         return f"[OBSERVATION_SUMMARY] {name}({args}) -> {summary}"
 
     def __call__(self, state: PEVState) -> Dict[str, Any]:
-        # History-level distillation (Fallback)
-        if len(str(state.history)) < 4000:
-            return {"summary": str(state.history)}
-
-        print("--- [NODE] History Distiller (Compressing) ---")
-        prompt = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": f"History to distill: {state.history}"}
+        """
+        Unified Extraction & Distillation.
+        Returns both a text summary AND a structured variable store.
+        """
+        print("--- [NODE] Context Harvester (Extracting Variables) ---")
+        
+        # 1. Structured Variable Extraction (The 'Variable Store')
+        # We task the model with returning JSON of all discovered entities
+        extraction_prompt = [
+            {"role": "system", "content": (
+                "You are a Variable Extraction Engine. Scan the history and extract all discrete 'Task Variables' into a JSON dictionary. \n"
+                "VARIABLES TO TRACK: user_id, reservation_id, flight_id, origin, destination, date, price, status. \n"
+                "CRITICAL: Only output the JSON dictionary. Do not provide explanations."
+            )},
+            {"role": "user", "content": f"History: {state.history[-5:]}"}
         ]
-        summary = self.client.chat(prompt)
-        return {"summary": summary}
+        
+        extracted_raw = self.client.chat(extraction_prompt)
+        import json, re
+        extracted_vars = {}
+        json_match = re.search(r'\{.*\}', extracted_raw, re.DOTALL)
+        if json_match:
+            try:
+                extracted_vars = json.loads(json_match.group())
+            except:
+                pass
+
+        # 2. History-level distillation (Summary)
+        if len(str(state.history)) < 4000:
+            summary = str(state.history)
+        else:
+            print("--- [NODE] History Distiller (Compressing) ---")
+            prompt = [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": f"History to distill: {state.history}"}
+            ]
+            summary = self.client.chat(prompt)
+
+        return {
+            "summary": summary,
+            "manifest": {"world_snapshot": extracted_vars} # Merged into state.manifest.world_snapshot
+        }

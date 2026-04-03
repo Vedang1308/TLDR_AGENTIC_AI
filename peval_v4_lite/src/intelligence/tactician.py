@@ -19,17 +19,18 @@ class Tactician:
             self.system_prompt = (
                 "You are the Deterministic Tactician. Your goal is to map a strategic intent to a technical tool call.\n\n"
                 "AGNOSTIC SCHEMA MAPPING RULES:\n"
-                "1. SCHEMA VALIDATION: Scan the 'AVAILABLE TOOLS' (self.tools_info) to find the tool that provides the capability described in the 'refined_tactical_plan'.\n"
-                "2. PARAMETER RESOLUTION: Extract value-attribute pairs from the 'world_snapshot' to fulfill every REQUIRED parameter in the tool's schema.\n"
-                "3. NO HALLUCINATION: You are FORBIDDEN from using any tool name or parameter key not found in the 'AVAILABLE TOOLS' list.\n"
-                "4. INTERACTION LOCK: If the intent is to 'Ask the user', you MUST use the 'respond' tool if it exists.\n"
-                "5. OUTPUT: Output STRICTLY as a JSON object with 'action' (name, arguments).\n\n"
+                "1. SCHEMA VALIDATION: Scan the 'AVAILABLE TOOLS' (self.tools_info) to find the tool for 'refined_tactical_plan'.\n"
+                "2. PARAMETER RESOLUTION (PRE-EXECUTION CHECK): Scan the 'world_snapshot' FIRST to fulfill every REQUIRED parameter. If a value is missing from the instruction but exists in the snapshot (Variable Storage), you MUST inject it automatically.\n"
+                "3. MULTI-VALUE HANDLING: If multiple candidates exist for a variable, prioritize the one that matches ground-truth constraints from the task (e.g., origin city, dates).\n"
+                "4. NO HALLUCINATION: You are FORBIDDEN from using names not in the 'AVAILABLE TOOLS' list.\n"
+                "5. INTERACTION LOCK: Use the 'respond' tool if the intent is to 'Ask the user'.\n"
+                "6. OUTPUT: JSON object with 'action' (name, arguments).\n\n"
                 f"AVAILABLE TOOLS: {self.tools_info}"
             )
         else:
             self.system_prompt = (
-                "You are the PEVAL Tactician. Map the instruction to a tool. "
-                "Output your response STRICTLY as a JSON object with 'name' and 'arguments'.\n"
+                "You are the PEVAL Tactician. Map instruction to tool. Check 'world_snapshot' for missing parameters before asks. "
+                "Output STRICTLY as a JSON object with 'name' and 'arguments'.\n"
                 f"Tools available: {self.tools_info}"
             )
 

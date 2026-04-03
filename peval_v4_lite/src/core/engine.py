@@ -58,8 +58,9 @@ class PEVEngine:
         state = initial_state
         recursion_limit = config.get("recursion_limit", PEVConfig.RECURSION_LIMIT) if config else PEVConfig.RECURSION_LIMIT
         
-        # 1. Distiller
-        state = self._update_state(state, self.distiller(state))
+        # 1. Distiller (Extracts Variables & Summarizes History)
+        distilled_data = self.distiller(state)
+        state = self._update_state(state, distilled_data)
             
         # PME Execution Loop
         attempts = 0
