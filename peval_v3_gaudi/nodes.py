@@ -1,7 +1,7 @@
 import os
 import re
 import json
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from peval_v3_gaudi.state import PevState
 # Import the existing ModelClient (using absolute paths)
 from peval_v4_lite.src.core.model_client import ModelClient
