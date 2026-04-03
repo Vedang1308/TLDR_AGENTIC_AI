@@ -32,4 +32,5 @@ python3 -m vllm.entrypoints.openai.api_server \
     --host 0.0.0.0 \
     --block-size 128 \
     --max-num-seqs 64 \
-    --device hpu
+    --device hpu \
+    --served-model-name "qwen-72b-agent"
