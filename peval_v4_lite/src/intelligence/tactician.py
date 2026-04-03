@@ -57,15 +57,19 @@ class Tactician:
             
             if self.strategy == "react" and "action" in parsed_json:
                 drafted_call = parsed_json["action"]
-                node_log_content = f"Drafted: {drafted_call}"
             else:
                 drafted_call = parsed_json
-                node_log_content = f"Drafted: {drafted_call}"
-            
+
+            # TYPE-SAFETY SHIELD: Ensure drafted_call is a dict
+            if isinstance(drafted_call, str):
+                PEVLogger.warn(f"Tactician returned string '{drafted_call}'. Converting to dict.")
+                drafted_call = {"name": drafted_call, "arguments": {}}
+                
+            node_log_content = f"Drafted: {drafted_call}"
             PEVLogger.info(f"Action: {drafted_call}")
                 
-        except:
-            drafted_call = {"error": "Failed to parse tactician output", "raw": response}
+        except Exception as e:
+            drafted_call = {"error": f"Failed to parse tactician output: {str(e)}", "raw": response}
             node_log_content = f"Failed Parse: {response}"
             PEVLogger.error(f"Failed Parse: {response}")
 
