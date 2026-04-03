@@ -24,6 +24,16 @@ class OutcomeMonitor:
         fingerprint = hashlib.md5(json.dumps(action, sort_keys=True).encode()).hexdigest()
         
         # 2. Loop Detection (Stagnation Check) - Check state history
+        # SPECIAL CASE: If this exact call returned '[]' in history, flag as loop immediately
+        call_signature = f"{action['name']}({action.get('arguments', {})})"
+        for trace in state.manifest.functional_trace:
+            if call_signature in trace and "-> []" in trace:
+                PEVLogger.warn(f"REDUNDANT EMPTY SEARCH: {call_signature} already yielded no results.")
+                return {
+                    "is_loop": True,
+                    "audit_feedback": f"REJECTED: {action['name']} already returned an empty list []. You are forbidden from repeating this. You MUST pivot your roadmap to a different search or different parameters."
+                }
+
         if fingerprint in state.action_fingerprints:
             PEVLogger.warn(f"Stagnation detected! Fingerprint: {fingerprint}")
             

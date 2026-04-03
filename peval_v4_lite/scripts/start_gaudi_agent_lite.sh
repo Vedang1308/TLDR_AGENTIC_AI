@@ -1,13 +1,13 @@
 #!/bin/bash
 # start_gaudi_agent.sh
 # Optimized for Intel Gaudi (HL-225) 96GB per AIP
-# Model: Qwen2.5-32B-Instruct (Default)
-# TP: 2 (Optimized for 14B/32B/72B)
+# Model: Qwen2.5-72B-Instruct (Default)
+# TP: 4 (Optimized for 72B on Gaudi2)
 
 # Defaults
-MODEL_PATH="Qwen/Qwen2.5-32B-Instruct"
+MODEL_PATH="Qwen/Qwen2.5-72B-Instruct"
 PORT=8224
-TP=2
+TP=4
 
 # Improved argument parsing:
 # If first arg doesn't start with -- it's the model path
@@ -27,7 +27,7 @@ sleep 2
 # vLLM HPU-Optimized Command
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL_PATH \
-    --served-model-name qwen-32b-agent \
+    --served-model-name qwen-72b-agent \
     --host 127.0.0.1 \
     --port $PORT \
     --block-size 128 \

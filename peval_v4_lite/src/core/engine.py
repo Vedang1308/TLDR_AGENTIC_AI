@@ -99,18 +99,20 @@ class PEVEngine:
             # 5. Translate
             state = self._update_state(state, self.translator(state))
             
-            # 6. Monitor
+            # 6. Monitor (Detect Stagnation/Loops)
             state = self._update_state(state, self.monitor(state))
             
-            # 7. Audit
+            # 7. Audit (Security & Policy)
             state = self._update_state(state, self.auditor(state))
             
-            # Evaluation
-            if state.policy_violation:
+            # 8. Loop & Policy Enforcement
+            if state.is_loop or state.policy_violation:
                 state.consecutive_errors += 1
                 if state.consecutive_errors >= 3 or attempts >= recursion_limit:
-                    PEVLogger.error(f"Reasoning stalled. Breaking for Rollback.")
+                    PEVLogger.error(f"Reasoning stalled (Loop/Violations). Breaking for Rollback.")
                     break
+                # continue will trigger 'must_replan' in the next iteration 
+                # because last_memory status will be DATA_MISSING or previous attempt failed.
                 continue
             else:
                 state.consecutive_errors = 0

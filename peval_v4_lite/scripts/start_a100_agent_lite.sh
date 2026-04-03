@@ -3,10 +3,10 @@
 # 
 # Usage:
 #   For Single A100 (4B, 8B, 14B): ./start_a100_agent.sh Qwen/Qwen2.5-14B-Instruct 1
-#   For Multi A100 (32B, 72B-Instruct): ./start_a100_agent.sh Qwen/Qwen2.5-32B-Instruct 2
+#   For Multi A100 (32B, 72B): ./start_a100_agent.sh Qwen/Qwen2.5-72B-Instruct 4
 
-MODEL_PATH=${1:-"Qwen/Qwen2.5-32B-Instruct"}
-NUM_GPUS=${2:-2} # Default to 2 GPUs for the 32B model
+MODEL_PATH=${1:-"Qwen/Qwen2.5-72B-Instruct"}
+NUM_GPUS=${2:-4} # Default to 4 GPUs for the 72B model
 PORT=8224
 
 echo "--- Starting PEVAL Agent Model on $NUM_GPUS x A100 GPUs ---"
@@ -36,7 +36,7 @@ fi
 
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL_PATH \
-    --served-model-name qwen-32b-agent \
+    --served-model-name qwen-72b-agent \
     --host 127.0.0.1 \
     --port $PORT \
     --tensor-parallel-size $NUM_GPUS \
