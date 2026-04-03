@@ -12,7 +12,7 @@ class PEVConfig:
     
     # --- Model Selection ---
     # Supported: Qwen3-4B, 8B, 14B, 32B, Qwen2.5-72B-Instruct
-    AGENT_MODEL = "qwen-agent" 
+    AGENT_MODEL = "qwen-32b-agent" 
     USER_MODEL = "qwen-72b-simulator"
     
     # --- Tool Calling Strategy ---
