@@ -114,15 +114,12 @@ def planner_node(state: PevState) -> Dict:
 Your ONLY tool is 'submit_plan'. Use it to set the objective for the Executor.
 
 CRITICAL RULES:
-1. EXHAUST ALL TOOLS before transferring to a human.
-2. CHECK MEMORY KERNEL before asking the user.
-3. If search result is present in memory, DO NOT SEARCH AGAIN.
-4. If failures occur, you MUST change strategy based on the FAILURE HISTORY.
-5. If your previous plan was REJECTED or led to a loop, YOU MUST DEPART from it and try a fundamentally different approach.
+5. GOAL-LED REASONING: Your primary objective is to close the 'GAP' between the User's request and the current environment state.
 6. DATA-FIRST VERIFICATION: Always check MEMORY for existing records (certificates, cards) before asking the user. If data exists, ask for the user's PREFERENCE among known options instead of asking for the data again.
 7. MATH PRECISION: For bookings/payments, ensure the TOTAL payment amount exactly matches the target price. Check 'calculate' results carefully.
-8. SUCCESS RECOGNITION: If a tool returns a 'reservation_id', 'order_id', or 'success: true', that MILESTONE IS COMPLETE. Do NOT call that tool again. Move to the next user request immediately.
-9. GROUND-TRUTH VERIFICATION: Before the final 'respond' to the user, you MUST call 'get_reservation_details' or 'get_user_details' to verify the FINAL DATABASE STATE has the correct info (bags, passengers, prices) as requested.
+8. AUTOMONOUS MILESTONES: You must recognize success yourself. If you see a confirmation ID in memory, that part of the goal is FINISHED. Do not repeat it.
+9. GROUND-TRUTH VERIFICATION: Before your final 'respond' to the user, you MUST ensure you have 'witnessed' the final database state matching the entire request (bags, passengers, prices).
+10. NO PLACEHOLDER THINKING: Do not use the 'think' tool to stall. All reasoning must happen in your 'Thought:' block before selecting a functional tool call.
 
 ### CAPABILITIES CATALOG (Scan these for semantic alternatives):
 {get_compact_tool_catalog(state.tools_info)}
@@ -139,9 +136,9 @@ FAILURE HISTORY:
 In your 'Thought:' block, ALWAYS include:
 1. KNOWN VARIABLES: (e.g. user_id, flight_id already in memory)
 2. MISSING VARIABLES: (e.g. what you still need to find)
-3. MILESTONES: (What has been SUCCESSFULLY confirmed? e.g. "Booking HATHAT confirmed")
-4. DATA-FIRST CHECK: (Does the memory already contain certificates/cards/IDs for this task?)
-5. STRATEGY: (how you will get the missing data OR verify existing data)
+3. STATE-GAP ANALYSIS: (Compare your current 'Internal Ledger' against the User's original request. Identify EXACTLY what is missing.)
+4. TOOL PRE-SELECTION: (Scan the 'Capabilities Catalog' and name the single best tool to close the identified gap.)
+5. STRATEGY: (Describe how you will apply the pre-selected tool to advance the task.)
 """
     user_msgs = []
     if state.user_conversation:
@@ -249,7 +246,7 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
     # --- ELITE LOOP DETECTION ---
     for m in state.memory:
         if m.get("action_taken") == drafted_name and m.get("arguments_used") == drafted_args:
-            msg = f"REDUNDANCY: You already tried {drafted_name} with these arguments and got: {m.get('api_observation')}. Try a DIFFERENT tool or strategy (e.g., scan the Capabilities Catalog for a broader discovery tool)."
+            msg = f"REDUNDANCY: You already have this data in Memory (Step {state.memory.index(m) + 1}). Identify the next MISSING GAP in the user's request and use a progress-advancing tool from the catalog instead."
             return {
                 "rejection_feedback": msg,
                 "rejection_source": "validator",

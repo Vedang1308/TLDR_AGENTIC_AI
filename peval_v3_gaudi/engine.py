@@ -183,7 +183,7 @@ class PEVEngine:
                 PEVLogger.warn("Context Distillation: Compressing memory into Situational Report...")
                 summarizer = ModelClient(mode="summarizer")
                 history_text = "\n".join([f"Step {i}: {m.get('action_taken')} -> {str(m.get('api_observation'))[:200]}" for i, m in enumerate(state.memory)])
-                sys_summary = f"### MISSION PROGRESS SUMMARY ###\nReview the current history and output a concise Situational Report. CRITICAL: Identify if any 'reservation_id' has been successfully booked or confirmed. Highlight these MILESTONES as COMPLETED for the Planner.\n\nCurrent History:\n{history_text}"
+                sys_summary = f"### SITUATIONAL INVENTORY ###\nCompare the history against the original user request and output a clean summary of what is KNOWN and what is MISSING. Identify exactly what data has been retrieved (e.g., reservation_ids, prices, passenger_details). This report is the source of truth for the NEXT STEP selection.\n\nCurrent History:\n{history_text}"
                 report = summarizer.chat([{"role": "system", "content": sys_summary}])
                 
                 # Prepend the report to the tool wiki or as a special memory entry
