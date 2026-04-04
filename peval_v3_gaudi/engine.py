@@ -51,6 +51,16 @@ class PEVEngine:
         PEVLogger.info(f"--- [START] Solving Task {task_index} with Phase 3 Gaudi-Lite ---")
         
         env_res = env.reset(task_index=task_index)
+        
+        # --- DYNAMIC ENVIRONMENT ANCHORING ---
+        # Robust probe to find current_time in the simulation environment
+        sim_time = ""
+        try:
+            target = env.env if hasattr(env, 'env') else env
+            if hasattr(target, 'current_time'):
+                sim_time = target.current_time.strftime("%A, %B %d, %Y")
+        except: pass
+
         state = PevState(
             user_conversation=[
                 {"role": "system", "content": self.wiki},
@@ -59,7 +69,8 @@ class PEVEngine:
             tools_info=self.tools_info,
             tools_wiki=self.tools_wiki,
             global_wisdom=self._load_wisdom(),
-            wisdom_file=self.wisdom_file
+            wisdom_file=self.wisdom_file,
+            current_time=sim_time
         )
 
         # 1. Proactive Pre-fetch (Phase 3 Heuristic)

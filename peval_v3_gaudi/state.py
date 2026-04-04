@@ -49,3 +49,6 @@ class PevState(BaseModel):
     
     # Path to the shared wisdom file
     wisdom_file: str = Field(default="results/phase3/persistent_wisdom.json")
+    
+    # --- ENVIRONMENTAL ANCHORING ---
+    current_time: str = Field(default="")

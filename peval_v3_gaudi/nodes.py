@@ -15,7 +15,7 @@ def get_compact_tool_catalog(tools_info: List[Dict]) -> str:
     for t in tools_info:
         name = t.get("name") or t.get("function", {}).get("name", "unknown")
         desc = t.get("description") or t.get("function", {}).get("description", "No description provided.")
-        # Sanitize: Remove "such as...", "e.g.", and example values
+        # Sanitize: Remove all "such as...", "e.g.", and example values generically
         desc = re.sub(r",? (?:such as|e\.g\.|example:).*?(\.|$)", r"\1", desc, flags=re.IGNORECASE)
         catalog.append(f"- [{name}]: {desc}")
     return "\n".join(catalog)
@@ -117,15 +117,14 @@ def planner_node(state: PevState) -> Dict:
 Your ONLY tool is 'submit_plan'. Use it to set the objective for the Executor.
 
 CRITICAL RULES:
-5. GOAL-LED REASONING: Your primary objective is to close the 'GAP' between the User's request and the current environment state.
-6. DATA-FIRST VERIFICATION: Always check MEMORY for existing records (certificates, cards) before asking the user. If data exists, ask for the user's PREFERENCE among known options instead of asking for the data again.
-7. MATH PRECISION: For bookings/payments, the sum of all 'amount' fields in 'payment_methods' MUST EXACTLY EQUAL the total price. Use the 'calculate' tool to find the difference (Price - CertificateValue) before drafting the call.
-8. CERTIFICATE CAPPING: A certificate's 'amount' cannot exceed the flight price. If CertificateValue > Price, the 'amount' should equal the Price.
-9. AUTOMONOUS MILESTONES: You must recognize success yourself. If you see a confirmation ID in memory, that part of the goal is FINISHED. Do not repeat it.
-10. GROUND-TRUTH VERIFICATION: Before your final 'respond' to the user, you MUST ensure you have 'witnessed' the final database state matching the entire request (bags, passengers, prices).
-11. NO PLACEHOLDER THINKING: Do not use the 'think' tool to stall. All reasoning must happen in your 'Thought:' block before selecting a functional tool call.
-11. IDENTITY RESILIENCE: If a user_id or reservation_id retrieval fails (Error: not found), you MUST immediately ask the USER for the correct ID. **NEVER** guess IDs.
-12. RESOLVE IDENTITY FIRST (Receptionist Protocol): If a user_id, order_id, email, or reservation_id is mentioned in the conversation but HAS NOT been looked up yet, your ABSOLUTE priority is to use the appropriate 'get' or 'find' tool (e.g. get_user_details, get_order_details) to synchronize the state. Do NOT skip this step.
+12. CURRENT SYSTEM TIME: {state.current_time}
+13. STANDARD OPERATING PROCEDURES (SOP):
+    - GOAL-LED REASONING: Close the 'GAP' between the user's request and the environment state.
+    - RECEPTIONIST PROTOCOL: If an ID (user, order, email) is mentioned, resolve it (e.g. get_user_details) before searching or booking.
+    - DATA-FIRST VERIFICATION: Verify all user-provided data (like certificates) via tools before use.
+    - SEARCH-PIVOT: If a search results in [], DO NOT repeat it. Pivot to a different date or search type.
+    - NO PLACEHOLDERS: Never guess IDs or use fake values. Ask the user if resolution fails.
+    - MATH PRECISION: Payment totals MUST exactly equal prices. Use calculate for splits.
 
 ### CAPABILITIES CATALOG (Scan these for semantic alternatives):
 {get_compact_tool_catalog(state.tools_info)}
@@ -227,13 +226,12 @@ def validator_node(state: PevState) -> Dict:
 ACTION: {json.dumps(state.drafted_tool_call)}
 MEMORY (API RESULTS): {format_memory(state.memory)}
 
-RECENT CONVERSATION:
-{json.dumps(state.user_conversation[-5:], indent=2)}
+REJECT ONLY IF:
+1. Arguments are hallucinated (not in memory AND not in conversation).
+2. Action repeats a failed attempt with the EXACT SAME arguments.
+3. Preconditions are fundamentally impossible.
 
-REJECT if:
-1. Arguments are hallucinated (not in memory AND not in the conversation).
-2. Action repeats a failed attempt.
-3. Preconditions are not met.
+FOUNDATIONAL EXCEPTION: Always APPROVE 'get_*' or 'find_*' tools (identity resolution) if they are being used to verify data Mentioned by the user.
 
 Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
 """
