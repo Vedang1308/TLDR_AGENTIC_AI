@@ -15,8 +15,8 @@ def get_compact_tool_catalog(tools_info: List[Dict]) -> str:
     for t in tools_info:
         name = t.get("name") or t.get("function", {}).get("name", "unknown")
         desc = t.get("description") or t.get("function", {}).get("description", "No description provided.")
-        # Sanitize: Remove "such as...", "e.g.", and example values to prevent hallucinations
-        desc = re.sub(r",?\s*(?:such as|e\.g\.|example:).*?(\.|$)", r"\1", desc, flags=re.IGNORECASE)
+        # Sanitize: Remove "such as...", "e.g.", and example values
+        desc = re.sub(r",? (?:such as|e\.g\.|example:).*?(\.|$)", r"\1", desc, flags=re.IGNORECASE)
         catalog.append(f"- [{name}]: {desc}")
     return "\n".join(catalog)
 
@@ -113,15 +113,8 @@ def planner_node(state: PevState) -> Dict:
     # 4. Rejection Check (Inner Loop Feedback)
     rejection_section = f"\n### PREVIOUS ATTEMPT REJECTED:\n{state.rejection_feedback}\n" if state.rejection_feedback else ""
 
-    # 5. Strategic Overlay (Phase 4 Logic)
-    strategic_section = f"\n### CURRENT STRATEGIC OBJECTIVE:\n{state.strategic_objective}\n" if state.strategic_objective else ""
-
     sys_prompt = f"""You are the HIERARCHICAL PLANNER. 
 Your ONLY tool is 'submit_plan'. Use it to set the objective for the Executor.
-
-{strategic_section}
-
-CURRENT SYSTEM TIME: {state.current_time}
 
 CRITICAL RULES:
 5. GOAL-LED REASONING: Your primary objective is to close the 'GAP' between the User's request and the current environment state.
@@ -131,8 +124,8 @@ CRITICAL RULES:
 9. AUTOMONOUS MILESTONES: You must recognize success yourself. If you see a confirmation ID in memory, that part of the goal is FINISHED. Do not repeat it.
 10. GROUND-TRUTH VERIFICATION: Before your final 'respond' to the user, you MUST ensure you have 'witnessed' the final database state matching the entire request (bags, passengers, prices).
 11. NO PLACEHOLDER THINKING: Do not use the 'think' tool to stall. All reasoning must happen in your 'Thought:' block before selecting a functional tool call.
-12. IDENTITY RESILIENCE: If a user_id or reservation_id retrieval fails (Error: not found), you MUST immediately ask the USER for the correct ID. **NEVER** guess IDs and **NEVER** use placeholder values like 'unknown_id'.
-13. WALLET-FIRST PRIORITY: As soon as a user_id is in memory, you MUST call 'get_user_details' to synchronize their wallet (certificates, credit cards) before concluding any search or asking more questions.
+11. IDENTITY RESILIENCE: If a user_id or reservation_id retrieval fails (Error: not found), you MUST immediately ask the USER for the correct ID. **NEVER** guess IDs.
+12. RESOLVE IDENTITY FIRST (Receptionist Protocol): If a user_id, order_id, email, or reservation_id is mentioned in the conversation but HAS NOT been looked up yet, your ABSOLUTE priority is to use the appropriate 'get' or 'find' tool (e.g. get_user_details, get_order_details) to synchronize the state. Do NOT skip this step.
 
 ### CAPABILITIES CATALOG (Scan these for semantic alternatives):
 {get_compact_tool_catalog(state.tools_info)}
@@ -285,18 +278,11 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
         }
 
     # --- ELITE LOOP DETECTION (Argument-Aware) ---
-    rejection_count = state.rejection_feedback.count("REDUNDANCY") if state.rejection_feedback else 0
     for m in state.memory:
         # ONLY reject if the tool name AND the arguments are an exact match
         if m.get("action_taken") == drafted_name and m.get("arguments_used") == drafted_args:
-            if "[]" in str(m.get("api_observation")):
-                msg = f"STRATEGIC REDUNDANCY: This search for {drafted_name} with these arguments already returned NO RESULTS. Do NOT repeat it. PIVOT now."
-            else:
-                msg = f"REDUNDANCY: You already have this exact data in Memory from {drafted_name}. Move to the next step."
+            msg = f"REDUNDANCY: You already have this exact data in Memory from {drafted_name}. Move to the next progress-advancing tool."
             
-            if rejection_count >= 2:
-                msg += " STRATEGIC HINT: Check 'UNADDRESSED NOUNS' in your objective. You might need to look up user details or finalize a respondent message."
-
             return {
                 "rejection_feedback": msg,
                 "rejection_source": "validator",
@@ -406,70 +392,3 @@ def proactive_prefetch(env, state: PevState):
                 state.memory.append({"action": "AUTO_PREFETCH", "args": {"reservation_id": detected_res}, "observation": str(res.observation)})
                 PEVLogger.success(f"Proactive: Pre-fetched reservation {detected_res}")
             except: pass
-
-def strategic_auditor_node(state: PevState) -> Dict:
-    """PHASE 4: Pre-Planning Strategic Auditor."""
-    PEVLogger.node("Strategic Auditor", "Analyzing unmet requirement gaps...")
-    client = ModelClient(mode="summarizer")
-    
-    # 1. Distill current conversational context
-    latest_user_turn = "No conversation yet."
-    if state.user_conversation:
-        latest_user_turn = state.user_conversation[-1]["content"]
-        
-    # 2. Distill current tool history
-    history = "\n".join([f"- {m.get('action_taken')} result: {str(m.get('api_observation'))[:100]}" for m in state.memory[-5:]])
-    
-    # 3. Identify exhausted strategies
-    exhausted = [f"{m.get('action_taken')}({m.get('arguments_used')})" for m in state.memory if "[]" in str(m.get("api_observation"))]
-    exhausted_str = "\nEXHAUSTED SEARCHES (Returned 0 results): " + ", ".join(exhausted) if exhausted else ""
-
-    # 4. Global Semantic Scan (Antigravity Logic)
-    all_context = "\n".join([t["content"] for t in state.user_conversation])
-    unmatched_nouns = []
-    for noun in ["certificate", "gift card", "mile", "discount", "bag", "insurance"]:
-        if noun in all_context.lower() and noun not in str(state.memory).lower():
-            unmatched_nouns.append(noun)
-    noun_str = f"\nUNADDRESSED NOUNS from original task: {', '.join(unmatched_nouns)}" if unmatched_nouns else ""
-
-    # 5. Arithmetic Auditor (Payment Protection)
-    math_hint = ""
-    last_observation = str(state.memory[-1].get("api_observation", "")) if state.memory else ""
-    if "payment amount does not add up" in last_observation.lower():
-        import re
-        price_match = re.search(r"total price is (\d+)", last_observation)
-        if price_match:
-            total_price = int(price_match.group(1))
-            # Extract current payments from the last failed attempt in memory
-            last_args = state.memory[-1].get("arguments_used", {})
-            payments = last_args.get("payment_methods", [])
-            cert_val = sum(p.get("amount", 0) for p in payments if "certificate" in p.get("payment_id", ""))
-            needed_cc = total_price - cert_val
-            math_hint = f"\nARITHMETIC CORRECTION: The total price is {total_price}. You used {cert_val} in certificates. You MUST set your credit card amount to exactly {needed_cc}."
-
-    sys_prompt = f"""Compare the User's latest request against the history of API results. 
-Identify the ONE most critical 'State-Gap' (requirement not yet met).
-Then, provide a 1-2 sentence Strategic Directive for the Planner.
-{exhausted_str}
-{noun_str}
-{math_hint}
-
-CRITICAL: If a tool is listed under 'EXHAUSTED SEARCHES', you MUST issue a MANDATORY PIVOT directive.
-CRITICAL: If 'UNADDRESSED NOUNS' are present, DIRECT the planner to use a tool that specifically addresses them (e.g. get_user_details for certificates).
-CRITICAL: If an 'ARITHMETIC CORRECTION' is provided, you MUST command the planner to use those exact numbers.
-Forbid the planner from repeating those parameters and suggest an alternative strategy (e.g. check onestop, different date, or ask user).
-
-LATEST REQUEST: {latest_user_turn}
-RECENT HISTORY: {history}
-
-Output ONLY the strategic directive.
-"""
-    objective = client.chat([{"role": "system", "content": sys_prompt}])
-    
-    # Force critical hints into the objective string so the Planner cannot ignore them
-    if math_hint:
-        objective = f"{objective}\n{math_hint}"
-    if noun_str:
-        objective = f"{objective}\n{noun_str}"
-
-    return {"strategic_objective": objective, "node_logs": [{"node": "auditor", "objective": objective}]}

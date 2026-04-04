@@ -22,10 +22,6 @@ class PevState(BaseModel):
     rejection_feedback: Optional[str] = Field(default=None)
     rejection_source: Optional[str] = Field(default=None)
     
-    # --- PHASE 4: STRATEGIC OVERLAY ---
-    strategic_objective: str = Field(default="")
-    current_time: str = Field(default="")
-    
     # Memory Kernel: observations and API returns
     memory: List[Dict[str, Any]] = Field(default_factory=list)
     
