@@ -21,26 +21,32 @@ def get_compact_tool_catalog(tools_info: List[Dict]) -> str:
     return "\n".join(catalog)
 
 def format_memory(memory_list: List[Dict]) -> str:
-    """Converts the raw memory array into a clean, structural markdown trace."""
+    """Enhanced: Surfaces Success Milestones at the top for the Planner."""
     if not memory_list:
         return "No prior history."
+    
+    milestones = []
     out = []
     for i, m in enumerate(memory_list):
+        obs = str(m.get('api_observation', ''))
+        # Scrape for milestones
+        res_id = re.search(r'reservation_id":\s*"([A-Z0-9]+)"', obs)
+        if res_id: milestones.append(f"SUCCESS: Found Reservation ID {res_id.group(1)}")
+        
+        user_resolved = re.search(r'first_name":\s*"([^"]+)"', obs)
+        if user_resolved and "get_user_details" in m.get('action_taken', ''):
+            milestones.append(f"SUCCESS: Resolved Identity for {user_resolved.group(1)}")
+
         if m.get('type') == 'tool_result':
-            out.append(f"--- Step {i+1} ---")
-            out.append(f"Action: {m.get('action_taken')}")
-            out.append(f"Arguments: {json.dumps(m.get('arguments_used', {}))}")
-            out.append(f"Result Observation: {str(m.get('api_observation', 'None'))}")
+            out.append(f"--- Step {i+1} [SUCCESS] ---")
+            out.append(f"Action: {m.get('action_taken')} | Args: {json.dumps(m.get('arguments_used', {}))}")
+            out.append(f"Observation: {obs[:300]}...")
         elif m.get('type') == 'tool_error':
             out.append(f"--- Step {i+1} [FAILED] ---")
-            out.append(f"Attempted Action: {m.get('action_taken')}")
-            out.append(f"Error: {m.get('api_observation', 'None')}")
-        elif m.get('action') == 'AUTO_PREFETCH':
-            out.append(f"--- Step {i+1} [AUTO_PREFETCH] ---")
-            out.append(f"Action: {m.get('action')}")
-            out.append(f"Arguments: {json.dumps(m.get('args', {}))}")
-            out.append(f"Observation: {m.get('observation')}")
-    return "\n".join(out) if out else "No parseable actions."
+            out.append(f"Action: {m.get('action_taken')} | Error: {obs}")
+
+    milestone_dashboard = "### MILESTONE DASHBOARD ###\n" + ("\n".join(set(milestones)) if milestones else "None yet.")
+    return milestone_dashboard + "\n\n### DETAILED HISTORY ###\n" + "\n".join(out)
 
 def invoke_with_paradigm(client: ModelClient, sys_prompt: str, user_msgs: List[Dict], tools: List[Dict], reasoning_mode: str) -> Tuple[Optional[Dict], str]:
     """
@@ -119,8 +125,8 @@ Your ONLY tool is 'submit_plan'. Use it to set the objective for the Executor.
 12. CURRENT SYSTEM TIME: {state.current_time}
 13. STANDARD OPERATING PROCEDURES (SOP):
     - GOAL-LED REASONING: Close the 'GAP' between the user's request and the environment state.
-    - SILENT RECEPTIONIST: Resolve identifiers (user_id, email, etc.) ONLY if they contain real values. DO NOT guess placeholders like 'user_id' or 'USER_ID'.
-    - MILESTONE AWARENESS: If a 'reservation_id' or 'confirmation' is found in memory, the task is FINISHED. Do not repeat searches or bookings.
+    - TERMINATION RULE: If a 'Reservation ID' is in your MILESTONE DASHBOARD, the task is FINISHED. Your next step MUST be to respond to the user and terminate.
+    - SILENT RECEPTIONIST: Resolve identifiers (user_id, email, etc.) ONLY if they contain real values. DO NOT guess placeholders.
     - GROUND-TRUTH PIVOT: If the user mentions a flight NOT in memory, you MUST call 'search_*' FIRST. Never book a flight found only in the conversation.
     - MATH RECONCILIATION: If booking fails with 'amount mismatch', use 'calculate' to find (Price - Certificates) and resubmit with the EXACT resulting number.
     - NO PLACEHOLDERS: Never guess IDs or use fake values. Ask the user if resolution fails.
@@ -273,11 +279,17 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
             "node_logs": [{"node": "validator", "rejection": msg}]
         }
 
-    # --- ELITE LOOP DETECTION ---
+    # --- SMART LOOP DETECTION ---
     for m in state.memory:
+        prev_obs = str(m.get("api_observation", "")).lower()
+        is_prev_success = not any(kw in prev_obs for kw in ["error", "invalid", "fail", "not found", "mismatch"])
+        
         if m.get("action_taken") == drafted_name and m.get("arguments_used") == drafted_args:
-            msg = f"REDUNDANCY: You already have this exact data in Memory from {drafted_name}. Move to the next progress-advancing tool."
-            return {"rejection_feedback": msg, "rejection_source": "validator", "node_logs": [{"node": "validator", "rejection": msg}]}
+            if is_prev_success:
+                msg = f"REDUNDANCY: Action '{drafted_name}' was already SUCCESSFUL. Move to the next progress-advancing tool."
+                return {"rejection_feedback": msg, "rejection_source": "validator", "node_logs": [{"node": "validator", "rejection": msg}]}
+            else:
+                PEVLogger.info(f"Validator: Allowing retry of previously failed action '{drafted_name}'...")
 
     parsed, raw = invoke_with_paradigm(client, sys_prompt, [], [], "json")
     if parsed and parsed.get("decision") == "REJECT":
