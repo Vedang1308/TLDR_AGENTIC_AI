@@ -9,11 +9,14 @@ from peval_v4_lite.src.core.logger import PEVLogger
 import math
 
 def get_compact_tool_catalog(tools_info: List[Dict]) -> str:
-    """Dynamically generates a runtime summary of available tools for the Planner/Executor."""
+    """Dynamically generates a runtime summary of available tools for the Planner/Executor (Sanitized)."""
     catalog = []
+    import re
     for t in tools_info:
         name = t.get("name") or t.get("function", {}).get("name", "unknown")
         desc = t.get("description") or t.get("function", {}).get("description", "No description provided.")
+        # Sanitize: Remove "such as...", "e.g.", and example values to prevent hallucinations
+        desc = re.sub(r",?\s*(?:such as|e\.g\.|example:).*?(\.|$)", r"\1", desc, flags=re.IGNORECASE)
         catalog.append(f"- [{name}]: {desc}")
     return "\n".join(catalog)
 
@@ -281,18 +284,18 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
             "node_logs": [{"node": "validator", "rejection": msg}]
         }
 
-    # --- ELITE LOOP DETECTION ---
+    # --- ELITE LOOP DETECTION (Argument-Aware) ---
     rejection_count = state.rejection_feedback.count("REDUNDANCY") if state.rejection_feedback else 0
     for m in state.memory:
+        # ONLY reject if the tool name AND the arguments are an exact match
         if m.get("action_taken") == drafted_name and m.get("arguments_used") == drafted_args:
             if "[]" in str(m.get("api_observation")):
-                msg = f"STRATEGIC REDUNDANCY: This search for {drafted_name} already returned NO RESULTS. Do NOT repeat it. You must PIVOT to a different date, different airport, or ask the user for information."
+                msg = f"STRATEGIC REDUNDANCY: This search for {drafted_name} with these arguments already returned NO RESULTS. Do NOT repeat it. PIVOT now."
             else:
-                msg = f"REDUNDANCY: You already have this data in Memory (Step {state.memory.index(m) + 1}). Identify the next MISSING GAP in the user's request and use a progress-advancing tool from the catalog instead."
+                msg = f"REDUNDANCY: You already have this exact data in Memory from {drafted_name}. Move to the next step."
             
-            # --- STRATEGIC ESCALATION (Phase 4.2) ---
             if rejection_count >= 2:
-                msg += " STRATEGIC HINT: You have a user_id but haven't called 'get_user_details' yet, or you have a result and haven't 'responded' with it. Choose a different tool category."
+                msg += " STRATEGIC HINT: Check 'UNADDRESSED NOUNS' in your objective. You might need to look up user details or finalize a respondent message."
 
             return {
                 "rejection_feedback": msg,
@@ -429,14 +432,31 @@ def strategic_auditor_node(state: PevState) -> Dict:
             unmatched_nouns.append(noun)
     noun_str = f"\nUNADDRESSED NOUNS from original task: {', '.join(unmatched_nouns)}" if unmatched_nouns else ""
 
+    # 5. Arithmetic Auditor (Payment Protection)
+    math_hint = ""
+    last_observation = str(state.memory[-1].get("api_observation", "")) if state.memory else ""
+    if "payment amount does not add up" in last_observation.lower():
+        import re
+        price_match = re.search(r"total price is (\d+)", last_observation)
+        if price_match:
+            total_price = int(price_match.group(1))
+            # Extract current payments from the last failed attempt in memory
+            last_args = state.memory[-1].get("arguments_used", {})
+            payments = last_args.get("payment_methods", [])
+            cert_val = sum(p.get("amount", 0) for p in payments if "certificate" in p.get("payment_id", ""))
+            needed_cc = total_price - cert_val
+            math_hint = f"\nARITHMETIC CORRECTION: The total price is {total_price}. You used {cert_val} in certificates. You MUST set your credit card amount to exactly {needed_cc}."
+
     sys_prompt = f"""Compare the User's latest request against the history of API results. 
 Identify the ONE most critical 'State-Gap' (requirement not yet met).
 Then, provide a 1-2 sentence Strategic Directive for the Planner.
 {exhausted_str}
 {noun_str}
+{math_hint}
 
 CRITICAL: If a tool is listed under 'EXHAUSTED SEARCHES', you MUST issue a MANDATORY PIVOT directive.
 CRITICAL: If 'UNADDRESSED NOUNS' are present, DIRECT the planner to use a tool that specifically addresses them (e.g. get_user_details for certificates).
+CRITICAL: If an 'ARITHMETIC CORRECTION' is provided, you MUST command the planner to use those exact numbers.
 Forbid the planner from repeating those parameters and suggest an alternative strategy (e.g. check onestop, different date, or ask user).
 
 LATEST REQUEST: {latest_user_turn}
@@ -445,4 +465,11 @@ RECENT HISTORY: {history}
 Output ONLY the strategic directive.
 """
     objective = client.chat([{"role": "system", "content": sys_prompt}])
+    
+    # Force critical hints into the objective string so the Planner cannot ignore them
+    if math_hint:
+        objective = f"{objective}\n{math_hint}"
+    if noun_str:
+        objective = f"{objective}\n{noun_str}"
+
     return {"strategic_objective": objective, "node_logs": [{"node": "auditor", "objective": objective}]}

@@ -60,7 +60,11 @@ class PEVEngine:
             tools_wiki=self.tools_wiki,
             global_wisdom=self._load_wisdom(),
             wisdom_file=self.wisdom_file,
-            current_time=env.env.current_time.strftime("%A, %B %d, %Y") if hasattr(env, 'env') and hasattr(env.env, 'current_time') else ""
+            current_time=(
+                env.env.current_time.strftime("%A, %B %d, %Y") if hasattr(env, 'env') and hasattr(env.env, 'current_time')
+                else env.current_time.strftime("%A, %B %d, %Y") if hasattr(env, 'current_time')
+                else "Monday, May 20, 2024" # Safe fallback for airline domain
+            )
         )
 
         # 1. Proactive Pre-fetch (Phase 3 Heuristic)
