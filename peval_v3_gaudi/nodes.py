@@ -233,6 +233,11 @@ REJECT if:
 
 Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
 """
+    # --- ELITE TOOL VALIDATION ---
+    drafted_name = state.drafted_tool_call.get("name")
+    drafted_args = state.drafted_tool_call.get("arguments", {})
+    valid_names = [t.get("name") or t.get("function", {}).get("name") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
+
     # --- ELITE PAYMENT GUARD (Math Guard) ---
     if drafted_name == "book_reservation":
         payments = drafted_args.get("payment_methods", [])
@@ -260,9 +265,6 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
         if any(p.get("amount", 0) <= 0 for p in payments):
             msg = "MATH ERROR: Payment amounts must be positive numbers."
             return {"rejection_feedback": msg, "rejection_source": "validator", "node_logs": [{"node": "validator", "rejection": msg}]}
-    drafted_name = state.drafted_tool_call.get("name")
-    drafted_args = state.drafted_tool_call.get("arguments", {})
-    valid_names = [t.get("name") or t.get("function", {}).get("name") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
     if drafted_name not in valid_names:
         msg = f"INVALID TOOL: '{drafted_name}' is NOT a real tool. Use ONLY from the available tool list. Do NOT try to use virtual tools like 'think' or 'evaluate'."
         return {
