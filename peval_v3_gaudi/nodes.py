@@ -120,6 +120,7 @@ CRITICAL RULES:
 8. AUTOMONOUS MILESTONES: You must recognize success yourself. If you see a confirmation ID in memory, that part of the goal is FINISHED. Do not repeat it.
 9. GROUND-TRUTH VERIFICATION: Before your final 'respond' to the user, you MUST ensure you have 'witnessed' the final database state matching the entire request (bags, passengers, prices).
 10. NO PLACEHOLDER THINKING: Do not use the 'think' tool to stall. All reasoning must happen in your 'Thought:' block before selecting a functional tool call.
+11. IDENTITY RESILIENCE: If a user_id or reservation_id retrieval fails (Error: not found), you MUST immediately ask the USER for the correct ID. **NEVER** guess IDs and **NEVER** use placeholder values like 'unknown_id'.
 
 ### CAPABILITIES CATALOG (Scan these for semantic alternatives):
 {get_compact_tool_catalog(state.tools_info)}
@@ -331,7 +332,7 @@ def proactive_prefetch(env, state: PevState):
     """PORTED: Phase 3 'Customer Service Heuristic'."""
     obs = state.user_conversation[-1]["content"] if state.user_conversation else ""
     
-    # regex matches IDs (e.g. user_id: 'sara_doe_496', reservation: 'XJBK7Q')
+    # regex matches standard user/reservation ID patterns (e.g. name_name_123 or 6-char alphanumeric)
     user_id_match = re.search(r'\b([a-z]+_[a-z]+_\d{3,6})\b', obs, re.IGNORECASE)
     res_id_match = re.search(r'\b([A-Z\d]{6})\b', obs)
     
