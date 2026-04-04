@@ -59,7 +59,8 @@ class PEVEngine:
             tools_info=self.tools_info,
             tools_wiki=self.tools_wiki,
             global_wisdom=self._load_wisdom(),
-            wisdom_file=self.wisdom_file
+            wisdom_file=self.wisdom_file,
+            current_time=env.env.current_time.strftime("%A, %B %d, %Y") if hasattr(env, 'env') and hasattr(env.env, 'current_time') else ""
         )
 
         # 1. Proactive Pre-fetch (Phase 3 Heuristic)

@@ -118,6 +118,8 @@ Your ONLY tool is 'submit_plan'. Use it to set the objective for the Executor.
 
 {strategic_section}
 
+CURRENT SYSTEM TIME: {state.current_time}
+
 CRITICAL RULES:
 5. GOAL-LED REASONING: Your primary objective is to close the 'GAP' between the User's request and the current environment state.
 6. DATA-FIRST VERIFICATION: Always check MEMORY for existing records (certificates, cards) before asking the user. If data exists, ask for the user's PREFERENCE among known options instead of asking for the data again.
@@ -281,7 +283,11 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
     # --- ELITE LOOP DETECTION ---
     for m in state.memory:
         if m.get("action_taken") == drafted_name and m.get("arguments_used") == drafted_args:
-            msg = f"REDUNDANCY: You already have this data in Memory (Step {state.memory.index(m) + 1}). Identify the next MISSING GAP in the user's request and use a progress-advancing tool from the catalog instead."
+            if "[]" in str(m.get("api_observation")):
+                msg = f"STRATEGIC REDUNDANCY: This search for {drafted_name} already returned NO RESULTS. Do NOT repeat it. You must PIVOT to a different date, different airport, or ask the user for information."
+            else:
+                msg = f"REDUNDANCY: You already have this data in Memory (Step {state.memory.index(m) + 1}). Identify the next MISSING GAP in the user's request and use a progress-advancing tool from the catalog instead."
+            
             return {
                 "rejection_feedback": msg,
                 "rejection_source": "validator",
@@ -405,10 +411,17 @@ def strategic_auditor_node(state: PevState) -> Dict:
     # 2. Distill current tool history
     history = "\n".join([f"- {m.get('action_taken')} result: {str(m.get('api_observation'))[:100]}" for m in state.memory[-5:]])
     
+    # 3. Identify exhausted strategies
+    exhausted = [f"{m.get('action_taken')}({m.get('arguments_used')})" for m in state.memory if "[]" in str(m.get("api_observation"))]
+    exhausted_str = "\nEXHAUSTED SEARCHES (Returned 0 results): " + ", ".join(exhausted) if exhausted else ""
+
     sys_prompt = f"""Compare the User's latest request against the history of API results. 
 Identify the ONE most critical 'State-Gap' (requirement not yet met).
 Then, provide a 1-2 sentence Strategic Directive for the Planner.
-If a tool has already been tried with specific parameters and returned no results, DIRECT the planner to try a DIFFERENT tool or different parameters.
+{exhausted_str}
+
+CRITICAL: If a tool is listed under 'EXHAUSTED SEARCHES', you MUST issue a MANDATORY PIVOT directive.
+Forbid the planner from repeating those parameters and suggest an alternative strategy (e.g. check onestop, different date, or ask user).
 
 LATEST REQUEST: {latest_user_turn}
 RECENT HISTORY: {history}
