@@ -1,7 +1,5 @@
-import os
-import re
-import json
 from typing import Dict, Any, List, Tuple, Optional
+__VERSION__ = "5.1_PHASE_STABILIZATION"
 from peval_v3_gaudi.state import PevState
 # Import the existing ModelClient (using absolute paths)
 from peval_v4_lite.src.core.model_client import ModelClient
@@ -140,15 +138,17 @@ MEMORY KERNEL:
 FAILURE HISTORY:
 {failure_history}
 
+### ELITE PLANNING MANDATE:
+- CRITICAL: Prioritize the 'MILESTONE DASHBOARD' over user requests for repeat actions.
+- REJECTION AWARENESS: If you see a 'PREVIOUS ATTEMPT REJECTED' block below, you MUST pick a different tool or different arguments. Do NOT stubborn-draft.
+
 {rejection_section}
 
-### ELITE PLANNING MANDATE:
 In your 'Thought:' block, ALWAYS include:
-1. KNOWN VARIABLES: (e.g. user_id, flight_id already in memory)
-2. MISSING VARIABLES: (e.g. what you still need to find)
-3. STATE-GAP ANALYSIS: (Compare your current 'Internal Ledger' against the User's original request. Identify EXACTLY what is missing.)
-4. TOOL PRE-SELECTION: (Scan the 'Capabilities Catalog' and name the single best tool to close the identified gap.)
-5. STRATEGY: (Describe how you will apply the pre-selected tool to advance the task.)
+1. KNOWN VARIABLES: (e.g. reservation_id, user_id found)
+2. MISSING VARIABLES: (e.g. what info is still needed)
+3. REDUNDANCY CHECK: (Look at the Rejection/Memory section and confirm you are NOT repeating a successful tool.)
+4. STRATEGY: (Describe the NEXT progress-advancing tool choice.)
 """
     user_msgs = []
     if state.user_conversation:
@@ -286,7 +286,7 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
         
         if m.get("action_taken") == drafted_name and m.get("arguments_used") == drafted_args:
             if is_prev_success:
-                msg = f"REDUNDANCY: Action '{drafted_name}' was already SUCCESSFUL. Move to the next progress-advancing tool."
+                msg = f"[V5.1] REDUNDANCY: Action '{drafted_name}' was already SUCCESSFUL. You already have this result in the MILESTONE DASHBOARD. Move to a DIFFERENT tool."
                 return {"rejection_feedback": msg, "rejection_source": "validator", "node_logs": [{"node": "validator", "rejection": msg}]}
             else:
                 PEVLogger.info(f"Validator: Allowing retry of previously failed action '{drafted_name}'...")
