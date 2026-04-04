@@ -219,10 +219,13 @@ def validator_node(state: PevState) -> Dict:
     sys_prompt = f"""You are the VALIDATOR. Predict if the ACTION will SUCCEED or FAIL.
 
 ACTION: {json.dumps(state.drafted_tool_call)}
-MEMORY: {format_memory(state.memory)}
+MEMORY (API RESULTS): {format_memory(state.memory)}
+
+RECENT CONVERSATION:
+{json.dumps(state.user_conversation[-5:], indent=2)}
 
 REJECT if:
-1. Arguments are hallucinated (not in memory).
+1. Arguments are hallucinated (not in memory AND not in the conversation).
 2. Action repeats a failed attempt.
 3. Preconditions are not met.
 
@@ -230,6 +233,7 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
 """
     # --- ELITE TOOL VALIDATION ---
     drafted_name = state.drafted_tool_call.get("name")
+    drafted_args = state.drafted_tool_call.get("arguments", {})
     valid_names = [t.get("name") or t.get("function", {}).get("name") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
     if drafted_name not in valid_names:
         msg = f"INVALID TOOL: '{drafted_name}' is NOT a real tool. Use ONLY from the available tool list. Do NOT try to use virtual tools like 'think' or 'evaluate'."
