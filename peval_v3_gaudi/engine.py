@@ -139,6 +139,12 @@ class PEVEngine:
             # Env Step
             env_res = env.step(action)
             
+            # --- ELITE: PLAN FLUSH ON ERROR ---
+            # If the environment returns an error, we flush the plan so the Planner MUST reconsider its strategy.
+            if "Error" in str(env_res.observation) or "not found" in str(env_res.observation).lower() or "not match" in str(env_res.observation).lower():
+                PEVLogger.warn("Environment Error detected. FLUSHING PLAN to force recalibration.")
+                state.current_plan = ""
+            
             # --- ELITE LOGGING: OBSERVATION ---
             obs_clean = str(env_res.observation)[:500] + "..." if len(str(env_res.observation)) > 500 else str(env_res.observation)
             PEVLogger.info(f"Observation: {obs_clean}")

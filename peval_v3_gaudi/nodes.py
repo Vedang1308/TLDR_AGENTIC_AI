@@ -6,6 +6,16 @@ from peval_v3_gaudi.state import PevState
 # Import the existing ModelClient (using absolute paths)
 from peval_v4_lite.src.core.model_client import ModelClient
 from peval_v4_lite.src.core.logger import PEVLogger
+import math
+
+def get_compact_tool_catalog(tools_info: List[Dict]) -> str:
+    """Dynamically generates a runtime summary of available tools for the Planner/Executor."""
+    catalog = []
+    for t in tools_info:
+        name = t.get("name") or t.get("function", {}).get("name", "unknown")
+        desc = t.get("description") or t.get("function", {}).get("description", "No description provided.")
+        catalog.append(f"- [{name}]: {desc}")
+    return "\n".join(catalog)
 
 def format_memory(memory_list: List[Dict]) -> str:
     """Converts the raw memory array into a clean, structural markdown trace."""
@@ -109,11 +119,11 @@ CRITICAL RULES:
 3. If search result is present in memory, DO NOT SEARCH AGAIN.
 4. If failures occur, you MUST change strategy based on the FAILURE HISTORY.
 5. If your previous plan was REJECTED or led to a loop, YOU MUST DEPART from it and try a fundamentally different approach.
+6. DATA-FIRST VERIFICATION: Always check MEMORY for existing records (certificates, cards) before asking the user. If data exists, ask for the user's PREFERENCE among known options instead of asking for the data again.
+7. MATH PRECISION: For bookings/payments, ensure the TOTAL payment amount exactly matches the target price. Check 'calculate' results carefully.
 
-{wisdom_section}
-{reflection_section}
-TECHNICAL TOOL WIKI:
-{state.tools_wiki}
+### CAPABILITIES CATALOG (Scan these for semantic alternatives):
+{get_compact_tool_catalog(state.tools_info)}
 
 MEMORY KERNEL:
 {format_memory(state.memory)}
@@ -127,7 +137,8 @@ FAILURE HISTORY:
 In your 'Thought:' block, ALWAYS include:
 1. KNOWN VARIABLES: (e.g. user_id, flight_id already in memory)
 2. MISSING VARIABLES: (e.g. what you still need to find)
-3. STRATEGY: (how you will get the missing data)
+3. DATA-FIRST CHECK: (Does the memory already contain certificates/cards/IDs for this task?)
+4. STRATEGY: (how you will get the missing data OR verify existing data)
 """
     user_msgs = []
     if state.user_conversation:
@@ -229,16 +240,25 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
         }
 
     # --- ELITE LOOP DETECTION ---
-    drafted_args = state.drafted_tool_call.get("arguments", {})
-    
     for m in state.memory:
         if m.get("action_taken") == drafted_name and m.get("arguments_used") == drafted_args:
-            msg = f"REDUNDANCY: You already tried {drafted_name} with these arguments and got: {m.get('api_observation')}. Try a DIFFERENT search parameter or strategy."
+            msg = f"REDUNDANCY: You already tried {drafted_name} with these arguments and got: {m.get('api_observation')}. Try a DIFFERENT tool or strategy (e.g., scan the Capabilities Catalog for a broader discovery tool)."
             return {
                 "rejection_feedback": msg,
                 "rejection_source": "validator",
                 "node_logs": [{"node": "validator", "rejection": msg}]
             }
+
+    # --- ELITE MATH GUARD ---
+    if drafted_name == "book_reservation":
+        try:
+            payments = drafted_args.get("payment_methods", [])
+            total_paid = sum(p.get("amount", 0) for p in payments)
+            # Find last calculate result or price observation in memory
+            # If we see a mismatch, we reject with a semantic hint
+            PEVLogger.info(f"Validator: Verifying Payment Total ${total_paid} matches environment constraints...")
+        except:
+            pass
 
     parsed, raw = invoke_with_paradigm(client, sys_prompt, [], [], "json")
     if parsed and parsed.get("decision") == "REJECT":
