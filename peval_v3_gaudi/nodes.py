@@ -116,15 +116,14 @@ def planner_node(state: PevState) -> Dict:
     sys_prompt = f"""You are the HIERARCHICAL PLANNER. 
 Your ONLY tool is 'submit_plan'. Use it to set the objective for the Executor.
 
-CRITICAL RULES:
 12. CURRENT SYSTEM TIME: {state.current_time}
 13. STANDARD OPERATING PROCEDURES (SOP):
     - GOAL-LED REASONING: Close the 'GAP' between the user's request and the environment state.
-    - RECEPTIONIST PROTOCOL: If an ID (user, order, email) is mentioned, resolve it (e.g. get_user_details) before searching or booking.
+    - SILENT RECEPTIONIST: Resolve identifiers (user_id, order_id, email) ONLY if they contain real values (e.g. 'mia_li_3668', '123456'). DO NOT guess placeholders like 'user_id' or 'USER_ID'.
     - DATA-FIRST VERIFICATION: Verify all user-provided data (like certificates) via tools before use.
     - SEARCH-PIVOT: If a search results in [], DO NOT repeat it. Pivot to a different date or search type.
+    - MATH RECONCILIATION: If booking fails with 'amount mismatch', you MUST use 'calculate' to find (Price - Certificates) and resubmit with the EXACT resulting number.
     - NO PLACEHOLDERS: Never guess IDs or use fake values. Ask the user if resolution fails.
-    - MATH PRECISION: Payment totals MUST exactly equal prices. Use calculate for splits.
 
 ### CAPABILITIES CATALOG (Scan these for semantic alternatives):
 {get_compact_tool_catalog(state.tools_info)}
@@ -228,10 +227,10 @@ MEMORY (API RESULTS): {format_memory(state.memory)}
 
 REJECT ONLY IF:
 1. Arguments are hallucinated (not in memory AND not in conversation).
-2. Action repeats a failed attempt with the EXACT SAME arguments.
+2. Action repeats a failed attempt with EXACTLY SAME arguments (same tool AND same values). Note: 'user_id' vs 'mia_li_3668' are NOT the same; you MUST approve if the value changes.
 3. Preconditions are fundamentally impossible.
 
-FOUNDATIONAL EXCEPTION: Always APPROVE 'get_*' or 'find_*' tools (identity resolution) if they are being used to verify data Mentioned by the user.
+FOUNDATIONAL EXCEPTION: Always APPROVE 'get_*' or 'find_*' tools if they are resolving a NEW identifier mentioned by the user.
 
 Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
 """
