@@ -116,10 +116,11 @@ Your ONLY tool is 'submit_plan'. Use it to set the objective for the Executor.
 CRITICAL RULES:
 5. GOAL-LED REASONING: Your primary objective is to close the 'GAP' between the User's request and the current environment state.
 6. DATA-FIRST VERIFICATION: Always check MEMORY for existing records (certificates, cards) before asking the user. If data exists, ask for the user's PREFERENCE among known options instead of asking for the data again.
-7. MATH PRECISION: For bookings/payments, ensure the TOTAL payment amount exactly matches the target price. Check 'calculate' results carefully.
-8. AUTOMONOUS MILESTONES: You must recognize success yourself. If you see a confirmation ID in memory, that part of the goal is FINISHED. Do not repeat it.
-9. GROUND-TRUTH VERIFICATION: Before your final 'respond' to the user, you MUST ensure you have 'witnessed' the final database state matching the entire request (bags, passengers, prices).
-10. NO PLACEHOLDER THINKING: Do not use the 'think' tool to stall. All reasoning must happen in your 'Thought:' block before selecting a functional tool call.
+7. MATH PRECISION: For bookings/payments, the sum of all 'amount' fields in 'payment_methods' MUST EXACTLY EQUAL the total price. Use the 'calculate' tool to find the difference (Price - CertificateValue) before drafting the call.
+8. CERTIFICATE CAPPING: A certificate's 'amount' cannot exceed the flight price. If CertificateValue > Price, the 'amount' should equal the Price.
+9. AUTOMONOUS MILESTONES: You must recognize success yourself. If you see a confirmation ID in memory, that part of the goal is FINISHED. Do not repeat it.
+10. GROUND-TRUTH VERIFICATION: Before your final 'respond' to the user, you MUST ensure you have 'witnessed' the final database state matching the entire request (bags, passengers, prices).
+11. NO PLACEHOLDER THINKING: Do not use the 'think' tool to stall. All reasoning must happen in your 'Thought:' block before selecting a functional tool call.
 11. IDENTITY RESILIENCE: If a user_id or reservation_id retrieval fails (Error: not found), you MUST immediately ask the USER for the correct ID. **NEVER** guess IDs and **NEVER** use placeholder values like 'unknown_id'.
 
 ### CAPABILITIES CATALOG (Scan these for semantic alternatives):
@@ -232,7 +233,33 @@ REJECT if:
 
 Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
 """
-    # --- ELITE TOOL VALIDATION ---
+    # --- ELITE PAYMENT GUARD (Math Guard) ---
+    if drafted_name == "book_reservation":
+        payments = drafted_args.get("payment_methods", [])
+        total_paid = sum(p.get("amount", 0) for p in payments)
+        cabin = drafted_args.get("cabin", "economy")
+        
+        # Calculate expected price from memory
+        expected_price = 0
+        flight_nums = [f.get("flight_number") for f in drafted_args.get("flights", [])]
+        for m in state.memory:
+            if m.get("type") == "tool_result" and "prices" in str(m.get("api_observation")):
+                try:
+                    # Very basic extraction - in production we'd use a better parser
+                    obs_data = json.loads(str(m.get("api_observation")).replace("API output: ", ""))
+                    if isinstance(obs_data, list):
+                        for flight in obs_data:
+                            if flight.get("flight_number") in flight_nums:
+                                expected_price += flight.get("prices", {}).get(cabin, 0)
+                except: pass
+
+        if expected_price > 0 and total_paid != expected_price:
+            msg = f"MATH ERROR: Total payment ({total_paid}) does not match expected price ({expected_price}) for {cabin} class. Use 'calculate' to find the correct split."
+            return {"rejection_feedback": msg, "rejection_source": "validator", "node_logs": [{"node": "validator", "rejection": msg}]}
+        
+        if any(p.get("amount", 0) <= 0 for p in payments):
+            msg = "MATH ERROR: Payment amounts must be positive numbers."
+            return {"rejection_feedback": msg, "rejection_source": "validator", "node_logs": [{"node": "validator", "rejection": msg}]}
     drafted_name = state.drafted_tool_call.get("name")
     drafted_args = state.drafted_tool_call.get("arguments", {})
     valid_names = [t.get("name") or t.get("function", {}).get("name") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
