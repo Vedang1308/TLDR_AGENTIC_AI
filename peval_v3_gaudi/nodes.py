@@ -219,7 +219,7 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
 """
     # --- ELITE TOOL VALIDATION ---
     drafted_name = state.drafted_tool_call.get("name")
-    valid_names = [t.get("name") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
+    valid_names = [t.get("name") or t.get("function", {}).get("name") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
     if drafted_name not in valid_names:
         msg = f"INVALID TOOL: '{drafted_name}' is NOT a real tool. Use ONLY from the available tool list. Do NOT try to use virtual tools like 'think' or 'evaluate'."
         return {
