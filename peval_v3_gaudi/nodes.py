@@ -121,7 +121,7 @@ CRITICAL RULES:
 5. If your previous plan was REJECTED or led to a loop, YOU MUST DEPART from it and try a fundamentally different approach.
 6. DATA-FIRST VERIFICATION: Always check MEMORY for existing records (certificates, cards) before asking the user. If data exists, ask for the user's PREFERENCE among known options instead of asking for the data again.
 7. MATH PRECISION: For bookings/payments, ensure the TOTAL payment amount exactly matches the target price. Check 'calculate' results carefully.
-8. SUCCESS RECOGNITION: If a tool returns a 'reservation_id', 'order_id', or 'success: true', that MILESTONE IS COMPLETE. Do NOT call that tool again. Move to the next user request immediately.
+8. VALIDATION BY WITNESSING: You only know you succeeded if you can 'witness' the proof (ID, success flag) in the MEMORY KERNEL yourself. If you see an ID, do not repeat that action.
 
 ### CAPABILITIES CATALOG (Scan these for semantic alternatives):
 {get_compact_tool_catalog(state.tools_info)}
@@ -138,9 +138,9 @@ FAILURE HISTORY:
 In your 'Thought:' block, ALWAYS include:
 1. KNOWN VARIABLES: (e.g. user_id, flight_id already in memory)
 2. MISSING VARIABLES: (e.g. what you still need to find)
-3. MILESTONES: (What has been SUCCESSFULLY confirmed? e.g. "Booking HATHAT confirmed")
-4. DATA-FIRST CHECK: (Does the memory already contain certificates/cards/IDs for this task?)
-5. STRATEGY: (how you will get the missing data OR verify existing data)
+3. SELF-AUDIT: (Which sub-tasks are DEFINITIVELY finished?)
+4. INTERNAL LEDGER: (Check your past observations—do you have a 'reservation_id'? Do you have the passenger's details?)
+5. STRATEGY: (The specific next step to address any unsatisfied parts of the user request)
 """
     user_msgs = []
     if state.user_conversation:
