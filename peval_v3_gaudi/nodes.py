@@ -110,8 +110,13 @@ def planner_node(state: PevState) -> Dict:
     # 4. Rejection Check (Inner Loop Feedback)
     rejection_section = f"\n### PREVIOUS ATTEMPT REJECTED:\n{state.rejection_feedback}\n" if state.rejection_feedback else ""
 
+    # 5. Strategic Overlay (Phase 4 Logic)
+    strategic_section = f"\n### CURRENT STRATEGIC OBJECTIVE:\n{state.strategic_objective}\n" if state.strategic_objective else ""
+
     sys_prompt = f"""You are the HIERARCHICAL PLANNER. 
 Your ONLY tool is 'submit_plan'. Use it to set the objective for the Executor.
+
+{strategic_section}
 
 CRITICAL RULES:
 5. GOAL-LED REASONING: Your primary objective is to close the 'GAP' between the User's request and the current environment state.
@@ -121,7 +126,7 @@ CRITICAL RULES:
 9. AUTOMONOUS MILESTONES: You must recognize success yourself. If you see a confirmation ID in memory, that part of the goal is FINISHED. Do not repeat it.
 10. GROUND-TRUTH VERIFICATION: Before your final 'respond' to the user, you MUST ensure you have 'witnessed' the final database state matching the entire request (bags, passengers, prices).
 11. NO PLACEHOLDER THINKING: Do not use the 'think' tool to stall. All reasoning must happen in your 'Thought:' block before selecting a functional tool call.
-11. IDENTITY RESILIENCE: If a user_id or reservation_id retrieval fails (Error: not found), you MUST immediately ask the USER for the correct ID. **NEVER** guess IDs and **NEVER** use placeholder values like 'unknown_id'.
+12. IDENTITY RESILIENCE: If a user_id or reservation_id retrieval fails (Error: not found), you MUST immediately ask the USER for the correct ID. **NEVER** guess IDs and **NEVER** use placeholder values like 'unknown_id'.
 
 ### CAPABILITIES CATALOG (Scan these for semantic alternatives):
 {get_compact_tool_catalog(state.tools_info)}
@@ -386,3 +391,29 @@ def proactive_prefetch(env, state: PevState):
                 state.memory.append({"action": "AUTO_PREFETCH", "args": {"reservation_id": detected_res}, "observation": str(res.observation)})
                 PEVLogger.success(f"Proactive: Pre-fetched reservation {detected_res}")
             except: pass
+
+def strategic_auditor_node(state: PevState) -> Dict:
+    """PHASE 4: Pre-Planning Strategic Auditor."""
+    PEVLogger.node("Strategic Auditor", "Analyzing unmet requirement gaps...")
+    client = ModelClient(mode="summarizer")
+    
+    # 1. Distill current conversational context
+    latest_user_turn = "No conversation yet."
+    if state.user_conversation:
+        latest_user_turn = state.user_conversation[-1]["content"]
+        
+    # 2. Distill current tool history
+    history = "\n".join([f"- {m.get('action_taken')} result: {str(m.get('api_observation'))[:100]}" for m in state.memory[-5:]])
+    
+    sys_prompt = f"""Compare the User's latest request against the history of API results. 
+Identify the ONE most critical 'State-Gap' (requirement not yet met).
+Then, provide a 1-2 sentence Strategic Directive for the Planner.
+If a tool has already been tried with specific parameters and returned no results, DIRECT the planner to try a DIFFERENT tool or different parameters.
+
+LATEST REQUEST: {latest_user_turn}
+RECENT HISTORY: {history}
+
+Output ONLY the strategic directive.
+"""
+    objective = client.chat([{"role": "system", "content": sys_prompt}])
+    return {"strategic_objective": objective, "node_logs": [{"node": "auditor", "objective": objective}]}

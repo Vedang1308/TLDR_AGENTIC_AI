@@ -5,7 +5,7 @@ from peval_v3_gaudi.state import PevState
 from peval_v3_gaudi.nodes import (
     planner_node, executor_node, validator_node, 
     error_reflection_node, global_reflector_node,
-    proactive_prefetch
+    proactive_prefetch, strategic_auditor_node
 )
 from peval_v4_lite.src.core.model_client import ModelClient
 from peval_v4_lite.src.core.logger import PEVLogger
@@ -73,6 +73,11 @@ class PEVEngine:
             state.rejection_feedback = None # Clear for fresh step
             PEVLogger.info(f"=== STEP {step+1} ===")
             
+            # --- PHASE 4: STRATEGIC AUDIT ---
+            audit_res = strategic_auditor_node(state)
+            state.strategic_objective = audit_res.get("strategic_objective", "")
+            state.node_logs.extend(audit_res.get("node_logs", []))
+
             # INNER LOOP: Planner -> Executor -> Validator (Retry up to 3 times if rejected)
             inner_retries = 0
             while inner_retries < 3:
