@@ -108,6 +108,7 @@ CRITICAL RULES:
 2. CHECK MEMORY KERNEL before asking the user.
 3. If search result is present in memory, DO NOT SEARCH AGAIN.
 4. If failures occur, you MUST change strategy based on the FAILURE HISTORY.
+5. If your previous plan was REJECTED or led to a loop, YOU MUST DEPART from it and try a fundamentally different approach.
 
 {wisdom_section}
 {reflection_section}
@@ -216,6 +217,16 @@ REJECT if:
 
 Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
 """
+    # --- ELITE TOOL VALIDATION ---
+    valid_names = [t.get("name") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
+    if drafted_name not in valid_names:
+        msg = f"INVALID TOOL: '{drafted_name}' is NOT a real tool. Use ONLY from the available tool list. Do NOT try to use virtual tools like 'think' or 'evaluate'."
+        return {
+            "rejection_feedback": msg,
+            "rejection_source": "validator",
+            "node_logs": [{"node": "validator", "rejection": msg}]
+        }
+
     # --- ELITE LOOP DETECTION ---
     drafted_name = state.drafted_tool_call.get("name")
     drafted_args = state.drafted_tool_call.get("arguments", {})

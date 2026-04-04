@@ -104,9 +104,10 @@ class PEVEngine:
             
             # --- ELITE: 3-STRIKE FALLBACK ---
             if state.rejection_feedback and inner_retries >= 3:
-                PEVLogger.error("CRITICAL: Inner loop failed to resolve rejection. Falling back to Respond.")
+                PEVLogger.error("CRITICAL: Inner loop failed to resolve rejection. Falling back to Respond and FLUSHING PLAN.")
                 state.drafted_tool_call = {"name": "respond", "arguments": {"content": f"I'm having difficulty finalizing a valid next step. Let me step back and reassess the task."}}
                 state.rejection_feedback = None # Clear after fallback
+                state.current_plan = "" # ELITE: Reset the plan to break the reasoning loop
             
             if state.task_completed:
                 PEVLogger.success("Planner marked task as completed.")
