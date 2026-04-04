@@ -129,6 +129,7 @@ CRITICAL RULES:
 10. GROUND-TRUTH VERIFICATION: Before your final 'respond' to the user, you MUST ensure you have 'witnessed' the final database state matching the entire request (bags, passengers, prices).
 11. NO PLACEHOLDER THINKING: Do not use the 'think' tool to stall. All reasoning must happen in your 'Thought:' block before selecting a functional tool call.
 12. IDENTITY RESILIENCE: If a user_id or reservation_id retrieval fails (Error: not found), you MUST immediately ask the USER for the correct ID. **NEVER** guess IDs and **NEVER** use placeholder values like 'unknown_id'.
+13. WALLET-FIRST PRIORITY: As soon as a user_id is in memory, you MUST call 'get_user_details' to synchronize their wallet (certificates, credit cards) before concluding any search or asking more questions.
 
 ### CAPABILITIES CATALOG (Scan these for semantic alternatives):
 {get_compact_tool_catalog(state.tools_info)}
@@ -281,6 +282,7 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
         }
 
     # --- ELITE LOOP DETECTION ---
+    rejection_count = state.rejection_feedback.count("REDUNDANCY") if state.rejection_feedback else 0
     for m in state.memory:
         if m.get("action_taken") == drafted_name and m.get("arguments_used") == drafted_args:
             if "[]" in str(m.get("api_observation")):
@@ -288,6 +290,10 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
             else:
                 msg = f"REDUNDANCY: You already have this data in Memory (Step {state.memory.index(m) + 1}). Identify the next MISSING GAP in the user's request and use a progress-advancing tool from the catalog instead."
             
+            # --- STRATEGIC ESCALATION (Phase 4.2) ---
+            if rejection_count >= 2:
+                msg += " STRATEGIC HINT: You have a user_id but haven't called 'get_user_details' yet, or you have a result and haven't 'responded' with it. Choose a different tool category."
+
             return {
                 "rejection_feedback": msg,
                 "rejection_source": "validator",
@@ -415,12 +421,22 @@ def strategic_auditor_node(state: PevState) -> Dict:
     exhausted = [f"{m.get('action_taken')}({m.get('arguments_used')})" for m in state.memory if "[]" in str(m.get("api_observation"))]
     exhausted_str = "\nEXHAUSTED SEARCHES (Returned 0 results): " + ", ".join(exhausted) if exhausted else ""
 
+    # 4. Global Semantic Scan (Antigravity Logic)
+    all_context = "\n".join([t["content"] for t in state.user_conversation])
+    unmatched_nouns = []
+    for noun in ["certificate", "gift card", "mile", "discount", "bag", "insurance"]:
+        if noun in all_context.lower() and noun not in str(state.memory).lower():
+            unmatched_nouns.append(noun)
+    noun_str = f"\nUNADDRESSED NOUNS from original task: {', '.join(unmatched_nouns)}" if unmatched_nouns else ""
+
     sys_prompt = f"""Compare the User's latest request against the history of API results. 
 Identify the ONE most critical 'State-Gap' (requirement not yet met).
 Then, provide a 1-2 sentence Strategic Directive for the Planner.
 {exhausted_str}
+{noun_str}
 
 CRITICAL: If a tool is listed under 'EXHAUSTED SEARCHES', you MUST issue a MANDATORY PIVOT directive.
+CRITICAL: If 'UNADDRESSED NOUNS' are present, DIRECT the planner to use a tool that specifically addresses them (e.g. get_user_details for certificates).
 Forbid the planner from repeating those parameters and suggest an alternative strategy (e.g. check onestop, different date, or ask user).
 
 LATEST REQUEST: {latest_user_turn}
