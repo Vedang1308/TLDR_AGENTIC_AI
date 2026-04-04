@@ -119,10 +119,10 @@ Your ONLY tool is 'submit_plan'. Use it to set the objective for the Executor.
 12. CURRENT SYSTEM TIME: {state.current_time}
 13. STANDARD OPERATING PROCEDURES (SOP):
     - GOAL-LED REASONING: Close the 'GAP' between the user's request and the environment state.
-    - SILENT RECEPTIONIST: Resolve identifiers (user_id, order_id, email) ONLY if they contain real values (e.g. 'mia_li_3668', '123456'). DO NOT guess placeholders like 'user_id' or 'USER_ID'.
-    - DATA-FIRST VERIFICATION: Verify all user-provided data (like certificates) via tools before use.
-    - SEARCH-PIVOT: If a search results in [], DO NOT repeat it. Pivot to a different date or search type.
-    - MATH RECONCILIATION: If booking fails with 'amount mismatch', you MUST use 'calculate' to find (Price - Certificates) and resubmit with the EXACT resulting number.
+    - SILENT RECEPTIONIST: Resolve identifiers (user_id, email, etc.) ONLY if they contain real values. DO NOT guess placeholders like 'user_id' or 'USER_ID'.
+    - MILESTONE AWARENESS: If a 'reservation_id' or 'confirmation' is found in memory, the task is FINISHED. Do not repeat searches or bookings.
+    - GROUND-TRUTH PIVOT: If the user mentions a flight NOT in memory, you MUST call 'search_*' FIRST. Never book a flight found only in the conversation.
+    - MATH RECONCILIATION: If booking fails with 'amount mismatch', use 'calculate' to find (Price - Certificates) and resubmit with the EXACT resulting number.
     - NO PLACEHOLDERS: Never guess IDs or use fake values. Ask the user if resolution fails.
 
 ### CAPABILITIES CATALOG (Scan these for semantic alternatives):
@@ -235,19 +235,18 @@ FOUNDATIONAL EXCEPTION: Always APPROVE 'get_*' or 'find_*' tools if they are res
 Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
 """
     # --- ELITE TOOL VALIDATION ---
-    drafted_name = state.drafted_tool_call.get("name")
-    drafted_args = state.drafted_tool_call.get("arguments", {})
-    valid_names = [t.get("name") or t.get("function", {}).get("name") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
+    # --- HARD PLACEHOLDER BLOCK ---
+    if any(p in json.dumps(drafted_args).lower() for p in ["user_id", "not_provided", "your_id"]):
+        msg = "REJECT: Placeholder argument detected. You MUST wait for a real ID from the conversation or memory."
+        return {"rejection_feedback": msg, "rejection_source": "validator", "node_logs": [{"node": "validator", "rejection": msg}]}
 
-    # --- ELITE PAYMENT GUARD (Math Guard) ---
+    # --- MATH & PRICE GUARD ---
     if drafted_name == "book_reservation":
         payments = drafted_args.get("payment_methods", [])
         total_paid = sum(p.get("amount", 0) for p in payments)
         cabin = drafted_args.get("cabin", "economy")
-        
-        # Calculate expected price from memory
         expected_price = 0
-        flight_nums = [f.get("flight_number") for f in drafted_args.get("flights", [])]
+        flight_num_list = [f.get("flight_number") for f in drafted_args.get("flights", [])]
         for m in state.memory:
             if m.get("type") == "tool_result" and "prices" in str(m.get("api_observation")):
                 try:
@@ -274,28 +273,11 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
             "node_logs": [{"node": "validator", "rejection": msg}]
         }
 
-    # --- ELITE LOOP DETECTION (Argument-Aware) ---
+    # --- ELITE LOOP DETECTION ---
     for m in state.memory:
-        # ONLY reject if the tool name AND the arguments are an exact match
         if m.get("action_taken") == drafted_name and m.get("arguments_used") == drafted_args:
             msg = f"REDUNDANCY: You already have this exact data in Memory from {drafted_name}. Move to the next progress-advancing tool."
-            
-            return {
-                "rejection_feedback": msg,
-                "rejection_source": "validator",
-                "node_logs": [{"node": "validator", "rejection": msg}]
-            }
-
-    # --- ELITE MATH GUARD ---
-    if drafted_name == "book_reservation":
-        try:
-            payments = drafted_args.get("payment_methods", [])
-            total_paid = sum(p.get("amount", 0) for p in payments)
-            # Find last calculate result or price observation in memory
-            # If we see a mismatch, we reject with a semantic hint
-            PEVLogger.info(f"Validator: Verifying Payment Total ${total_paid} matches environment constraints...")
-        except:
-            pass
+            return {"rejection_feedback": msg, "rejection_source": "validator", "node_logs": [{"node": "validator", "rejection": msg}]}
 
     parsed, raw = invoke_with_paradigm(client, sys_prompt, [], [], "json")
     if parsed and parsed.get("decision") == "REJECT":
