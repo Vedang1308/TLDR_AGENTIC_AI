@@ -218,6 +218,7 @@ REJECT if:
 Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
 """
     # --- ELITE TOOL VALIDATION ---
+    drafted_name = state.drafted_tool_call.get("name")
     valid_names = [t.get("name") for t in state.tools_info] + ["respond", "transfer_to_human_agents"]
     if drafted_name not in valid_names:
         msg = f"INVALID TOOL: '{drafted_name}' is NOT a real tool. Use ONLY from the available tool list. Do NOT try to use virtual tools like 'think' or 'evaluate'."
@@ -228,7 +229,6 @@ Output JSON: {{"decision": "APPROVE"|"REJECT", "reason": "..."}}
         }
 
     # --- ELITE LOOP DETECTION ---
-    drafted_name = state.drafted_tool_call.get("name")
     drafted_args = state.drafted_tool_call.get("arguments", {})
     
     for m in state.memory:
