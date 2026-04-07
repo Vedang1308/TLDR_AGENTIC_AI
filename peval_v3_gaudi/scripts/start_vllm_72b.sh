@@ -6,9 +6,10 @@ PORT=8224
 eval "$(conda shell.bash hook)"
 conda activate vllm_gaudi
 
-# Force cache to scratch
-export HF_HOME=/scratch/vavaghad/huggingface_cache
-export XDG_CACHE_HOME=/scratch/vavaghad/xdg_cache
+# Force cache to /data (Consistent with User Sim)
+export HF_HOME=/data/huggingface_cache
+export XDG_CACHE_HOME=/data/xdg_cache
+export HF_HUB_OFFLINE=1
 mkdir -p $HF_HOME $XDG_CACHE_HOME
 
 # Check if port is in use

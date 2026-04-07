@@ -37,6 +37,7 @@ fi
 export HF_HOME="$HF_DATA_CACHE"
 export HUGGINGFACE_HUB_CACHE="$HF_DATA_CACHE"
 export TRANSFORMERS_CACHE="$HF_DATA_CACHE"
+export HF_HUB_OFFLINE=1
 
 # Improved argument parsing:
 # If first arg doesn't start with -- it's the model path
