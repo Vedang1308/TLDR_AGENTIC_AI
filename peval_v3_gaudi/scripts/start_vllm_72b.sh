@@ -33,14 +33,17 @@ if [ "$DEVICE_TYPE" = "cuda" ]; then
     echo "Detected $ACCEL_COUNT GPUs (A100/H100 Cluster)"
     DTYPE="bfloat16"
     # 72B on A100-80GB needs TP-4 or TP-8
-    if [ "$ACCEL_COUNT" -ge 8 ]; then TP_SIZE=8; else TP_SIZE=4; fi
+    # Using GPUs 0,1,2,3 for Agent
+    export CUDA_VISIBLE_DEVICES=0,1,2,3
+    TP_SIZE=4
     EXTRA_ARGS=""
     MEM_UTIL=0.90
 elif [ "$DEVICE_TYPE" = "hpu" ]; then
     echo "Detected $ACCEL_COUNT HPUs (Intel Gaudi HL-225 Cluster)"
-    export HABANA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+    # PARTITION 1: Agent Server on HPUs 0,1,2,3 (TP-4)
+    export HABANA_VISIBLE_DEVICES=0,1,2,3
     DTYPE="bfloat16"
-    TP_SIZE=8
+    TP_SIZE=4
     EXTRA_ARGS="--device hpu --enable-auto-tool-choice --tool-call-parser hermes"
     MEM_UTIL=0.90
 else

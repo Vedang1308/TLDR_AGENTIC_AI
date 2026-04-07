@@ -27,24 +27,18 @@ fi
 if [ "$DEVICE_TYPE" = "cuda" ]; then
     echo "Detected $ACCEL_COUNT GPUs (A100/H100 Cluster)"
     DTYPE="bfloat16"
-    # If single GPU, share with agent. If multiple, use GPU 1.
-    if [ "$ACCEL_COUNT" -gt 1 ]; then
-        echo "Using dedicated GPU 1 for User Sim"
-        export CUDA_VISIBLE_DEVICES=1
-        MEM_UTIL=0.90
-        TP_SIZE=1 
-    else
-        echo "Sharing GPU 0 with Agent (Limited Memory)"
-        MEM_UTIL=0.45
-        TP_SIZE=1
-    fi
+    # PARTITION 2: User Sim on GPUs 4,5,6,7
+    # (If card count < 8, adjust accordingly. We assume standard 8-card node)
+    export CUDA_VISIBLE_DEVICES=4,5,6,7
+    TP_SIZE=4
+    MEM_UTIL=0.90
     EXTRA_ARGS=""
 elif [ "$DEVICE_TYPE" = "hpu" ]; then
     echo "Detected $ACCEL_COUNT HPUs (Intel Gaudi Cluster)"
-    # For User Sim on Gaudi, we use HPU 0 (sharing with agent if TP matches, or dedicated if count permits)
-    # Simulator typically runs with TP=2 or TP=4 depending on available HPUs
-    if [ "$ACCEL_COUNT" -ge 8 ]; then TP_SIZE=2; else TP_SIZE=2; fi
+    # PARTITION 2: User Sim on HPUs 4,5,6,7 (TP-4)
+    export HABANA_VISIBLE_DEVICES=4,5,6,7
     DTYPE="bfloat16"
+    TP_SIZE=4
     EXTRA_ARGS="--device hpu"
     MEM_UTIL=0.90
 else
@@ -56,7 +50,7 @@ else
 fi
 # ────────────────────────────────────────────────────────────────────────────
 
-echo "Starting vLLM User Simulator ($MODEL_PATH) on port $PORT (Device: $DEVICE_TYPE)..."
+echo "Starting vLLM User Simulator ($MODEL_PATH) on port $PORT (Device: $DEVICE_TYPE, TP: $TP_SIZE)..."
 
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL_PATH \
