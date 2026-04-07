@@ -329,3 +329,34 @@ def error_reflection_node(state: PevState) -> Dict:
         "consecutive_error_count": 0,
         "node_logs": [{"node": "error_reflection", "reflection": reflection_text}]
     }
+
+# --- ALIASES FOR LEGACY ENGINE COMPATIBILITY ---
+global_reflector_node = error_reflection_node
+
+def proactive_prefetch(env, state: PevState):
+    """
+    Standalone pre-fetch logic for legacy PEVEngine.
+    Proactively probes for User and Reservation details.
+    """
+    obs = state.user_conversation[-1]["content"] if state.user_conversation else ""
+    
+    # User ID Seeding
+    user_id_match = re.search(r'\b([a-z]+_[a-z]+_\d{3,6})\b', obs, re.IGNORECASE)
+    if user_id_match:
+        uid = user_id_match.group(1).lower()
+        # Finding a generic user-detail tool
+        tool = next((t for t in state.tools_info if 'user' in t.get('name','').lower() and 'detail' in t.get('name','').lower()), None)
+        if tool:
+            from tau_bench.types import Action
+            res = env.step(Action(name=tool['name'], kwargs={"user_id": uid}))
+            state.memory.append({"action": "AUTO_PREFETCH", "args": {"user_id": uid}, "observation": str(res.observation)})
+
+    # Reservation ID Seeding
+    res_id_match = re.search(r'\b([A-Z\d]{6})\b', obs)
+    if res_id_match:
+        rid = res_id_match.group(1)
+        tool = next((t for t in state.tools_info if ('reservation' in t.get('name','').lower() or 'order' in t.get('name','').lower()) and 'detail' in t.get('name','').lower()), None)
+        if tool:
+            from tau_bench.types import Action
+            res = env.step(Action(name=tool['name'], kwargs={"reservation_id": rid}))
+            state.memory.append({"action": "AUTO_PREFETCH", "args": {"reservation_id": rid}, "observation": str(res.observation)})
