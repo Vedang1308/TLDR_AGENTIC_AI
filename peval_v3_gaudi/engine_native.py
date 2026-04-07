@@ -12,7 +12,9 @@ from .nodes import (
     syntax_monitor_node, 
     validator_node, 
     translator_node,
-    error_reflection_node
+    error_reflection_node,
+    reformulator_node,
+    reflection_strategy_node
 )
 from .distiller import ContextDistiller
 
@@ -26,6 +28,9 @@ class PEVEngineNative:
         self.wiki = wiki
         self.log_dir = log_dir
         os.makedirs(self.log_dir, exist_ok=True)
+        
+        # Determine Domain from tool metadata if possible, or default to env
+        self.domain = os.environ.get("AGENT_DOMAIN", "airline")
         
         # SUMMARIZER (Step 3 in Diagram)
         self.summarizer = ContextDistiller()
@@ -57,8 +62,8 @@ class PEVEngineNative:
             json.dump(updated, f, indent=2)
 
     def proactive_seed(self, state: PevState, env: Env, obs: str):
-        """Phase 3 Proactive Context Seeding."""
-        # Seeding logic remains as a pre-flight boost to Data Hub
+        """Domain-Aware Proactive Context Seeding."""
+        # Common: User ID
         user_id_match = re.search(r'\b([a-z]+_[a-z]+_\d{3,6})\b', obs, re.IGNORECASE)
         if user_id_match:
             uid = user_id_match.group(1).lower()
@@ -68,24 +73,35 @@ class PEVEngineNative:
                 res = env.step(Action(name=t_name, kwargs={"user_id": uid}))
                 state.memory.append({"action": "AUTO_PREFETCH", "args": {"user_id": uid}, "observation": str(res.observation)})
 
+        # Domain-Agnostic: Reservation or Order ID
         res_id_match = re.search(r'\b([A-Z\d]{6})\b', obs)
         if res_id_match:
             rid = res_id_match.group(1)
-            res_lookup = next((t for t in self.tools_info if ('reservation' in (t.get('name') or t.get('function', {}).get('name', '')).lower() or 'order' in (t.get('name') or t.get('function', {}).get('name', '')).lower()) and 'detail' in (t.get('name') or t.get('function', {}).get('name', '')).lower()), None)
+            # Find detail tool that matches either domain
+            res_lookup = next((t for t in self.tools_info if (
+                'reservation' in (t.get('name') or t.get('function', {}).get('name', '')).lower() or 
+                'order' in (t.get('name') or t.get('function', {}).get('name', '')).lower()
+            ) and 'detail' in (t.get('name') or t.get('function', {}).get('name', '')).lower()), None)
+            
             if res_lookup:
                 t_name = res_lookup.get('name') or res_lookup.get('function', {}).get('name')
-                res = env.step(Action(name=t_name, kwargs={"reservation_id": rid}))
-                state.memory.append({"action": "AUTO_PREFETCH", "args": {"reservation_id": rid}, "observation": str(res.observation)})
+                arg_name = "reservation_id" if "reservation" in t_name.lower() else "order_id"
+                try:
+                    res = env.step(Action(name=t_name, kwargs={arg_name: rid}))
+                    state.memory.append({"action": "AUTO_PREFETCH", "args": {arg_name: rid}, "observation": str(res.observation)})
+                except: pass
 
     def solve(self, env: Env, task_index: Optional[int] = None, max_steps: int = 30) -> SolveResult:
         env_res = env.reset(task_index=task_index)
+        strategy = os.environ.get("AGENT_REASONING_MODE", "fc")
+        
         state = PevState(
             tools_info=self.tools_info,
             tools_wiki=self.tools_wiki,
-            global_wisdom=self._load_wisdom() # Step 1: Insights from Wisdom
+            global_wisdom=self._load_wisdom()
         )
-        state.user_conversation.append({"role": "system", "content": self.wiki}) # System Specs
-        state.user_conversation.append({"role": "user", "content": env_res.observation}) # Step 2: Utterance
+        state.user_conversation.append({"role": "system", "content": self.wiki})
+        state.user_conversation.append({"role": "user", "content": env_res.observation})
         
         # Data Hub initialization
         self.proactive_seed(state, env, env_res.observation)
@@ -94,14 +110,22 @@ class PEVEngineNative:
         messages_log = state.user_conversation.copy()
 
         for step in range(max_steps):
-            # 1. Distill (Step 3: Strategic Kernel creation)
+            # 1. Distill (Step 3: Strategic Kernel)
             distilled = self.summarizer(state)
             state.strategic_kernel = distilled["summary"]
             state.world_snapshot = distilled["world_snapshot"]
 
+            # [STRATEGY HOOK]: IRMA Reformulation
+            if strategy == "irma":
+                ref_out = reformulator_node(state)
+                state.node_logs.extend(ref_out.get("node_logs", []))
+                # Update situational knowledge with reformulated view
+                if ref_out.get("reformulated_observation"):
+                    state.strategic_kernel = f"### REFORMULATED FOCUS ###\n{ref_out['reformulated_observation']}\n\n{state.strategic_kernel}"
+
             # PEVAL Graph Orchestration
             while True:
-                # 2. Planner (Step 4: Strategist Instructions)
+                # 2. Planner (Step 4)
                 p_out = planner_node(state)
                 state.node_logs.extend(p_out.get("node_logs", []))
                 if p_out.get("task_completed"):
@@ -114,30 +138,41 @@ class PEVEngineNative:
                 state.node_logs.extend(e_out.get("node_logs", []))
                 state.drafted_tool_call = e_out.get("drafted_tool_call")
 
-                # 4. Translator (Step 5: Normalized Action)
+                # 4. Translator (Step 5)
                 t_out = translator_node(state)
                 state.node_logs.extend(t_out.get("node_logs", []))
                 state.drafted_tool_call = t_out.get("drafted_tool_call")
 
-                # 5. Syntax Monitor (Step 6: Verified Schema)
+                # 5. Syntax Monitor (Step 6)
                 m_out = syntax_monitor_node(state)
                 if m_out.get("rejection_feedback"):
                     state.rejection_feedback = m_out["rejection_feedback"]
                     state.rejection_source = m_out["rejection_source"]
                     state.internal_retry_count = m_out["internal_retry_count"]
-                    # Loop Reject -> Plan feedback
+                    
+                    # [STRATEGY HOOK]: Reflection Diagnosis
+                    if strategy == "reflection":
+                        refl_out = reflection_strategy_node(state)
+                        state.error_reflection = refl_out.get("error_reflection")
+                        state.node_logs.extend(refl_out.get("node_logs", []))
+                    
                     continue 
                 
-                # 6. Validator (Step 7: Dispatch Check)
+                # 6. Validator (Step 7)
                 v_out = validator_node(state)
                 if v_out.get("rejection_feedback"):
                     state.rejection_feedback = v_out["rejection_feedback"]
                     state.rejection_source = v_out["rejection_source"]
                     state.internal_retry_count = v_out["internal_retry_count"]
-                    # Policy Reject -> Plan feedback
+                    
+                    # [STRATEGY HOOK]: Reflection Diagnosis
+                    if strategy == "reflection":
+                        refl_out = reflection_strategy_node(state)
+                        state.error_reflection = refl_out.get("error_reflection")
+                        state.node_logs.extend(refl_out.get("node_logs", []))
+                        
                     continue 
                 
-                # Decision finalized
                 break
 
             if state.task_completed: break
@@ -146,11 +181,11 @@ class PEVEngineNative:
             if not drafted: action = Action(name=RESPOND_ACTION_NAME, kwargs={"content": "Confused."})
             else: action = Action(name=drafted["name"], kwargs=drafted.get("arguments", {}))
             
-            # 7. Dispatch to Env (Step 8: Observation return)
+            # 7. Dispatch to Env (Step 8)
             res = env.step(action)
             reward = res.reward
             
-            # Record Observation back to State
+            # Record Observation
             is_error = any(kw in str(res.observation).lower() for kw in ["error", "invalid", "failed", "not found"])
             state.memory.append({
                 "type": "tool_error" if is_error else "tool_result",
@@ -159,7 +194,7 @@ class PEVEngineNative:
                 "api_observation": res.observation
             })
             
-            # 8. Learning Node (Step 9/10: Rewards/Heuristics)
+            # 8. Learning Node (Step 9/10)
             if is_error:
                 state.consecutive_error_count += 1
                 if state.consecutive_error_count >= 2:
@@ -175,4 +210,4 @@ class PEVEngineNative:
             
             if res.done: break
             
-        return SolveResult(reward=reward, info=res.info.model_dump(), messages=messages_log, total_cost=0.0)
+        return SolveResult(reward=reward, info=res.info.model_dump(), messages=state.user_conversation, total_cost=0.0)

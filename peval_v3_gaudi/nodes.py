@@ -102,6 +102,58 @@ Action:
         except: pass
         return None, content
 
+    elif reasoning_mode == "irma":
+        # Iterative Reasoning and Model Alignment (IRMA) Mode
+        # Focuses on step-by-step extraction and canonical alignment
+        instruction = """
+<tool_instructions>
+You are the IRMA Logic Engine. Your goal is to align the current instruction with the exact Schema of Available Tools.
+1. Identify the core intent.
+2. Search for the tool that matches this intent exactly.
+3. Map all required parameters from the situation history.
+4. Output only the Verified JSON Action block.
+
+Action:
+{"name": "...", "arguments": {...}}
+</tool_instructions>
+"""
+        final_prompt = f"{sys_prompt}\n{instruction}\n<available_tools>\n{json.dumps(tools, indent=2)}\n</available_tools>\nUser Trace: {full_user_content}"
+        content = client.generate(final_prompt, stop=["Observation:", "OBSERVATION:"])
+        try:
+            start = content.find('{')
+            end = content.rfind('}')
+            if start != -1 and end != -1:
+                return json.loads(content[start:end+1]), content
+        except: pass
+        return None, content
+
+    elif reasoning_mode == "reflection":
+        # Self-Reflection Mode: Forces intermediate reasoning to catch hallucinations
+        instruction = """
+<tool_instructions>
+You are a Self-Reflective Agent. 
+Step 1: Analyze the current situation in a [Reasoning] block.
+Step 2: Self-verify the name and parameters of your intended tool against the list.
+Step 3: Output the tool call in a JSON block.
+
+[Reasoning]
+<Your internal verification of parameter validity>
+
+Action:
+{"name": "...", "arguments": {...}}
+</tool_instructions>
+"""
+        final_prompt = f"{sys_prompt}\n{instruction}\n<available_tools>\n{json.dumps(tools, indent=2)}\n</available_tools>\nUser Trace: {full_user_content}"
+        content = client.generate(final_prompt, stop=["Observation:", "OBSERVATION:"])
+        try:
+            action_split = content.split("Action:")[-1].strip()
+            start = action_split.find('{')
+            end = action_split.rfind('}')
+            if start != -1 and end != -1:
+                return json.loads(action_split[start:end+1]), content
+        except: pass
+        return None, content
+
     else: # "fc"
         # We manually simulate FC for Qwen2.5/3 on Gaudi if native FC isn't enabled
         instruction = """
@@ -330,33 +382,91 @@ def error_reflection_node(state: PevState) -> Dict:
         "node_logs": [{"node": "error_reflection", "reflection": reflection_text}]
     }
 
+def reformulator_node(state: PevState) -> Dict:
+    """
+    Component: Input Reformulator (IRMA Node)
+    Role: Transforms raw environmental observations into structured, canonical inputs.
+    """
+    client = get_llm()
+    if not state.memory:
+        return {}
+        
+    last_obs = state.memory[-1].get("api_observation", "")
+    sys_prompt = """
+You are the IRMA Input Reformulator. Your task is to extract core actionable information 
+from raw noisy observations. Remove conversational filler and identify key values 
+(IDs, prices, status). Output the reformulated canonical input only.
+"""
+    reformulated = client.generate(f"{sys_prompt}\n\nRaw Observation: {last_obs}")
+    
+    return {
+        "reformulated_observation": reformulated,
+        "node_logs": [{"node": "reformulator", "status": "reformatted", "output": reformulated}]
+    }
+
+def reflection_strategy_node(state: PevState) -> Dict:
+    """
+    Component: Self-Reflection Strategy Node (Reflection Routing)
+    Role: Diagnoses why a tool draft was rejected and provides corrective instructions.
+    """
+    client = get_llm()
+    draft = state.drafted_tool_call
+    feedback = state.rejection_feedback
+    source = state.rejection_source
+    
+    sys_prompt = f"""
+You are the Pre-Flight Reflector. The previous tool draft was REJECTED during validation.
+REJECTION SOURCE: {source}
+REJECTION FEEDBACK: {feedback}
+FAILED DRAFT: {json.dumps(draft)}
+
+Diagnose the root cause (hallucination, missing parameter, schema mismatch) 
+and provide a specific corrective instruction for the next planning turn.
+"""
+    diagnosis = client.generate(sys_prompt)
+    
+    return {
+        "error_reflection": diagnosis, # Inject into the same slot for Planner consumption
+        "node_logs": [{"node": "reflection_strategy", "diagnosis": diagnosis}]
+    }
+
 # --- ALIASES FOR LEGACY ENGINE COMPATIBILITY ---
 global_reflector_node = error_reflection_node
 
 def proactive_prefetch(env, state: PevState):
     """
     Standalone pre-fetch logic for legacy PEVEngine.
-    Proactively probes for User and Reservation details.
+    Proactively probes for User, Reservation, or Order details (Domain-Aware).
     """
     obs = state.user_conversation[-1]["content"] if state.user_conversation else ""
     
-    # User ID Seeding
+    # 1. User ID Seeding (Common to both domains)
     user_id_match = re.search(r'\b([a-z]+_[a-z]+_\d{3,6})\b', obs, re.IGNORECASE)
     if user_id_match:
         uid = user_id_match.group(1).lower()
-        # Finding a generic user-detail tool
         tool = next((t for t in state.tools_info if 'user' in t.get('name','').lower() and 'detail' in t.get('name','').lower()), None)
         if tool:
             from tau_bench.types import Action
             res = env.step(Action(name=tool['name'], kwargs={"user_id": uid}))
             state.memory.append({"action": "AUTO_PREFETCH", "args": {"user_id": uid}, "observation": str(res.observation)})
 
-    # Reservation ID Seeding
+    # 2. Reservation/Order ID Seeding (Domain-Aware Regex)
+    # Airline: 6-char Alpha (e.g. ABCDEF) or alphanumeric
+    # Retail: Sometimes numeric or alphanumeric
     res_id_match = re.search(r'\b([A-Z\d]{6})\b', obs)
     if res_id_match:
         rid = res_id_match.group(1)
-        tool = next((t for t in state.tools_info if ('reservation' in t.get('name','').lower() or 'order' in t.get('name','').lower()) and 'detail' in t.get('name','').lower()), None)
+        # Search for domain-agnostic detail tools (reservation or order)
+        tool = next((t for t in state.tools_info if (
+            'reservation' in t.get('name','').lower() or 
+            'order' in t.get('name','').lower()
+        ) and 'detail' in t.get('name','').lower()), None)
+        
         if tool:
             from tau_bench.types import Action
-            res = env.step(Action(name=tool['name'], kwargs={"reservation_id": rid}))
-            state.memory.append({"action": "AUTO_PREFETCH", "args": {"reservation_id": rid}, "observation": str(res.observation)})
+            # Dynamically determine argument name based on tool schema
+            arg_name = "reservation_id" if "reservation" in tool['name'] else "order_id"
+            try:
+                res = env.step(Action(name=tool['name'], kwargs={arg_name: rid}))
+                state.memory.append({"action": "AUTO_PREFETCH", "args": {arg_name: rid}, "observation": str(res.observation)})
+            except: pass
