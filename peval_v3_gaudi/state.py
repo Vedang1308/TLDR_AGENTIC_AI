@@ -3,17 +3,15 @@ from pydantic import BaseModel, Field
 
 class PevState(BaseModel):
     """
-    Simplified State for Phase 3 Gaudi-Lite (No LangGraph).
-    Maintains the successful 'Persistence' and 'Metacognition' fields.
+    Standard PEV State ported from Phase 3.
+    Upgraded for 100% Diagram Compliance (Strategic Kernel + World Snapshot).
     """
     # History with the user
     user_conversation: List[Dict[str, str]] = Field(default_factory=list)
     
-    # The Planner's current high-level plan and reasoning
-    current_plan: str = Field(default="")
-    
-    # State flags
-    task_completed: bool = Field(default=False)
+    # --- STRATEGIC HUB (Step 3 in Diagram) ---
+    strategic_kernel: str = Field(default="")
+    world_snapshot: Dict[str, Any] = Field(default_factory=dict)
     
     # Latest Tool Draft from Executor
     drafted_tool_call: Optional[Dict[str, Any]] = Field(default=None)
@@ -25,6 +23,10 @@ class PevState(BaseModel):
     # Memory Kernel: observations and API returns
     memory: List[Dict[str, Any]] = Field(default_factory=list)
     
+    # The Planner's current high-level plan and reasoning
+    current_plan: str = Field(default="")
+    task_completed: bool = Field(default=False)
+    
     # Track internal loops to prevent recursion crashes
     internal_retry_count: int = Field(default=0)
     
@@ -34,21 +36,15 @@ class PevState(BaseModel):
     # API schemas injected at strategy startup
     tools_info: List[Dict[str, Any]] = Field(default_factory=list)
     
-    # --- SELF-CORRECTION FIELDS ---
+    # --- SELF-CORRECTION FIELDS (Step 9/10 Learning Node) ---
     global_wisdom: List[str] = Field(default_factory=list)
     tools_wiki: str = "" 
     
-    # Tracks ALL failed strategies
+    # Experience Log
     failure_log: List[Dict[str, Any]] = Field(default_factory=list)
     
-    # Counts how many consecutive API errors happened
+    # Error Reflection
     consecutive_error_count: int = Field(default=0)
-    
-    # The output of the Error Reflection node
     error_reflection: Optional[str] = Field(default=None)
     
-    # Path to the shared wisdom file
-    wisdom_file: str = Field(default="results/phase3/persistent_wisdom.json")
-    
-    # --- ENVIRONMENTAL ANCHORING ---
-    current_time: str = Field(default="")
+    current_time: str = ""

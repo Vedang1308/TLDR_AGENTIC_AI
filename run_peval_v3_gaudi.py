@@ -12,13 +12,14 @@ sys.path.insert(0, os.getcwd())
 from peval_v4_lite.src.core.config import PEVConfig
 from peval_v4_lite.src.core.logger import PEVLogger
 from peval_v3_gaudi.engine import PEVEngine
+from peval_v3_gaudi.engine_native import PEVEngineNative
 
-def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, trials=5):
+def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, trials=5, use_native=False):
     if num_tasks == -1:
         num_tasks = 115 if domain == "retail" else 50
 
-    print(f"=== PEVAL Phase 3 Gaudi-Lite Experiment: {domain} ===")
-    print(f"Model: {model_name} | Logic: PHASE 3 (No LangGraph) | Tasks: {num_tasks} | Trials: {trials}")
+    print(f"=== PEVAL Gaudi Experiment: {domain} ===")
+    print(f"Model: {model_name} | Orchestration: {'NATIVE' if use_native else 'LITE'} | Tasks: {num_tasks} | Trials: {trials}")
     
     PEVConfig.AGENT_MODEL = model_name
     
@@ -57,11 +58,12 @@ def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, 
     else:
         env = MockAirlineDomainEnv(user_model=PEVConfig.USER_MODEL, user_provider="openai")
     
-    # 3. Initialize the Phase 3 Gaudi Engine
-    engine = PEVEngine(
+    # 3. Initialize Engine
+    EngineClass = PEVEngineNative if use_native else PEVEngine
+    engine = EngineClass(
         tools_info=env.tools_info,
         wiki=env.wiki,
-        log_dir=f"results/phase3_gaudi_{domain}"
+        log_dir=f"results/gaudi_{domain}_{'native' if use_native else 'lite'}"
     )
     
     # 4. Results Storage
@@ -94,6 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, default="qwen-72b-agent")
     parser.add_argument("--num_tasks", type=int, default=-1)
     parser.add_argument("--trials", type=int, default=5)
+    parser.add_argument("--native", action="store_true", help="Use Native Python orchestration (Upgraded Phase 3)")
     
     args = parser.parse_args()
-    run_experiment(domain=args.domain, model_name=args.model, num_tasks=args.num_tasks, trials=args.trials)
+    run_experiment(domain=args.domain, model_name=args.model, num_tasks=args.num_tasks, trials=args.trials, use_native=args.native)
