@@ -18,10 +18,10 @@ class ModelClient:
     def __init__(self, mode: str = "agent"):
         self.config = PEVConfig()
         if mode == "agent":
-            self.client = openai.OpenAI(base_url=self.config.AGENT_ENDPOINT, api_key="empty", timeout=300)
+            self.client = openai.OpenAI(base_url=self.config.AGENT_ENDPOINT, api_key="empty", timeout=900)
             self.model = self.config.AGENT_MODEL
         elif mode == "user":
-            self.client = openai.OpenAI(base_url=self.config.USER_ENDPOINT, api_key="empty", timeout=300)
+            self.client = openai.OpenAI(base_url=self.config.USER_ENDPOINT, api_key="empty", timeout=900)
             self.model = self.config.USER_MODEL
         elif mode == "summarizer":
             if self.config.OPENAI_API_KEY:
@@ -36,7 +36,7 @@ class ModelClient:
                 self.client = openai.OpenAI(
                     base_url="https://api.openai.com/v1",
                     api_key=self.config.OPENAI_API_KEY,
-                    timeout=300
+                    timeout=900
                 )
                 
                 # Discovery Handshake
@@ -60,7 +60,7 @@ class ModelClient:
             self.client = openai.OpenAI(
                 base_url=self.config.AGENT_ENDPOINT,
                 api_key="empty",
-                timeout=300
+                timeout=900
             )
             self.model = self.config.AGENT_MODEL
 
