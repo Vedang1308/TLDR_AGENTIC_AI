@@ -327,12 +327,23 @@ def syntax_monitor_node(state: PevState) -> Dict:
 def validator_node(state: PevState) -> Dict:
     client = get_llm()
     retries = state.internal_retry_count + 1
+    draft = state.drafted_tool_call
     
     if retries >= 5:
         return {"drafted_tool_call": {"name": "respond", "arguments": {"content": "Validation Timeout."}}, "internal_retry_count": 0}
 
-    if state.drafted_tool_call and state.drafted_tool_call.get("name") == "respond":
+    if draft and draft.get("name") == "respond":
         return {"node_logs": [{"node": "validator", "status": "approved (respond)"}], "internal_retry_count": 0}
+
+    if draft and draft.get("name") == "think":
+        last_action = state.memory[-1].get("action_taken") if state.memory else None
+        if last_action == "think":
+            return {
+                "rejection_feedback": "Consecutive thinking detected without progress. Use a primary tool or respond to the user.",
+                "rejection_source": "validator",
+                "internal_retry_count": retries,
+                "node_logs": [{"node": "validator", "status": "rejected (consecutive think)"}]
+            }
 
     sys_prompt = f"""You are the VALIDATOR. Pre-flight simulate:
 DRAFT: {json.dumps(state.drafted_tool_call)}

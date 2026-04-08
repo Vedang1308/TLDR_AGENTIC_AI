@@ -24,8 +24,7 @@ class PEVEngineNative:
     Steps 1-11 implemented with local Gaudi-Native logic.
     """
     def __init__(self, tools_info: List[Dict[str, Any]], wiki: str, log_dir: str = "results/phase3_gaudi_native"):
-        # Filter out 'think' tool (redundant in REAct and leads to loops)
-        self.tools_info = [t for t in tools_info if (t.get('name') or t.get('function', {}).get('name', '')) != 'think']
+        self.tools_info = tools_info
         self.wiki = wiki
         self.log_dir = log_dir
         os.makedirs(self.log_dir, exist_ok=True)
