@@ -344,6 +344,20 @@ def validator_node(state: PevState) -> Dict:
                 "internal_retry_count": retries,
                 "node_logs": [{"node": "validator", "status": "rejected (consecutive think)"}]
             }
+            
+    # Redundancy Check: Prevent the agent from repeating empty searches
+    if draft and state.memory:
+        for m in state.memory:
+            if m.get("type") == "tool_result" and m.get("action_taken") == draft.get("name"):
+                if m.get("arguments_used") == draft.get("arguments"):
+                    obs = str(m.get("api_observation"))
+                    if obs == "[]" or obs == "{}" or "not found" in obs.lower():
+                        return {
+                            "rejection_feedback": f"Redundant action. You already tried {draft.get('name')} with these arguments and it returned no results. Try a different date, city, or ask the user for more info.",
+                            "rejection_source": "validator",
+                            "internal_retry_count": retries,
+                            "node_logs": [{"node": "validator", "status": "rejected (redundant empty search)"}]
+                        }
 
     sys_prompt = f"""You are the VALIDATOR. Pre-flight simulate:
 DRAFT: {json.dumps(state.drafted_tool_call)}
