@@ -233,6 +233,12 @@ Your ONLY tool is `submit_plan`.
 {initial_mission}
 {victory_status}
 
+### THE EXHAUSTION MANDATE (CRITICAL):
+- If a search tool returns an empty list `[]`, that means NO flights exist for those parameters.
+- DO NOT repeat the same search. DO NOT retry if you've already tried both direct and one-stop for a date.
+- If you have exhausted all search options (direct, one-stop, different dates) and found nothing, your goal is to use the `respond` tool to explain this clearly to the user and end the task.
+- NEVER loop. An empty observation is a FINAL FACT.
+
 ### YOUR STRATEGIC CONTEXT:
 {kernel_section}
 {snapshot_section}
@@ -404,14 +410,15 @@ def validator_node(state: PevState) -> Dict:
         immutable_tools = ["search_direct_flight", "search_onestop_flight"]
         
         def get_fingerprint(args):
-            # Focus on the core 'facts' of a search to prevent fuzzy loops
             if not args: return ""
-            return f"{str(args.get('origin')).strip().upper()}|{str(args.get('destination')).strip().upper()}|{str(args.get('date')).strip()}"
+            # Engine stores as 'arguments_used', nodes use 'arguments'. Normalize both.
+            return f"{str(args.get('origin', '')).strip().upper()}|{str(args.get('destination', '')).strip().upper()}|{str(args.get('date', '')).strip()}"
 
         current_fp = get_fingerprint(draft.get("arguments"))
         for m in state.memory:
             if m.get("type") == "tool_result" and m.get("action_taken") == draft.get("name"):
-                prev_fp = get_fingerprint(m.get("arguments_used"))
+                prev_args = m.get("arguments_used") or m.get("arguments") or {}
+                prev_fp = get_fingerprint(prev_args)
                 if prev_fp == current_fp and draft.get("name") in immutable_tools:
                     return {
                         "rejection_feedback": f"Redundant action! You already searched for {current_fp} with {draft.get('name')}. Database results are STATIC. Repeating this exact search is a loop. Try a different date, city, or respond to the user.",
@@ -420,12 +427,12 @@ def validator_node(state: PevState) -> Dict:
                         "node_logs": [{"node": "validator", "status": "rejected (fuzzy redundant search)"}]
                     }
                 
-                # Fallback for other tools (like get_user_details) returning empty results
-                if normalize_args(m.get("arguments_used")) == normalize_args(draft.get("arguments")):
+                # Fallback for other tools returning empty results
+                if normalize_args(prev_args) == normalize_args(draft.get("arguments")):
                     obs = str(m.get("api_observation"))
                     if obs == "[]" or obs == "{}" or "not found" in obs.lower():
                         return {
-                            "rejection_feedback": f"Redundant action. You already tried {draft.get('name')} with these arguments and it returned no results. Try a different query or ask the user for more info.",
+                            "rejection_feedback": f"Redundant action. You already tried {draft.get('name')} with these arguments and it returned no results.",
                             "rejection_source": "validator",
                             "internal_retry_count": retries,
                             "node_logs": [{"node": "validator", "status": "rejected (redundant empty search)"}]
@@ -436,7 +443,9 @@ DRAFT: {json.dumps(state.drafted_tool_call)}
 MEMORY: {format_memory(state.memory)}
 
 ### YOUR MANDATE ###
-1. TECHNICAL VALIDITY: Verify tool name and argument types.
+1. TECHNICAL VALIDITY: Verify tool name and argument types against the Tool Wiki.
+   - DO NOT invent missing parameters (like 'bags' or 'preferences') if they are not in the Tool Wiki JSON schema.
+   - If the tool (like search_direct_flight) only accepts 'origin', 'destination', and 'date', then ONLY validate those.
 2. MATH & ID VERIFICATION (STRICT):
    - For `book_reservation`: SUM all amounts in the `payment` list. 
    - IF the SUM == the price in MEMORY, you MUST APPROVE the math. 
@@ -448,7 +457,7 @@ MEMORY: {format_memory(state.memory)}
    - REJECT REDUNDANCY: If the MEMORY already contains a result for these EXACT parameters, you must REJECT to prevent a loop.
 
 Your job is NOT to judge high-level strategy.
-Approve or Reject. Be VERY specific about errors (e.g., "ID Hallucination: certificate_7815826 not found in memory")."""
+Approve or Reject. Be VERY specific about technical errors."""
     
     tools = [{
         "type": "function",
