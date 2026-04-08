@@ -59,6 +59,7 @@ echo "Starting vLLM agent server ($MODEL) on port $PORT (Device: $DEVICE_TYPE, T
 
 python3 -m vllm.entrypoints.openai.api_server \
     --model $MODEL \
+    --served-model-name qwen-72b-agent \
     --trust-remote-code \
     --port $PORT \
     --dtype $DTYPE \
