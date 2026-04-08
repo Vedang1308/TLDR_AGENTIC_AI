@@ -1,5 +1,5 @@
 import openai
-from typing import List
+from typing import List, Optional, Dict
 from .config import PEVConfig
 
 class PEVInferenceError(Exception):
@@ -63,6 +63,22 @@ class ModelClient:
                 timeout=300
             )
             self.model = self.config.AGENT_MODEL
+
+    def generate(self, prompt: str, stop: Optional[List[str]] = None) -> str:
+        """Simple string-in, string-out wrapper for backward compatibility."""
+        messages = [{"role": "user", "content": prompt}]
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                stop=stop
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            from .logger import PEVLogger
+            PEVLogger.error(f"Generate failure: {str(e)}")
+            raise PEVInferenceError(str(e))
 
     def chat(self, messages: List, temperature: float = 1.0):
         try:
