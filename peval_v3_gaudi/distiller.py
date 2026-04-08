@@ -44,8 +44,14 @@ class ContextDistiller:
                 extracted_vars = json.loads(json_match.group())
             except: pass
 
-        # 2. History-level distillation (Summary)
-        history_str = str(state.user_conversation[-3:]) + "\n" + str(state.memory[-10:])
+        # 2. History-level distillation (Summary) with safety truncation
+        def safe_truncate(obj, limit=1000):
+            s = str(obj)
+            return s[:limit] + "... [TRUNCATED]" if len(s) > limit else s
+
+        recent_msgs = [safe_truncate(m) for m in state.user_conversation[-3:]]
+        recent_mem = [safe_truncate(m) for m in state.memory[-10:]]
+        history_str = "\n".join(recent_msgs) + "\n" + "\n".join(recent_mem)
         
         if len(history_str) > 2000:
             distill_prompt = [

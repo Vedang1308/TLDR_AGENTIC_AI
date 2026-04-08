@@ -11,25 +11,29 @@ def get_llm():
     return ModelClient(mode="agent")
 
 def format_memory(memory_list: List[Dict]) -> str:
-    """Converts the raw JSON memory array into a clean markdown trace."""
+    """Converts the raw JSON memory array into a clean markdown trace with aggressive truncation."""
     if not memory_list:
         return "No prior history."
     out = []
     for i, m in enumerate(memory_list):
+        obs = str(m.get('api_observation', 'None'))
+        if len(obs) > 800:
+            obs = obs[:800] + "... [TRUNCATED for brevity]"
+            
         if m.get('type') == 'tool_result':
             out.append(f"--- Step {i+1} ---")
             out.append(f"Action: {m.get('action_taken')}")
             out.append(f"Arguments: {json.dumps(m.get('arguments_used', {}))}")
-            out.append(f"Result Observation: {str(m.get('api_observation', 'None'))}")
+            out.append(f"Result Observation: {obs}")
         elif m.get('type') == 'tool_error':
             out.append(f"--- Step {i+1} [FAILED] ---")
             out.append(f"Attempted Action: {m.get('action_taken')}")
-            out.append(f"Error: {m.get('api_observation', 'None')}")
+            out.append(f"Error: {obs}")
         elif m.get('action') == 'AUTO_PREFETCH':
              out.append(f"--- Step {i+1} [AUTO-PREFETCH] ---")
              out.append(f"Action: {m.get('action')}")
              out.append(f"Args: {json.dumps(m.get('args'))}")
-             out.append(f"Observation: {m.get('observation')}")
+             out.append(f"Observation: {obs}")
     return "\n".join(out) if out else "No parseable actions."
 
 def invoke_with_paradigm(client, sys_prompt: str, user_msgs: List, tools: List[Dict], reasoning_mode: str, role_name: str):
@@ -397,27 +401,35 @@ def validator_node(state: PevState) -> Dict:
             
     # Redundancy Check: Prevent the agent from repeating empty or static searches
     if draft and state.memory:
-        immutable_tools = ["search_direct_flight", "search_onestop_flight", "list_all_airports", "calculate"]
-        current_args_norm = normalize_args(draft.get("arguments"))
+        immutable_tools = ["search_direct_flight", "search_onestop_flight"]
+        
+        def get_fingerprint(args):
+            # Focus on the core 'facts' of a search to prevent fuzzy loops
+            if not args: return ""
+            return f"{str(args.get('origin')).strip().upper()}|{str(args.get('destination')).strip().upper()}|{str(args.get('date')).strip()}"
+
+        current_fp = get_fingerprint(draft.get("arguments"))
         for m in state.memory:
             if m.get("type") == "tool_result" and m.get("action_taken") == draft.get("name"):
-                if normalize_args(m.get("arguments_used")) == current_args_norm:
-                    if draft.get("name") in immutable_tools:
+                prev_fp = get_fingerprint(m.get("arguments_used"))
+                if prev_fp == current_fp and draft.get("name") in immutable_tools:
+                    return {
+                        "rejection_feedback": f"Redundant action! You already searched for {current_fp} with {draft.get('name')}. Database results are STATIC. Repeating this exact search is a loop. Try a different date, city, or respond to the user.",
+                        "rejection_source": "validator",
+                        "internal_retry_count": retries,
+                        "node_logs": [{"node": "validator", "status": "rejected (fuzzy redundant search)"}]
+                    }
+                
+                # Fallback for other tools (like get_user_details) returning empty results
+                if normalize_args(m.get("arguments_used")) == normalize_args(draft.get("arguments")):
+                    obs = str(m.get("api_observation"))
+                    if obs == "[]" or obs == "{}" or "not found" in obs.lower():
                         return {
-                            "rejection_feedback": f"Redundant action! You already called {draft.get('name')} with these exact arguments. Flight databases are static for a given date; repeating the exact same search will yield the exact same flights. If none of the flights work (e.g. wrong time), you MUST try a different date, use a different search tool (like one-stop), or use the 'respond' tool to tell the user no options exist.",
+                            "rejection_feedback": f"Redundant action. You already tried {draft.get('name')} with these arguments and it returned no results. Try a different query or ask the user for more info.",
                             "rejection_source": "validator",
                             "internal_retry_count": retries,
-                            "node_logs": [{"node": "validator", "status": "rejected (redundant static search)"}]
+                            "node_logs": [{"node": "validator", "status": "rejected (redundant empty search)"}]
                         }
-                    else:
-                        obs = str(m.get("api_observation"))
-                        if obs == "[]" or obs == "{}" or "not found" in obs.lower():
-                            return {
-                                "rejection_feedback": f"Redundant action. You already tried {draft.get('name')} with these arguments and it returned no results. Try a different date, city, or ask the user for more info.",
-                                "rejection_source": "validator",
-                                "internal_retry_count": retries,
-                                "node_logs": [{"node": "validator", "status": "rejected (redundant empty search)"}]
-                            }
 
     sys_prompt = f"""You are the strict structural and SEMANTIC VALIDATOR. Pre-flight simulate:
 DRAFT: {json.dumps(state.drafted_tool_call)}
