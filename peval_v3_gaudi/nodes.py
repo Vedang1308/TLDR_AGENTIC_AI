@@ -266,15 +266,13 @@ Your ONLY tool is `submit_plan`.
 
 ### THE EXHAUSTION MANDATE (CRITICAL):
 - If a search tool returns an empty list `[]`, that means NO flights exist for those parameters.
-- If a search tool returns a flight with `available_seats: 0` for your target class, that flight is IMPOSSIBLE to book for that class.
-- DO NOT repeat the same search (unless the user explicitly asked you to "check again").
-- If a search fails or a flight is full, you MUST pivot intelligently: 
-    1. Try different search tools (e.g. if direct failed, try one-stop).
-    2. Suggest/try adjacent dates (e.g. if May 20 is empty, try May 21).
-    3. Suggest different airport options.
-    4. If economy is full, check if business class price is acceptable, or find a different flight number.
-- NEVER try to book a flight that you previously saw had 0 seats. That is an automatic failure.
-- Your response to the user must be PROACTIVE: Do not just say "none found"; say "I couldn't find those, but I can check tomorrow or a different airport. Which do you prefer?"
+- The environment is unforgiving. If a search tool returns a flight with `available_seats: 0` for your target class, or a departure time that violates user constraints, that flight is a DEAD END.
+- DO NOT repeat the same search. DO NOT apologize endlessly.
+- If a search result (like `search_direct_flight`) fails your constraints (e.g., all flights are at 6 AM but user wants after 11 AM), you MUST pivot intelligently: 
+    1. IMMEDIARE FALLBACK: If direct flights fail constraints, try `search_onestop_flight` immediately.
+    2. ADJACENT SEARCH: Suggest/try adjacent dates (e.g. if May 20 is empty, try May 21).
+    3. ADJACENT LOCATIONS: Suggest different airport options in the same region.
+- Your response to the user must be ACTIONABLE: If you have no technical tools left to try, summarize exactly what you checked and ask the user for a specific pivot (date or airport).
 
 ### YOUR STRATEGIC CONTEXT:
 {kernel_section}
@@ -430,6 +428,20 @@ def validator_node(state: PevState) -> Dict:
         return {"drafted_tool_call": {"name": "respond", "arguments": {"content": "Validation Timeout."}}, "internal_retry_count": 0}
 
     if draft and draft.get("name") == "respond":
+        # CONVERSATIONAL LOOP DETECTION: Prevent infinite 'apology loops'
+        respond_count = 0
+        for m in reversed(state.memory):
+            if m.get("type") == "action" and m.get("action_taken") == "respond":
+                respond_count += 1
+            else: break
+        
+        if respond_count >= 2:
+            return {
+                "rejection_feedback": f"Infinite Loop Detected: You have responded to the user {respond_count} times in a row without making technical progress. You are FORBIDDEN from responding further until you perform a technical action (search, get_details, etc.). Call a tool now.",
+                "rejection_source": "validator",
+                "internal_retry_count": retries,
+                "node_logs": [{"node": "validator", "status": "rejected (forced technical pivot)"}]
+            }
         return {"node_logs": [{"node": "validator", "status": "approved (respond)"}], "internal_retry_count": 0}
 
     if draft and draft.get("name") == "think":
