@@ -305,8 +305,8 @@ MEMORY: {format_memory(state.memory)}
 {failed_actions_note}
 Draft the single best tool call."""
 
-    if state.rejection_feedback and state.rejection_source == "syntax_monitor":
-        sys_prompt += f"\n\n[REJECTION]: {state.rejection_feedback}\n"
+    if state.rejection_feedback:
+        sys_prompt += f"\n\n[REJECTION FEEDBACK from {state.rejection_source}]: {state.rejection_feedback}\n"
 
     tools = state.tools_info.copy()
     parsed, raw = invoke_with_paradigm(client, sys_prompt, [], tools, reasoning_mode, "Executor")
