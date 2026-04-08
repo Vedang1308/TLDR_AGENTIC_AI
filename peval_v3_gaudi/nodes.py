@@ -57,7 +57,7 @@ At each step, your generation MUST follow this exact sequence:
 
 **Format required:**
 Thought:
-<A single line of powerful reasoning to analyze your current task, state the chosen tool, and map its required arguments.>
+<Evidence-based reasoning citing specific steps from your MEMORY to map required arguments.>
 Action:
 {{"name": <The name of the action>, "arguments": <The arguments to the action in json format>}}
 
@@ -206,8 +206,14 @@ def planner_node(state: PevState) -> Dict:
     kernel_section = f"\nSTRATEGIC KERNEL (Compressed Context):\n{state.strategic_kernel}\n" if state.strategic_kernel else ""
     snapshot_section = f"\nWORLD SNAPSHOT (Harvested Facts):\n{json.dumps(state.world_snapshot, indent=2)}\n" if state.world_snapshot else ""
 
+    # MISSION ANCHOR: Always extract the very first user message to prevent drift
+    initial_mission = state.user_conversation[0].get('content', 'Unknown Mission') if state.user_conversation else "Unknown Mission"
+
     sys_prompt = f"""You are the HIERARCHICAL STRATEGIST (Planner). 
 Your ONLY tool is `submit_plan`. 
+
+### IMMOVABLE MISSION (ORIGINAL REQUEST) ###
+{initial_mission}
 
 ### YOUR STRATEGIC CONTEXT:
 {kernel_section}
@@ -410,6 +416,9 @@ MEMORY: {format_memory(state.memory)}
    - Verify that this SUM exactly matches the 'total_price' or 'total_amount' found in the previous flight/order search tools in your memory.
    - REJECT if the DRAFT uses an ID (flight_id, certificate_id, credit_card_id) that has not appeared in your memory yet. 
    - REJECT if the payment calculation is even $1 off.
+3. MISSION SHIELD: Verify that the DRAFT aligns with the ORIGINAL MISSION (First user message in MEMORY). 
+   - REJECT if the draft searches for origins, destinations, or dates that were NOT part of the initial user request, unless the user specifically asked to change them later.
+   - REJECT if the draft uses a user ID or passenger name that contradicts the mission context.
 
 Your job is NOT to judge high-level strategy.
 Approve or Reject. Be VERY specific about errors (e.g., "Math mismatch: expected 355, draft has 255")."""
