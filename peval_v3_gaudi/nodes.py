@@ -328,6 +328,9 @@ def validator_node(state: PevState) -> Dict:
     client = get_llm()
     retries = state.internal_retry_count + 1
     
+    if retries >= 5:
+        return {"drafted_tool_call": {"name": "respond", "arguments": {"content": "Validation Timeout."}}, "internal_retry_count": 0}
+
     if state.drafted_tool_call and state.drafted_tool_call.get("name") == "respond":
         return {"node_logs": [{"node": "validator", "status": "approved (respond)"}], "internal_retry_count": 0}
 

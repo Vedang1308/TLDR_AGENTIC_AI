@@ -110,6 +110,7 @@ class PEVEngineNative:
         messages_log = state.user_conversation.copy()
 
         for step in range(max_steps):
+            print(f"  [Step {step+1}/{max_steps}] Orchestrating Reasoning Flow...")
             # 1. Distill (Step 3: Strategic Kernel)
             distilled = self.summarizer(state)
             state.strategic_kernel = distilled["summary"]
@@ -117,15 +118,17 @@ class PEVEngineNative:
 
             # [STRATEGY HOOK]: IRMA Reformulation
             if strategy == "irma":
+                print(f"  [Step {step+1}] Strategy: IRMA Reformulating Observation...")
                 ref_out = reformulator_node(state)
                 state.node_logs.extend(ref_out.get("node_logs", []))
-                # Update situational knowledge with reformulated view
                 if ref_out.get("reformulated_observation"):
                     state.strategic_kernel = f"### REFORMULATED FOCUS ###\n{ref_out['reformulated_observation']}\n\n{state.strategic_kernel}"
 
-            # PEVAL Graph Orchestration
-            while True:
+            inner_step = 0
+            while inner_step < 10: # Safety cap for internal reasoning
+                inner_step += 1
                 # 2. Planner (Step 4)
+                print(f"  [Step {step+1}.{inner_step}] Node: Planner...")
                 p_out = planner_node(state)
                 state.node_logs.extend(p_out.get("node_logs", []))
                 if p_out.get("task_completed"):
@@ -134,6 +137,7 @@ class PEVEngineNative:
                 state.current_plan = p_out.get("current_plan", state.current_plan)
 
                 # 3. Executor (Tactician)
+                print(f"  [Step {step+1}.{inner_step}] Node: Executor (Drafting Action)...")
                 e_out = executor_node(state)
                 state.node_logs.extend(e_out.get("node_logs", []))
                 state.drafted_tool_call = e_out.get("drafted_tool_call")
@@ -144,33 +148,35 @@ class PEVEngineNative:
                 state.drafted_tool_call = t_out.get("drafted_tool_call")
 
                 # 5. Syntax Monitor (Step 6)
+                print(f"  [Step {step+1}.{inner_step}] Node: Syntax Monitor...")
                 m_out = syntax_monitor_node(state)
                 if m_out.get("rejection_feedback"):
+                    print(f"    ! REJECTED (Syntax): {m_out['rejection_feedback']}")
                     state.rejection_feedback = m_out["rejection_feedback"]
                     state.rejection_source = m_out["rejection_source"]
                     state.internal_retry_count = m_out["internal_retry_count"]
                     
-                    # [STRATEGY HOOK]: Reflection Diagnosis
                     if strategy == "reflection":
+                        print(f"    ! Reflecting on Syntax failure...")
                         refl_out = reflection_strategy_node(state)
                         state.error_reflection = refl_out.get("error_reflection")
                         state.node_logs.extend(refl_out.get("node_logs", []))
-                    
                     continue 
                 
                 # 6. Validator (Step 7)
+                print(f"  [Step {step+1}.{inner_step}] Node: Validator...")
                 v_out = validator_node(state)
                 if v_out.get("rejection_feedback"):
+                    print(f"    ! REJECTED (Validator): {v_out['rejection_feedback']}")
                     state.rejection_feedback = v_out["rejection_feedback"]
                     state.rejection_source = v_out["rejection_source"]
                     state.internal_retry_count = v_out["internal_retry_count"]
                     
-                    # [STRATEGY HOOK]: Reflection Diagnosis
                     if strategy == "reflection":
+                        print(f"    ! Reflecting on Validation failure...")
                         refl_out = reflection_strategy_node(state)
                         state.error_reflection = refl_out.get("error_reflection")
                         state.node_logs.extend(refl_out.get("node_logs", []))
-                        
                     continue 
                 
                 break
@@ -182,6 +188,7 @@ class PEVEngineNative:
             else: action = Action(name=drafted["name"], kwargs=drafted.get("arguments", {}))
             
             # 7. Dispatch to Env (Step 8)
+            print(f"  [Step {step+1}] Dispatching Action: {action.name}")
             res = env.step(action)
             reward = res.reward
             
