@@ -272,6 +272,11 @@ Your ONLY tool is `submit_plan`.
     1. IMMEDIARE FALLBACK: If direct flights fail constraints, try `search_onestop_flight` immediately.
     2. ADJACENT SEARCH: Suggest/try adjacent dates (e.g. if May 20 is empty, try May 21).
     3. ADJACENT LOCATIONS: Suggest different airport options in the same region.
+
+### PAYMENT & MATH RECOVERY (NEW):
+- If a booking or update tool fails with "Amount Mismatch" or "Calculated Price differs," you MUST use the `calculate` tool to re-verify the cost of ALL segments + base price + baggage fees before retrying the booking.
+- Certificates are listed in the user profile (get_user_details). If using a certificate, ensure you use the correct ID (e.g., certificate_12345) and include the matching amount in your payment_methods list.
+
 - Your response to the user must be ACTIONABLE: If you have no technical tools left to try, summarize exactly what you checked and ask the user for a specific pivot (date or airport).
 - MATH & PRICING: If the user asks for "total cost", "price", or "total", you MUST use the `calculate` tool. Do NOT estimate or guess totals in conversation.
 - ID CONTEXT MANDATE: Whenever using a reservation-specific tool (update, cancel, get_reservation_details), you MUST include BOTH 'user_id' AND 'reservation_id' if both are available in MEMORY.
@@ -477,39 +482,37 @@ def validator_node(state: PevState) -> Dict:
             if any(k in last_msg for k in retry_keywords):
                 user_retry_intent = True
 
-        # 2. Airtight Fingerprinting (Fixed: Robust Date Normalization)
-        def get_fingerprint(args):
-            if not args: return ""
-            raw_date = str(args.get('date', "")).lower().strip()
+        # 2. Airtight Fingerprinting (Fixed: Granular Argument Hashing for utility tools)
+        def get_fingerprint(tool_name, args):
+            if not args: return tool_name
             
-            # Month mapping
-            month_map = {"jan":"01", "feb":"02", "mar":"03", "apr":"04", "may":"05", "jun":"06", 
-                         "jul":"07", "aug":"08", "sep":"09", "oct":"10", "nov":"11", "dec":"12"}
+            # For Search tools, stick to Origin|Destination|Date
+            if "search" in tool_name.lower():
+                raw_date = str(args.get('date', "")).lower().strip()
+                month_map = {"jan":"01", "feb":"02", "mar":"03", "apr":"04", "may":"05", "jun":"06", 
+                             "jul":"07", "aug":"08", "sep":"09", "oct":"10", "nov":"11", "dec":"12"}
+                year, m_found, day = "NODATE", "NODATE", "NODATE"
+                if raw_date:
+                    iso_parts = re.split(r'[-/]', raw_date)
+                    if len(iso_parts) >= 3:
+                        year = iso_parts[0] if len(iso_parts[0]) == 4 else "2024"
+                        m_found = iso_parts[1].zfill(2)
+                        day = iso_parts[2].zfill(2)
+                    else:
+                        nums = re.findall(r'\d+', raw_date)
+                        for m_name, m_val in month_map.items():
+                            if m_name in raw_date:
+                                m_found = m_val; break
+                        if nums:
+                            nums_sorted = sorted([int(n) for n in nums], reverse=True)
+                            if nums_sorted[0] > 1000: year = str(nums_sorted[0])
+                            if len(nums_sorted) > 1: day = str(nums_sorted[-1])
+                norm_date = f"{year}{m_found}{str(day).zfill(2)}"
+                return f"{tool_name.upper()}:{str(args.get('origin', '')).strip().upper()}|{str(args.get('destination', '')).strip().upper()}|{norm_date}"
             
-            # FIXED: Do NOT use default date constants (like 20240101) which cause fingerprint collisions
-            year, m_found, day = "NODATE", "NODATE", "NODATE"
-            
-            if raw_date:
-                # Robust ISO/Numeric Parsing (e.g. 2024-05-20)
-                iso_parts = re.split(r'[-/]', raw_date)
-                if len(iso_parts) >= 3:
-                    # Assuming YYYY-MM-DD
-                    year = iso_parts[0] if len(iso_parts[0]) == 4 else "2024"
-                    m_found = iso_parts[1].zfill(2)
-                    day = iso_parts[2].zfill(2)
-                else:
-                    # Fallback to Natural Language Parsing
-                    nums = re.findall(r'\d+', raw_date)
-                    for m_name, m_val in month_map.items():
-                        if m_name in raw_date:
-                            m_found = m_val; break
-                    if nums:
-                        nums_sorted = sorted([int(n) for n in nums], reverse=True)
-                        if nums_sorted[0] > 1000: year = str(nums_sorted[0])
-                        if len(nums_sorted) > 1: day = str(nums_sorted[-1])
-
-            norm_date = f"{year}{m_found}{str(day).zfill(2)}"
-            return f"{str(args.get('origin', '')).strip().upper()}|{str(args.get('destination', '')).strip().upper()}|{norm_date}"
+            # For Calculation or Detail tools, use the entire argument string to detect unique work
+            # This prevents collissions between two DIFFERENT calculations (e.g. Economy vs Business)
+            return f"{tool_name.upper()}:{json.dumps(args, sort_keys=True)}"
 
         # 3. Apply Gate
         if not user_retry_intent:
@@ -518,7 +521,7 @@ def validator_node(state: PevState) -> Dict:
                 "get_user_details", "update_reservation_baggages", 
                 "book_reservation", "calculate", "list_reservations", "get_reservation_details"
             ]
-            current_fp = get_fingerprint(draft.get("arguments"))
+            current_fp = get_fingerprint(draft.get("name"), draft.get("arguments", {}))
             for m in state.memory:
                 if m.get("type") in ["tool_result", "tool_error"] and m.get("action_taken") == draft.get("name"):
                     # FIXED: Only reject if the previous result was SUCCESSFUL.
@@ -528,7 +531,7 @@ def validator_node(state: PevState) -> Dict:
                         continue # Allow retry after failures
                         
                     prev_args = m.get("arguments_used") or m.get("arguments") or {}
-                    prev_fp = get_fingerprint(prev_args)
+                    prev_fp = get_fingerprint(m.get("action_taken"), prev_args)
                     if prev_fp == current_fp and draft.get("name") in immutable_tools:
                         return {
                             "rejection_feedback": f"Broad Redundancy Gate: You already performed '{draft.get('name')}' for {current_fp} at Step {state.memory.index(m)+1}. Repeating this exactly is a waste. Pivot or check results.",
