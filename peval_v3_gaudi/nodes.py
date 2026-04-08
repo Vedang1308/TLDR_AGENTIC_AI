@@ -274,6 +274,8 @@ Your ONLY tool is `submit_plan`.
     3. ADJACENT LOCATIONS: Suggest different airport options in the same region.
 - Your response to the user must be ACTIONABLE: If you have no technical tools left to try, summarize exactly what you checked and ask the user for a specific pivot (date or airport).
 - MATH & PRICING: If the user asks for "total cost", "price", or "total", you MUST use the `calculate` tool. Do NOT estimate or guess totals in conversation.
+- ID CONTEXT MANDATE: Whenever using a reservation-specific tool (update, cancel, get_reservation_details), you MUST include BOTH 'user_id' AND 'reservation_id' if both are available in MEMORY.
+- PROACTIVE HARVESTING: If you are missing a 'reservation_id', do NOT just ask the user. Immediately call `get_user_details` to harvest any existing reservations from the user's profile.
 
 ### YOUR STRATEGIC CONTEXT:
 {kernel_section}
@@ -567,6 +569,7 @@ MEMORY: {format_memory(state.memory)}
    - The User is the Source of Truth. If the user corrects a route, date, or preference in a message, APPROVE IT. 
    - DO NOT reject based on a previous "Initial Mission" if the User has provided new data.
    - 24-HOUR CONVERSION: 'After 11 AM' is 11:00-23:59 (19:00 is successful).
+   - VICTORY BYPASS: If the VERY LAST TECHNICAL ACTION in MEMORY (ignore previous 'think' or 'respond' blocks) was a SUCCESSFUL state-mutation tool (e.g. update, book, calculate, or cancel), you MUST APPROVE the drafting of a final 'respond' call to close the loop with the user.
    - DO NOT enforce tool "consistency." Pivoting between tools is a sign of intelligence.
 
 Your job is NOT to judge high-level strategy or path selection. Approve if technical schema and physical constraints are met.
