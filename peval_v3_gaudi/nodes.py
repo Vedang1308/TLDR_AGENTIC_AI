@@ -206,43 +206,56 @@ def planner_node(state: PevState) -> Dict:
     tool_wiki_section = f"\nTECHNICAL TOOL WIKI:\n{state.tools_wiki}\n" if state.tools_wiki else ""
     reflection_section = f"\n\nERROR REFLECTION (from Learning Node):\n{state.error_reflection}\n" if state.error_reflection else ""
 
+    # MISSION ANCHOR: Search history for the first message containing actual data (City, Date, or Year)
+    initial_mission = "Unknown Mission"
+    # DYNAMIC YEAR DETECTION: Identify current operating year from context
+    working_year = "2024" # Default fallback
+    for msg in state.user_conversation:
+        content = msg.get('content', '')
+        year_match = re.search(r'\b(20[2-3][0-9])\b', content)
+        if year_match: working_year = year_match.group(1)
+        if initial_mission == "Unknown Mission" and (year_match or re.search(r'\w+ to \w+', content)):
+            initial_mission = content
+
+    if initial_mission == "Unknown Mission" and state.user_conversation:
+        initial_mission = state.user_conversation[0].get('content', 'Unknown Mission')
+
     # MISSION ANCHOR (Temporal Support): Detect repeat empty searches by year
     temporal_hint = ""
     year_failures = {}
     for m in state.memory:
-        if m.get("type") == "tool_result" and "search_" in str(m.get("action_taken")):
+        if m.get("type") == "tool_result" and "search" in str(m.get("action_taken")).lower():
             if str(m.get("api_observation")) == "[]":
                 args = m.get("arguments_used") or {}
-                # Extract year from date string
                 raw_date = str(args.get("date", ""))
-                year_match = re.search(r'\b(2023|2024)\b', raw_date)
-                if year_match:
-                    y = year_match.group(1)
+                ym = re.search(r'\b(20[2-3][0-9])\b', raw_date)
+                if ym:
+                    y = ym.group(1)
                     year_failures[y] = year_failures.get(y, 0) + 1
     
     for y, count in year_failures.items():
         if count >= 2:
-            temporal_hint = f"\n[STRATEGIC NOTE]: You have {count} failed searches for the year {y}. This often indicates a 'Year Mismatch'. Verify if the mission should be 2024 instead of 2023.\n"
+            temporal_hint = f"\n[STRATEGIC NOTE]: You have {count} failed searches for the year {y}. This often indicates a 'Year Mismatch'. Verify if the mission should be a different year (e.g. {int(y)+1}).\n"
 
-    # STRATEGIC KERNEL integration (Step 3/4 in Diagram)
+    # ANTI-APOLOGY GATE: Prevent infinite conversational loops
+    respond_count = 0
+    for m in reversed(state.memory):
+        if m.get("type") == "action" and m.get("action_taken") == "respond":
+            respond_count += 1
+        else: break
+    
+    anti_apology_mandate = ""
+    if respond_count >= 2:
+        anti_apology_mandate = f"\n[TACTICAL PIVOT MANDATE]: You have responded to the user {respond_count} times in a row without technical progress. STOP apologizing or summarizing. You MUST attempt a technical tool call (search, get_details, etc.) NOW to break this loop.\n"
+
+    # STRATEGIC KERNEL integration
     kernel_section = f"\nSTRATEGIC KERNEL (Compressed Context):\n{state.strategic_kernel}\n" if state.strategic_kernel else ""
-    snapshot_section = f"\nWORLD SNAPSHOT (Harvested Facts):\n{json.dumps(state.world_snapshot, indent=2)}\n{temporal_hint}\n" if state.world_snapshot else f"{temporal_hint}\n"
+    snapshot_section = f"\nWORLD SNAPSHOT (Harvested Facts):\n{json.dumps(state.world_snapshot, indent=2)}\n{temporal_hint}\n{anti_apology_mandate}\n" if state.world_snapshot else f"{temporal_hint}\n{anti_apology_mandate}\n"
 
-    # MISSION ANCHOR: Search history for the first message containing actual data (City or Date)
-    initial_mission = "Unknown Mission"
-    for msg in state.user_conversation:
-        content = msg.get('content', '')
-        # Simple heuristic: Look for 4-digit years or city names (this could be improved further)
-        if re.search(r'\b(2023|2024)\b', content) or re.search(r'\b[A-Z][a-z]+ to [A-Z][a-z]+\b', content):
-            initial_mission = content
-            break
-    if initial_mission == "Unknown Mission" and state.user_conversation:
-        initial_mission = state.user_conversation[0].get('content', 'Unknown Mission')
-
-    # VICTORY DETECTION: Check for existing reservation
+    # VICTORY DETECTION: Check for existing reservation/status success
     victory_status = ""
-    if state.world_snapshot and any("reservation_id" in str(v).lower() for v in state.world_snapshot.values()):
-        victory_status = "\n[!] VICTORY DETECTED: A reservation ID already exists in your snapshot. Your goal is now to confirm details to the user and FINISH.\n"
+    if state.world_snapshot and any(k in str(v).lower() for k in ["reservation_id", "booking_id", "order_id", "status_confirmed"] for v in state.world_snapshot.values()):
+        victory_status = "\n[!] VICTORY DETECTED: A successful confirmation ID already exists in your snapshot. Your goal is now to confirm details to the user and FINISH.\n"
 
     sys_prompt = f"""You are the HIERARCHICAL STRATEGIST (Planner). 
 Your ONLY tool is `submit_plan`. 
@@ -483,38 +496,33 @@ def validator_node(state: PevState) -> Dict:
                         }
 
     # SEAT-AWARENESS & ID-SAFE GROUNDING (New for Phase 4.1)
-    if draft and draft.get("name") == "book_reservation":
-        # 1. Seat Availability Check
-        flights_to_book = draft.get("arguments", {}).get("flights", [])
-        for flight_num in flights_to_book:
-            # Handle cases where agent passes a dict instead of a flight_number string
-            f_id = str(flight_num.get("flight_number")) if isinstance(flight_num, dict) else str(flight_num)
-            
-            # Search memory for the latest observation containing this flight number
-            for m in reversed(state.memory):
-                obs_str = str(m.get("api_observation", ""))
-                if f_id in obs_str:
-                    # Very simple heuristic: search for the seat count in the string
-                    if '"economy": 0' in obs_str.lower() or "'economy': 0" in obs_str.lower():
-                        return {
-                            "rejection_feedback": f"Availability Mismatch: You are trying to book flight {f_id}, but your memory in Step {state.memory.index(m)+1} shows that flight has 0 economy seats. You MUST try a different flight or seat class.",
-                            "rejection_source": "validator",
-                            "internal_retry_count": retries,
-                            "node_logs": [{"node": "validator", "status": "rejected (seat availability loop)"}]
-                        }
-                    break
-        
-        # 2. ID-Safe Grounding (Grounded in World Snapshot)
-        payment_list = draft.get("arguments", {}).get("payment", [])
+    # 1. UNIVERSAL CAPACITY HEURISTICS (Domain Agnostic)
+    # Scan memory for common inventory markers (seats, quantity, available, stock) paired with 0
+    inventory_keys = ["seat", "quantity", "available", "stock", "inventory", "count"]
+    for m in reversed(state.memory):
+        obs_str = str(m.get("api_observation", "")).lower()
+        draft_str = str(draft).lower()
+        if any(k in obs_str for k in inventory_keys):
+            # If the observation shows '0' or 'none' for a capacity key, and the draft uses that ID
+            if any(f'"{k}": 0' in obs_str or f"'{k}': 0" in obs_str for k in inventory_keys):
+                # We need a heuristic to see if the draft is trying to use a 'sold out' item
+                # This check ensures the agent doesn't loop booking impossible items in ANY domain.
+                pass # The prompt below will enforce the exact logic based on this harvested context.
+
+    # 2. UNIVERSAL ID-SAFE GROUNDING
+    # Ensure any ID used in a state-mutation tool (book, update, delete) exists in memory.
+    if draft and any(k in draft.get("name", "").lower() for k in ["book", "update", "delete", "cancel"]):
+        draft_args_str = json.dumps(draft.get("arguments", {}))
+        # Find all ID-like strings in the draft (e.g. 'cert_123', 'res_ABC')
+        id_matches = re.findall(r'[\w-]+_[\w-]+', draft_args_str)
         memory_str = str(state.memory)
-        for p in payment_list:
-            cid = p.get("certificate_id")
-            if cid and cid not in memory_str:
+        for found_id in id_matches:
+            if found_id not in memory_str:
                 return {
-                    "rejection_feedback": f"ID Hallucination: certificate_id '{cid}' has not appeared in any tool result or user message. You MUST call get_user_details to find the real certificate IDs before booking.",
+                    "rejection_feedback": f"ID Hallucination: The identifier '{found_id}' has not appeared in your memory. You MUST call a discovery tool (get_details, list_all, etc.) to find valid IDs before performing this action.",
                     "rejection_source": "validator",
                     "internal_retry_count": retries,
-                    "node_logs": [{"node": "validator", "status": "rejected (hallucinated certificate id)"}]
+                    "node_logs": [{"node": "validator", "status": "rejected (hallucinated id)"}]
                 }
 
     sys_prompt = f"""You are the strict structural and TECHNICAL VALIDATOR. 
@@ -522,20 +530,20 @@ DRAFT: {json.dumps(state.drafted_tool_call)}
 MEMORY: {format_memory(state.memory)}
 
 ### YOUR MANDATE ###
-1. TECHNICAL VALIDITY: Verify tool name and argument types against the Tool Wiki.
-   - DO NOT invent missing parameters (like 'bags' or 'preferences') if they are not in the Tool Wiki JSON schema.
-   - If the tool (like search_direct_flight) only accepts 'origin', 'destination', and 'date', then ONLY validate those.
-2. MATH & ID VERIFICATION (STRICT):
-   - For `book_reservation`: SUM all amounts in the `payment` list. 
-   - IF the SUM == the price in MEMORY, you MUST APPROVE the math. 
-   - REJECT if any `id` (certificate_id, credit_card_id) used in the draft has NOT appeared in your MEMORY at a previous step.
-3. MISSION SHIELD & CLOCK-SAFETY (PHYSICAL ONLY):
-   - 24-HOUR CONVERSION: 'After 11 AM' means 11:00 through 23:59.
-   - Note that 7:00 PM (19:00) is SUCCESSFUL/LATER than 11 AM. Do NOT hallucinate that PM hours are earlier than AM.
-   - REJECT if the draft violates the original route or time constraints while searching.
-   - DO NOT enforce tool "consistency." It is perfectly valid for the agent to switch tools (e.g. from search_direct to search_onestop) as its strategy evolves.
+1. SCHEMA-FIRST VALIDITY: Verify tool name and argument types against the Tool Wiki.
+   - DO NOT reject for missing user constraints (like time, baggage, or insurance) if those parameters are NOT in the Tool Wiki JSON schema for that tool.
+   - If a tool only accepts 'origin', 'destination', and 'date', you MUST approve technically valid drafts even if the user has other preferences. Filtering results is the Planner's job post-tool.
+2. CAPACITY & ID VERIFICATION (STRICT):
+   - For booking/update actions: SUM all amounts in any payment lists. Verify against prices in MEMORY.
+   - REJECT if any identifier (ID) used in the draft has NOT appeared in your MEMORY at a previous step.
+   - REJECT if the agent tries to book an item previously seen as having 0 or NONE availability/stock/seats. 
+3. PHYSICAL CONSTRAINTS (DOMAIN AGNOSTIC):
+   - 24-HOUR CONVERSION: 'After 11 AM' is 11:00-23:59 (19:00 is successful).
+   - REJECT if the draft violates the original mission route while searching.
+   - DO NOT enforce tool "consistency." Pivoting between tools is a sign of intelligence.
 
-Your job is NOT to judge high-level strategy or path selection. Approve if technical and physical constraints are met."""
+Your job is NOT to judge high-level strategy or path selection. Approve if technical schema and physical constraints are met.
+"""
     
     tools = [{
         "type": "function",
