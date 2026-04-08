@@ -206,14 +206,28 @@ def planner_node(state: PevState) -> Dict:
     kernel_section = f"\nSTRATEGIC KERNEL (Compressed Context):\n{state.strategic_kernel}\n" if state.strategic_kernel else ""
     snapshot_section = f"\nWORLD SNAPSHOT (Harvested Facts):\n{json.dumps(state.world_snapshot, indent=2)}\n" if state.world_snapshot else ""
 
-    # MISSION ANCHOR: Always extract the very first user message to prevent drift
-    initial_mission = state.user_conversation[0].get('content', 'Unknown Mission') if state.user_conversation else "Unknown Mission"
+    # MISSION ANCHOR: Search history for the first message containing actual data (City or Date)
+    initial_mission = "Unknown Mission"
+    for msg in state.user_conversation:
+        content = msg.get('content', '')
+        # Simple heuristic: Look for 4-digit years or city names (this could be improved further)
+        if re.search(r'\b(2023|2024)\b', content) or re.search(r'\b[A-Z][a-z]+ to [A-Z][a-z]+\b', content):
+            initial_mission = content
+            break
+    if initial_mission == "Unknown Mission" and state.user_conversation:
+        initial_mission = state.user_conversation[0].get('content', 'Unknown Mission')
+
+    # VICTORY DETECTION: Check for existing reservation
+    victory_status = ""
+    if state.world_snapshot and any("reservation_id" in str(v).lower() for v in state.world_snapshot.values()):
+        victory_status = "\n[!] VICTORY DETECTED: A reservation ID already exists in your snapshot. Your goal is now to confirm details to the user and FINISH.\n"
 
     sys_prompt = f"""You are the HIERARCHICAL STRATEGIST (Planner). 
 Your ONLY tool is `submit_plan`. 
 
 ### IMMOVABLE MISSION (ORIGINAL REQUEST) ###
 {initial_mission}
+{victory_status}
 
 ### YOUR STRATEGIC CONTEXT:
 {kernel_section}
