@@ -335,6 +335,19 @@ def syntax_monitor_node(state: PevState) -> Dict:
         
     return {"node_logs": [{"node": "syntax_monitor", "status": "passed"}], "internal_retry_count": 0}
 
+def normalize_args(args: Any) -> str:
+    """Normalize tool arguments for robust comparison."""
+    if not args: return "{}"
+    if isinstance(args, str):
+        try:
+            val = json.loads(args)
+            if isinstance(val, dict): return json.dumps(val, sort_keys=True)
+        except: pass
+        return str(args).strip().lower()
+    if isinstance(args, dict):
+        return json.dumps(args, sort_keys=True)
+    return str(args).strip().lower()
+
 def validator_node(state: PevState) -> Dict:
     client = get_llm()
     retries = state.internal_retry_count + 1
@@ -359,9 +372,10 @@ def validator_node(state: PevState) -> Dict:
     # Redundancy Check: Prevent the agent from repeating empty or static searches
     if draft and state.memory:
         immutable_tools = ["search_direct_flight", "search_onestop_flight", "list_all_airports", "calculate"]
+        current_args_norm = normalize_args(draft.get("arguments"))
         for m in state.memory:
             if m.get("type") == "tool_result" and m.get("action_taken") == draft.get("name"):
-                if m.get("arguments_used") == draft.get("arguments"):
+                if normalize_args(m.get("arguments_used")) == current_args_norm:
                     if draft.get("name") in immutable_tools:
                         return {
                             "rejection_feedback": f"Redundant action! You already called {draft.get('name')} with these exact arguments. Flight databases are static for a given date; repeating the exact same search will yield the exact same flights. If none of the flights work (e.g. wrong time), you MUST try a different date, use a different search tool (like one-stop), or use the 'respond' tool to tell the user no options exist.",
@@ -379,13 +393,21 @@ def validator_node(state: PevState) -> Dict:
                                 "node_logs": [{"node": "validator", "status": "rejected (redundant empty search)"}]
                             }
 
-    sys_prompt = f"""You are the strict technical VALIDATOR. Pre-flight simulate:
+    sys_prompt = f"""You are the strict structural and SEMANTIC VALIDATOR. Pre-flight simulate:
 DRAFT: {json.dumps(state.drafted_tool_call)}
 MEMORY: {format_memory(state.memory)}
 
-Your ONLY job is to verify technical validity and execution sanity. You must NOT judge the agent's overarching strategy, conversational direction, or whether it perfectly matches the user's subtle preferences. 
-If the DRAFT is a known tool with correct argument types, you MUST output APPROVE.
-Only output REJECT if there is a catastrophic hallucination (e.g., using a tool that doesn't exist, passing a string when a number is required, or attempting an action that is technically impossible right now).
+### YOUR MANDATE ###
+1. TECHNICAL VALIDITY: Verify that the tool name exists and argument types are correct.
+2. SEMANTIC ACCURACY (CRITICAL): Cross-reference the DRAFT arguments with the MEMORY. 
+   - REJECT if the DRAFT uses a price, flight ID, or user ID that is not present in the memory (Hallucination).
+   - REJECT if a booking specifies a payment amount that does not match the total price found in previous tool results.
+   - REJECT if the agent is trying to search for the same failed parameters again.
+
+Your job is NOT to judge the agent's high-level strategy or conversation tone.
+If the draft is technically valid AND its parameters match the facts in your Memory, output APPROVE.
+Only output REJECT if there is a hallucination or technical error. Be VERY specific in your reason.
+
 Approve or Reject."""
     
     tools = [{

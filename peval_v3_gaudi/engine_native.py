@@ -202,6 +202,10 @@ class PEVEngineNative:
                     continue 
                 
                 break
+            else:
+                # If we exhausted 10 retries without break (approval), clear the draft to force respond
+                print(f"    ! FAILED: Internal reasoning limit reached for Step {step+1}. Forcing fallback to respond.")
+                state.drafted_tool_call = None
 
             if state.task_completed: break
             
