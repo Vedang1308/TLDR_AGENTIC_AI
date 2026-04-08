@@ -354,19 +354,28 @@ def validator_node(state: PevState) -> Dict:
                 "node_logs": [{"node": "validator", "status": "rejected (consecutive think)"}]
             }
             
-    # Redundancy Check: Prevent the agent from repeating empty searches
+    # Redundancy Check: Prevent the agent from repeating empty or static searches
     if draft and state.memory:
+        immutable_tools = ["search_direct_flight", "search_onestop_flight", "list_all_airports", "calculate"]
         for m in state.memory:
             if m.get("type") == "tool_result" and m.get("action_taken") == draft.get("name"):
                 if m.get("arguments_used") == draft.get("arguments"):
-                    obs = str(m.get("api_observation"))
-                    if obs == "[]" or obs == "{}" or "not found" in obs.lower():
+                    if draft.get("name") in immutable_tools:
                         return {
-                            "rejection_feedback": f"Redundant action. You already tried {draft.get('name')} with these arguments and it returned no results. Try a different date, city, or ask the user for more info.",
+                            "rejection_feedback": f"Redundant action! You already called {draft.get('name')} with these exact arguments. Flight databases are static for a given date; repeating the exact same search will yield the exact same flights. If none of the flights work (e.g. wrong time), you MUST try a different date, use a different search tool (like one-stop), or use the 'respond' tool to tell the user no options exist.",
                             "rejection_source": "validator",
                             "internal_retry_count": retries,
-                            "node_logs": [{"node": "validator", "status": "rejected (redundant empty search)"}]
+                            "node_logs": [{"node": "validator", "status": "rejected (redundant static search)"}]
                         }
+                    else:
+                        obs = str(m.get("api_observation"))
+                        if obs == "[]" or obs == "{}" or "not found" in obs.lower():
+                            return {
+                                "rejection_feedback": f"Redundant action. You already tried {draft.get('name')} with these arguments and it returned no results. Try a different date, city, or ask the user for more info.",
+                                "rejection_source": "validator",
+                                "internal_retry_count": retries,
+                                "node_logs": [{"node": "validator", "status": "rejected (redundant empty search)"}]
+                            }
 
     sys_prompt = f"""You are the VALIDATOR. Pre-flight simulate:
 DRAFT: {json.dumps(state.drafted_tool_call)}
