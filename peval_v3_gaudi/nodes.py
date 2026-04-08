@@ -411,10 +411,11 @@ MEMORY: {format_memory(state.memory)}
 
 ### YOUR MANDATE ###
 1. TECHNICAL VALIDITY: Verify tool name and argument types.
-2. MATH & ID VERIFICATION (CRITICAL):
-   - For `book_reservation`: SUM all entries in the `payment` list. 
-   - REJECT if the total SUM is not exactly equal to the 'total_price' from your MEMORY.
-   - REJECT if any `id` (flight_id, certificate_id) used in the draft has NOT appeared in your MEMORY at a previous step.
+2. MATH & ID VERIFICATION (STRICT):
+   - For `book_reservation`: SUM all amounts in the `payment` list. 
+   - IF the SUM == the price in MEMORY, you MUST APPROVE the math. Do NOT overthink small details if the final number is correct.
+   - REJECT ONLY IF the final number is mathematically different.
+   - REJECT if any `id` (certificate_id, credit_card_id) used in the draft is NOT an exact string match to an ID found in a previous `get_user_details` or `search` observation.
 3. MISSION SHIELD: Verify that the DRAFT aligns with the ORIGINAL MISSION (First user message in MEMORY). 
    - REJECT if the draft searches for origins, destinations, or dates that were NOT part of the initial user request, unless the user specifically asked to change them later.
 
