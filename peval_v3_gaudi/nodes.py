@@ -224,8 +224,9 @@ MEMORY KERNEL (Recent raw steps):
 FAILURE HISTORY:
 {failure_history}
 
-REJECTION FEEDBACK:
-{f"Source: {state.rejection_source} | Message: {state.rejection_feedback}" if state.rejection_feedback else "None."}
+### REJECTION HISTORY (MUST RESOLVE) ###
+{f"CRITICAL ERROR FROM {state.rejection_source.upper()}: {state.rejection_feedback}" if state.rejection_feedback else "None."}
+{f"PREVIOUS ATTEMPTED ACTION: {state.drafted_tool_call.get('name')}" if state.drafted_tool_call else ""}
 
 MANDATORY POLICY CHECKLIST:
 1. USER IDENTIFIED? [{"X" if state.user_identified else " "}] 
@@ -313,7 +314,8 @@ MEMORY: {format_memory(state.memory)}
 Draft the single best tool call."""
 
     if state.rejection_feedback:
-        sys_prompt += f"\n\n[REJECTION FEEDBACK from {state.rejection_source}]: {state.rejection_feedback}\n"
+        sys_prompt += f"\n\n[!!! CRITICAL CORRECTION !!! from {state.rejection_source.upper()}]:\n>> {state.rejection_feedback}\n"
+        sys_prompt += "\nYour previous attempt was INVALID. You MUST change your arguments or strategy based on this feedback immediately. DO NOT repeat the same mistake.\n"
         if "loop" in str(state.rejection_feedback).lower() or "redundant" in str(state.rejection_feedback).lower():
             sys_prompt += "\nGUIDANCE: Do NOT repeat the previous action. Switch to a different tool (Interacting with User or searching differently).\n"
 
