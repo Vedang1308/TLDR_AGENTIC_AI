@@ -412,16 +412,14 @@ MEMORY: {format_memory(state.memory)}
 ### YOUR MANDATE ###
 1. TECHNICAL VALIDITY: Verify tool name and argument types.
 2. MATH & ID VERIFICATION (CRITICAL):
-   - For `book_reservation`: Check the `payment` list. Sum the `amount` fields. 
-   - Verify that this SUM exactly matches the 'total_price' or 'total_amount' found in the previous flight/order search tools in your memory.
-   - REJECT if the DRAFT uses an ID (flight_id, certificate_id, credit_card_id) that has not appeared in your memory yet. 
-   - REJECT if the payment calculation is even $1 off.
+   - For `book_reservation`: SUM all entries in the `payment` list. 
+   - REJECT if the total SUM is not exactly equal to the 'total_price' from your MEMORY.
+   - REJECT if any `id` (flight_id, certificate_id) used in the draft has NOT appeared in your MEMORY at a previous step.
 3. MISSION SHIELD: Verify that the DRAFT aligns with the ORIGINAL MISSION (First user message in MEMORY). 
    - REJECT if the draft searches for origins, destinations, or dates that were NOT part of the initial user request, unless the user specifically asked to change them later.
-   - REJECT if the draft uses a user ID or passenger name that contradicts the mission context.
 
 Your job is NOT to judge high-level strategy.
-Approve or Reject. Be VERY specific about errors (e.g., "Math mismatch: expected 355, draft has 255")."""
+Approve or Reject. Be VERY specific about errors (e.g., "ID Hallucination: certificate_7815826 not found in memory")."""
     
     tools = [{
         "type": "function",

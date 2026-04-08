@@ -217,6 +217,7 @@ class PEVEngineNative:
             print(f"  [Step {step+1}] Dispatching Action: {action.name}")
             state.tool_attempts[action.name] = state.tool_attempts.get(action.name, 0) + 1
             res = env.step(action)
+            print(f"  [Step {step+1}] Observation (Environment): {str(res.observation)[:300]}...") # Print first 300 chars for clarity
             reward = res.reward
             
             # Record Observation
