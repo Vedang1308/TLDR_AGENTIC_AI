@@ -11,16 +11,15 @@ class PEVConfig:
     USER_PORT = 8225
     
     # --- Model Selection ---
-    # Supported: Qwen3-4B, 8B, 14B, 32B, Qwen2.5-72B-Instruct
-    AGENT_MODEL = "qwen-72b-agent" 
+    AGENT_MODEL = os.getenv("AGENT_MODEL_NAME", "qwen-72b-agent") 
     USER_MODEL = "qwen-72b-simulator"
     
     # --- Tool Calling Strategy ---
     # Supported: fc, react, reflection, irma
-    TOOL_STRATEGY = os.getenv("TOOL_STRATEGY", "fc")
+    TOOL_STRATEGY = os.getenv("TOOL_STRATEGY", os.getenv("AGENT_REASONING_MODE", "fc"))
     
     # --- Endpoints ---
-    AGENT_ENDPOINT = f"http://127.0.0.1:{AGENT_PORT}/v1"
+    AGENT_ENDPOINT = os.getenv("AGENT_API_BASE", f"http://127.0.0.1:{AGENT_PORT}/v1")
     USER_ENDPOINT = f"http://127.0.0.1:{USER_PORT}/v1"
     
     # --- External Summarizer (No local VRAM cost) ---

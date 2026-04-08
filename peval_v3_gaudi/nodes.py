@@ -7,10 +7,8 @@ from peval_v4_lite.src.core.model_client import ModelClient
 from .state import PevState
 
 def get_llm():
-    # Phase 3 Gaudi-Native uses the local ModelClient wrapper
-    api_base = os.environ.get("AGENT_API_BASE", "http://localhost:8000/v1")
-    model_name = os.environ.get("AGENT_MODEL_NAME", "Qwen/Qwen3-4B")
-    return ModelClient(base_url=api_base, model_name=model_name)
+    # Phase 3 Gaudi-Native uses the standard ModelClient mode
+    return ModelClient(mode="agent")
 
 def format_memory(memory_list: List[Dict]) -> str:
     """Converts the raw JSON memory array into a clean markdown trace."""
