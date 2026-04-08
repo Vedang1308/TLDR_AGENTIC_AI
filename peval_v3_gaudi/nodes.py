@@ -235,9 +235,11 @@ MANDATORY POLICY CHECKLIST:
 1. USER IDENTIFIED? [{"X" if state.user_identified else " "}] 
    - IF NO: You MUST prioritize obtaining user_id or reservation_id immediately.
    - IF YES: Proceed with requested services.
-2. LAST ATTEMPT? {state.memory[-1].get("action_taken") if state.memory else "None."}
-   - IF [] or REJECTED: Choose a DIFFERENT tool or different arguments.
-3. CONSECUTIVE FAILURES? If any tool has > 3 attempts in 'TOOL ATTEMPT COUNTS', you MUST PIVOT strategy (e.g., ask user for help) instead of retrying.
+3. CONSECUTIVE FAILURES? If any tool has > 3 attempts in 'TOOL ATTEMPT COUNTS', you MUST PIVOT autonomously. Do NOT just repeat. Instead:
+   - Try a different search tool (e.g., one-stop instead of direct).
+   - Change search parameters (e.g., +/- 1 day or different airport).
+   - Re-calculate and verify your arguments against the MEMORY.
+   - Only ask the user for clarification as a last resort if all tool variations are exhausted.
 """
     tools = [{
         "type": "function",
