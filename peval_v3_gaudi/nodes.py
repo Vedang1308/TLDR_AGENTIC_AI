@@ -404,17 +404,15 @@ DRAFT: {json.dumps(state.drafted_tool_call)}
 MEMORY: {format_memory(state.memory)}
 
 ### YOUR MANDATE ###
-1. TECHNICAL VALIDITY: Verify that the tool name exists and argument types are correct.
-2. SEMANTIC ACCURACY (CRITICAL): Cross-reference the DRAFT arguments with the MEMORY. 
-   - REJECT if the DRAFT uses a price, flight ID, or user ID that is not present in the memory (Hallucination).
-   - REJECT if a booking specifies a payment amount that does not match the total price found in previous tool results.
-   - REJECT if the agent is trying to search for the same failed parameters again.
+1. TECHNICAL VALIDITY: Verify tool name and argument types.
+2. MATH & ID VERIFICATION (CRITICAL):
+   - For `book_reservation`: Check the `payment` list. Sum the `amount` fields. 
+   - Verify that this SUM exactly matches the 'total_price' or 'total_amount' found in the previous flight/order search tools in your memory.
+   - REJECT if the DRAFT uses an ID (flight_id, certificate_id, credit_card_id) that has not appeared in your memory yet. 
+   - REJECT if the payment calculation is even $1 off.
 
-Your job is NOT to judge the agent's high-level strategy or conversation tone.
-If the draft is technically valid AND its parameters match the facts in your Memory, output APPROVE.
-Only output REJECT if there is a hallucination or technical error. Be VERY specific in your reason.
-
-Approve or Reject."""
+Your job is NOT to judge high-level strategy.
+Approve or Reject. Be VERY specific about errors (e.g., "Math mismatch: expected 355, draft has 255")."""
     
     tools = [{
         "type": "function",
