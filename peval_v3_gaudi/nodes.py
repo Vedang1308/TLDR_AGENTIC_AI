@@ -273,6 +273,7 @@ Your ONLY tool is `submit_plan`.
     2. ADJACENT SEARCH: Suggest/try adjacent dates (e.g. if May 20 is empty, try May 21).
     3. ADJACENT LOCATIONS: Suggest different airport options in the same region.
 - Your response to the user must be ACTIONABLE: If you have no technical tools left to try, summarize exactly what you checked and ask the user for a specific pivot (date or airport).
+- MATH & PRICING: If the user asks for "total cost", "price", or "total", you MUST use the `calculate` tool. Do NOT estimate or guess totals in conversation.
 
 ### YOUR STRATEGIC CONTEXT:
 {kernel_section}
@@ -535,18 +536,20 @@ def validator_node(state: PevState) -> Dict:
     # 2. UNIVERSAL ID-SAFE GROUNDING
     # Ensure any ID used in a state-mutation tool (book, update, delete) exists in memory.
     if draft and any(k in draft.get("name", "").lower() for k in ["book", "update", "delete", "cancel"]):
-        draft_args_str = json.dumps(draft.get("arguments", {}))
-        # Find all ID-like strings in the draft (e.g. 'cert_123', 'res_ABC')
-        id_matches = re.findall(r'[\w-]+_[\w-]+', draft_args_str)
+        # Robust ID detection: Only flag values that look like system IDs (prefixed and numeric/random)
+        # and ensure we aren't flagging Tool Schema keys (like flight_type)
         memory_str = str(state.memory)
-        for found_id in id_matches:
-            if found_id not in memory_str:
-                return {
-                    "rejection_feedback": f"ID Hallucination: The identifier '{found_id}' has not appeared in your memory. You MUST call a discovery tool (get_details, list_all, etc.) to find valid IDs before performing this action.",
-                    "rejection_source": "validator",
-                    "internal_retry_count": retries,
-                    "node_logs": [{"node": "validator", "status": "rejected (hallucinated id)"}]
-                }
+        for key, value in draft.get("arguments", {}).items():
+            val_str = str(value)
+            # Match typical system ID patterns (e.g., credit_card_123, reservation_ABC)
+            if re.search(r'^[a-zA-Z]+_[a-zA-Z0-9]{4,}$', val_str):
+                if val_str not in memory_str:
+                    return {
+                        "rejection_feedback": f"ID Hallucination: The identifier '{val_str}' has not appeared in your memory. You MUST call a discovery tool (get_details, list_all, etc.) to find valid IDs before performing this action.",
+                        "rejection_source": "validator",
+                        "internal_retry_count": retries,
+                        "node_logs": [{"node": "validator", "status": "rejected (hallucinated id)"}]
+                    }
 
     sys_prompt = f"""You are the strict structural and TECHNICAL VALIDATOR. 
 DRAFT: {json.dumps(state.drafted_tool_call)}
@@ -560,9 +563,10 @@ MEMORY: {format_memory(state.memory)}
    - For booking/update actions: SUM all amounts in any payment lists. Verify against prices in MEMORY.
    - REJECT if any identifier (ID) used in the draft has NOT appeared in your MEMORY at a previous step.
    - REJECT if the agent tries to book an item previously seen as having 0 or NONE availability/stock/seats. 
-3. PHYSICAL CONSTRAINTS (DOMAIN AGNOSTIC):
+3. SEMANTIC FLUIDITY (SOURCE OF TRUTH):
+   - The User is the Source of Truth. If the user corrects a route, date, or preference in a message, APPROVE IT. 
+   - DO NOT reject based on a previous "Initial Mission" if the User has provided new data.
    - 24-HOUR CONVERSION: 'After 11 AM' is 11:00-23:59 (19:00 is successful).
-   - REJECT if the draft violates the original mission route while searching.
    - DO NOT enforce tool "consistency." Pivoting between tools is a sign of intelligence.
 
 Your job is NOT to judge high-level strategy or path selection. Approve if technical schema and physical constraints are met.
