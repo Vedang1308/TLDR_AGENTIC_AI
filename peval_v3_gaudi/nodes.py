@@ -429,9 +429,10 @@ def validator_node(state: PevState) -> Dict:
 
     if draft and draft.get("name") == "respond":
         # CONVERSATIONAL LOOP DETECTION: Prevent infinite 'apology loops'
+        # Fixed: Use action_taken key to sync with Engine's memory storage
         respond_count = 0
         for m in reversed(state.memory):
-            if m.get("type") == "action" and m.get("action_taken") == "respond":
+            if m.get("action_taken") == "respond":
                 respond_count += 1
             else: break
         
@@ -465,26 +466,36 @@ def validator_node(state: PevState) -> Dict:
             if any(k in last_msg for k in retry_keywords):
                 user_retry_intent = True
 
-        # 2. Airtight Fingerprinting
+        # 2. Airtight Fingerprinting (Fixed: Robust Date Normalization)
         def get_fingerprint(args):
             if not args: return ""
-            raw_date = str(args.get('date', raw_date_if_missing := "")).lower()
+            raw_date = str(args.get('date', "")).lower().strip()
+            
             # Month mapping
             month_map = {"jan":"01", "feb":"02", "mar":"03", "apr":"04", "may":"05", "jun":"06", 
                          "jul":"07", "aug":"08", "sep":"09", "oct":"10", "nov":"11", "dec":"12"}
-            nums = re.findall(r'\d+', raw_date)
-            m_found = "01"
-            for m_name, m_val in month_map.items():
-                if m_name in raw_date:
-                    m_found = m_val; break
-            year, day = "2024", "01"
-            if nums:
-                nums_sorted = sorted([int(n) for n in nums], reverse=True)
-                if nums_sorted[0] > 1000: year = str(nums_sorted[0])
-                if len(nums_sorted) > 1: day = str(nums_sorted[-1])
-            norm_date = f"{year}{m_found}{str(day).zfill(2)}"
             
-            # Anchor fingerprint on origin, destination, and normalized date
+            year, m_found, day = "2024", "01", "01"
+            
+            # Robust ISO/Numeric Parsing (e.g. 2024-05-20)
+            iso_parts = re.split(r'[-/]', raw_date)
+            if len(iso_parts) >= 3:
+                # Assuming YYYY-MM-DD
+                year = iso_parts[0] if len(iso_parts[0]) == 4 else year
+                m_found = iso_parts[1].zfill(2)
+                day = iso_parts[2].zfill(2)
+            else:
+                # Fallback to Natural Language Parsing
+                nums = re.findall(r'\d+', raw_date)
+                for m_name, m_val in month_map.items():
+                    if m_name in raw_date:
+                        m_found = m_val; break
+                if nums:
+                    nums_sorted = sorted([int(n) for n in nums], reverse=True)
+                    if nums_sorted[0] > 1000: year = str(nums_sorted[0])
+                    if len(nums_sorted) > 1: day = str(nums_sorted[-1])
+
+            norm_date = f"{year}{m_found}{str(day).zfill(2)}"
             return f"{str(args.get('origin', '')).strip().upper()}|{str(args.get('destination', '')).strip().upper()}|{norm_date}"
 
         # 3. Apply Gate
