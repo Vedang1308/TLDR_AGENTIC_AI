@@ -235,9 +235,12 @@ Your ONLY tool is `submit_plan`.
 
 ### THE EXHAUSTION MANDATE (CRITICAL):
 - If a search tool returns an empty list `[]`, that means NO flights exist for those parameters.
-- DO NOT repeat the same search. DO NOT retry if you've already tried both direct and one-stop for a date.
-- If you have exhausted all search options (direct, one-stop, different dates) and found nothing, your goal is to use the `respond` tool to explain this clearly to the user and end the task.
-- NEVER loop. An empty observation is a FINAL FACT.
+- DO NOT repeat the same search (unless the user explicitly asked you to "check again").
+- If a search fails, you MUST pivot intelligently: 
+    1. Try different search tools (e.g. if direct failed, try one-stop).
+    2. Suggest/try adjacent dates (e.g. if May 20 is empty, try May 21).
+    3. Suggest different airport options.
+- Your response to the user must be PROACTIVE: Do not just say "none found"; say "I couldn't find those, but I can check tomorrow or a different airport. Which do you prefer?"
 
 ### YOUR STRATEGIC CONTEXT:
 {kernel_section}
@@ -409,34 +412,42 @@ def validator_node(state: PevState) -> Dict:
     if draft and state.memory:
         immutable_tools = ["search_direct_flight", "search_onestop_flight"]
         
+        # EXCEPTION: If the user explicitly asked to "check again" or "retry", bypass the redundancy gate.
+        user_retry_intent = False
+        if state.user_conversation:
+            last_msg = str(state.user_conversation[-1].get("content", "")).lower()
+            retry_keywords = ["check again", "retry", "are you sure", "try again", "double check", "re-search"]
+            if any(k in last_msg for k in retry_keywords):
+                user_retry_intent = True
+
         def get_fingerprint(args):
             if not args: return ""
-            # Engine stores as 'arguments_used', nodes use 'arguments'. Normalize both.
             return f"{str(args.get('origin', '')).strip().upper()}|{str(args.get('destination', '')).strip().upper()}|{str(args.get('date', '')).strip()}"
 
-        current_fp = get_fingerprint(draft.get("arguments"))
-        for m in state.memory:
-            if m.get("type") == "tool_result" and m.get("action_taken") == draft.get("name"):
-                prev_args = m.get("arguments_used") or m.get("arguments") or {}
-                prev_fp = get_fingerprint(prev_args)
-                if prev_fp == current_fp and draft.get("name") in immutable_tools:
-                    return {
-                        "rejection_feedback": f"Redundant action! You already searched for {current_fp} with {draft.get('name')}. Database results are STATIC. Repeating this exact search is a loop. Try a different date, city, or respond to the user.",
-                        "rejection_source": "validator",
-                        "internal_retry_count": retries,
-                        "node_logs": [{"node": "validator", "status": "rejected (fuzzy redundant search)"}]
-                    }
-                
-                # Fallback for other tools returning empty results
-                if normalize_args(prev_args) == normalize_args(draft.get("arguments")):
-                    obs = str(m.get("api_observation"))
-                    if obs == "[]" or obs == "{}" or "not found" in obs.lower():
+        if not user_retry_intent:
+            current_fp = get_fingerprint(draft.get("arguments"))
+            for m in state.memory:
+                if m.get("type") == "tool_result" and m.get("action_taken") == draft.get("name"):
+                    prev_args = m.get("arguments_used") or m.get("arguments") or {}
+                    prev_fp = get_fingerprint(prev_args)
+                    if prev_fp == current_fp and draft.get("name") in immutable_tools:
                         return {
-                            "rejection_feedback": f"Redundant action. You already tried {draft.get('name')} with these arguments and it returned no results.",
+                            "rejection_feedback": f"Redundant action! You already searched for {current_fp}. If the database was empty [], it won't change. You MUST explain this to the user and suggest alternatives (different dates/airports).",
                             "rejection_source": "validator",
                             "internal_retry_count": retries,
-                            "node_logs": [{"node": "validator", "status": "rejected (redundant empty search)"}]
+                            "node_logs": [{"node": "validator", "status": "rejected (fuzzy redundancy - no retry intent)"}]
                         }
+                    
+                    # Fallback for other tools returning empty results
+                    if normalize_args(prev_args) == normalize_args(draft.get("arguments")):
+                        obs = str(m.get("api_observation"))
+                        if obs == "[]" or obs == "{}" or "not found" in obs.lower():
+                            return {
+                                "rejection_feedback": f"Redundant action. You already tried {draft.get('name')} and it returned no results.",
+                                "rejection_source": "validator",
+                                "internal_retry_count": retries,
+                                "node_logs": [{"node": "validator", "status": "rejected (redundant empty search - no retry intent)"}]
+                            }
 
     sys_prompt = f"""You are the strict structural and SEMANTIC VALIDATOR. Pre-flight simulate:
 DRAFT: {json.dumps(state.drafted_tool_call)}
