@@ -377,10 +377,13 @@ def validator_node(state: PevState) -> Dict:
                                 "node_logs": [{"node": "validator", "status": "rejected (redundant empty search)"}]
                             }
 
-    sys_prompt = f"""You are the VALIDATOR. Pre-flight simulate:
+    sys_prompt = f"""You are the strict technical VALIDATOR. Pre-flight simulate:
 DRAFT: {json.dumps(state.drafted_tool_call)}
 MEMORY: {format_memory(state.memory)}
 
+Your ONLY job is to verify technical validity and execution sanity. You must NOT judge the agent's overarching strategy, conversational direction, or whether it perfectly matches the user's subtle preferences. 
+If the DRAFT is a known tool with correct argument types, you MUST output APPROVE.
+Only output REJECT if there is a catastrophic hallucination (e.g., using a tool that doesn't exist, passing a string when a number is required, or attempting an action that is technically impossible right now).
 Approve or Reject."""
     
     tools = [{
