@@ -221,6 +221,9 @@ Your ONLY tool is `submit_plan`.
 MEMORY KERNEL (Recent raw steps):
 {format_memory(state.memory[-5:])}
 
+TOOL ATTEMPT COUNTS (Task-wide):
+{json.dumps(state.tool_attempts, indent=2) if state.tool_attempts else "None."}
+
 FAILURE HISTORY:
 {failure_history}
 
@@ -234,6 +237,7 @@ MANDATORY POLICY CHECKLIST:
    - IF YES: Proceed with requested services.
 2. LAST ATTEMPT? {state.memory[-1].get("action_taken") if state.memory else "None."}
    - IF [] or REJECTED: Choose a DIFFERENT tool or different arguments.
+3. CONSECUTIVE FAILURES? If any tool has > 3 attempts in 'TOOL ATTEMPT COUNTS', you MUST PIVOT strategy (e.g., ask user for help) instead of retrying.
 """
     tools = [{
         "type": "function",

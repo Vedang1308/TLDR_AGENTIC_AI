@@ -50,4 +50,7 @@ class PevState(BaseModel):
     consecutive_error_count: int = Field(default=0)
     error_reflection: Optional[str] = Field(default=None)
     
+    # Global Repetition Tracker (Task-wide)
+    tool_attempts: Dict[str, int] = Field(default_factory=dict)
+    
     current_time: str = ""

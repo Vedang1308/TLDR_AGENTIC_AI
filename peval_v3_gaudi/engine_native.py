@@ -215,6 +215,7 @@ class PEVEngineNative:
             
             # 7. Dispatch to Env (Step 8)
             print(f"  [Step {step+1}] Dispatching Action: {action.name}")
+            state.tool_attempts[action.name] = state.tool_attempts.get(action.name, 0) + 1
             res = env.step(action)
             reward = res.reward
             

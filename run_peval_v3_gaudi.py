@@ -74,7 +74,9 @@ def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, 
     
     # 4. Results Storage
     os.makedirs(PEVConfig.LOG_DIR, exist_ok=True)
-    results_file = os.path.join(PEVConfig.LOG_DIR, f"v3_gaudi_{domain}_{model_name}_results.json")
+    sanitized_model = model_name.replace("/", "_")
+    results_file = os.path.join(PEVConfig.LOG_DIR, f"v3_gaudi_{domain}_{sanitized_model}_results.json")
+    os.makedirs(os.path.dirname(results_file), exist_ok=True)
     consistency_results = {}
     
     # 5. Benchmark Loop
@@ -90,6 +92,8 @@ def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, 
             status = "\033[92m[PASSED]\033[0m" if result.reward == 1.0 else "\033[91m[FAILED]\033[0m"
             print(f"  >>> RESULT: {status} (Reward: {result.reward})")
             
+        # Ensure directory exists again just in case before final write
+        os.makedirs(os.path.dirname(results_file), exist_ok=True)
         with open(results_file, 'w') as f:
             json.dump(consistency_results, f, indent=4)
     
