@@ -226,6 +226,13 @@ FAILURE HISTORY:
 
 REJECTION FEEDBACK:
 {f"Source: {state.rejection_source} | Message: {state.rejection_feedback}" if state.rejection_feedback else "None."}
+
+MANDATORY POLICY CHECKLIST:
+1. USER IDENTIFIED? [{"X" if state.user_identified else " "}] 
+   - IF NO: You MUST prioritize obtaining user_id or reservation_id immediately.
+   - IF YES: Proceed with requested services.
+2. LAST ATTEMPT? {state.memory[-1].get("action_taken") if state.memory else "None."}
+   - IF [] or REJECTED: Choose a DIFFERENT tool or different arguments.
 """
     tools = [{
         "type": "function",
@@ -307,6 +314,8 @@ Draft the single best tool call."""
 
     if state.rejection_feedback:
         sys_prompt += f"\n\n[REJECTION FEEDBACK from {state.rejection_source}]: {state.rejection_feedback}\n"
+        if "loop" in str(state.rejection_feedback).lower() or "redundant" in str(state.rejection_feedback).lower():
+            sys_prompt += "\nGUIDANCE: Do NOT repeat the previous action. Switch to a different tool (Interacting with User or searching differently).\n"
 
     tools = state.tools_info.copy()
     parsed, raw = invoke_with_paradigm(client, sys_prompt, [], tools, reasoning_mode, "Executor")

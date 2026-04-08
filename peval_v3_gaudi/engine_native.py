@@ -215,10 +215,20 @@ class PEVEngineNative:
                     state.consecutive_error_count = 0
             else:
                 state.consecutive_error_count = 0
+                # Identify User (Airline/Retail Policy Adherence)
+                if any(x in action.name.lower() for x in ["get_user", "get_reservation", "get_order"]):
+                    if not any(err in str(res.observation).lower() for err in ["not found", "error", "invalid"]):
+                        state.user_identified = True
+                        print(f"  [POLICY] User successfully identified: {action.kwargs}")
 
             if action.name == RESPOND_ACTION_NAME:
                 state.user_conversation.append({"role": "user", "content": res.observation})
             
+            # Anti-Think Loop: If last action was think, inject warning
+            if action.name == "think":
+                state.rejection_feedback = "You just used the 'think' tool. You MUST now take a physical action or respond to the user to avoid a loop."
+                state.rejection_source = "orchestrator"
+
             if res.done: break
             
         return SolveResult(reward=reward, info=res.info.model_dump(), messages=state.user_conversation, total_cost=0.0)

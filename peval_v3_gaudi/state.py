@@ -27,6 +27,9 @@ class PevState(BaseModel):
     current_plan: str = Field(default="")
     task_completed: bool = Field(default=False)
     
+    # Track progress for Airline/Retail policy adherence
+    user_identified: bool = Field(default=False)
+    
     # Track internal loops to prevent recursion crashes
     internal_retry_count: int = Field(default=0)
     
