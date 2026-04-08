@@ -254,8 +254,8 @@ def planner_node(state: PevState) -> Dict:
 
     # VICTORY DETECTION: Check for existing reservation/status success
     victory_status = ""
-    if state.world_snapshot and any(k in str(v).lower() for k in ["reservation_id", "booking_id", "order_id", "status_confirmed"] for v in state.world_snapshot.values()):
-        victory_status = "\n[!] VICTORY DETECTED: A successful confirmation ID already exists in your snapshot. Your goal is now to confirm details to the user and FINISH.\n"
+    if state.world_snapshot and any(k in str(v).lower() for k in ["reservation_id", "booking_id", "order_id", "status_confirmed", "cancelled"] for v in state.world_snapshot.values()):
+        victory_status = "\n[!] VICTORY DETECTED: Technical win confirmed. STOP technical work. Your goal is now to confirm these final details to the user and END the trial using the 'respond' tool immediately.\n"
 
     sys_prompt = f"""You are the HIERARCHICAL STRATEGIST (Planner). 
 Your ONLY tool is `submit_plan`. 
@@ -439,7 +439,15 @@ def validator_node(state: PevState) -> Dict:
                 respond_count += 1
             else: break
         
-        if respond_count >= 2:
+        # VICTORY BYPASS: If a technical tool call just succeeded, allow the termination response.
+        technical_success = False
+        for m in reversed(state.memory):
+            if m.get("type") == "tool_result" and "Error" not in str(m.get("api_observation")):
+                technical_success = True; break
+            elif m.get("type") == "action" and m.get("action_taken") not in ["respond", "think"]:
+                break # Hit a technical attempt that hasn't succeeded yet
+
+        if respond_count >= 2 and not technical_success:
             return {
                 "rejection_feedback": f"Infinite Loop Detected: You have responded to the user {respond_count} times in a row without making technical progress. You are FORBIDDEN from responding further until you perform a technical action (search, get_details, etc.). Call a tool now.",
                 "rejection_source": "validator",
@@ -540,14 +548,17 @@ def validator_node(state: PevState) -> Dict:
     if draft and any(k in draft.get("name", "").lower() for k in ["book", "update", "delete", "cancel"]):
         # Robust ID detection: Only flag values that look like system IDs (prefixed and numeric/random)
         # and ensure we aren't flagging Tool Schema keys (like flight_type)
+        # Total History ID Scan: Check memory AND user conversation for identifiers
         memory_str = str(state.memory)
+        history_str = str(state.user_conversation)
         for key, value in draft.get("arguments", {}).items():
             val_str = str(value)
             # Match typical system ID patterns (e.g., credit_card_123, reservation_ABC)
-            if re.search(r'^[a-zA-Z]+_[a-zA-Z0-9]{4,}$', val_str):
-                if val_str not in memory_str:
+            if re.search(r'^[a-zA-Z0-9]+_[a-zA-Z0-9]{4,}$', val_str):
+                # Valid if found in tool results OR provided by the user in conversation
+                if val_str not in memory_str and val_str not in history_str:
                     return {
-                        "rejection_feedback": f"ID Hallucination: The identifier '{val_str}' has not appeared in your memory. You MUST call a discovery tool (get_details, list_all, etc.) to find valid IDs before performing this action.",
+                        "rejection_feedback": f"ID Hallucination: The identifier '{val_str}' has not appeared in your memory or conversation history. You MUST call a discovery tool (get_details, list_all, etc.) or get it from the user before performing this action.",
                         "rejection_source": "validator",
                         "internal_retry_count": retries,
                         "node_logs": [{"node": "validator", "status": "rejected (hallucinated id)"}]
