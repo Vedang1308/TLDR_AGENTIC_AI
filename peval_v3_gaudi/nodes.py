@@ -486,25 +486,27 @@ def validator_node(state: PevState) -> Dict:
             month_map = {"jan":"01", "feb":"02", "mar":"03", "apr":"04", "may":"05", "jun":"06", 
                          "jul":"07", "aug":"08", "sep":"09", "oct":"10", "nov":"11", "dec":"12"}
             
-            year, m_found, day = "2024", "01", "01"
+            # FIXED: Do NOT use default date constants (like 20240101) which cause fingerprint collisions
+            year, m_found, day = "NODATE", "NODATE", "NODATE"
             
-            # Robust ISO/Numeric Parsing (e.g. 2024-05-20)
-            iso_parts = re.split(r'[-/]', raw_date)
-            if len(iso_parts) >= 3:
-                # Assuming YYYY-MM-DD
-                year = iso_parts[0] if len(iso_parts[0]) == 4 else year
-                m_found = iso_parts[1].zfill(2)
-                day = iso_parts[2].zfill(2)
-            else:
-                # Fallback to Natural Language Parsing
-                nums = re.findall(r'\d+', raw_date)
-                for m_name, m_val in month_map.items():
-                    if m_name in raw_date:
-                        m_found = m_val; break
-                if nums:
-                    nums_sorted = sorted([int(n) for n in nums], reverse=True)
-                    if nums_sorted[0] > 1000: year = str(nums_sorted[0])
-                    if len(nums_sorted) > 1: day = str(nums_sorted[-1])
+            if raw_date:
+                # Robust ISO/Numeric Parsing (e.g. 2024-05-20)
+                iso_parts = re.split(r'[-/]', raw_date)
+                if len(iso_parts) >= 3:
+                    # Assuming YYYY-MM-DD
+                    year = iso_parts[0] if len(iso_parts[0]) == 4 else "2024"
+                    m_found = iso_parts[1].zfill(2)
+                    day = iso_parts[2].zfill(2)
+                else:
+                    # Fallback to Natural Language Parsing
+                    nums = re.findall(r'\d+', raw_date)
+                    for m_name, m_val in month_map.items():
+                        if m_name in raw_date:
+                            m_found = m_val; break
+                    if nums:
+                        nums_sorted = sorted([int(n) for n in nums], reverse=True)
+                        if nums_sorted[0] > 1000: year = str(nums_sorted[0])
+                        if len(nums_sorted) > 1: day = str(nums_sorted[-1])
 
             norm_date = f"{year}{m_found}{str(day).zfill(2)}"
             return f"{str(args.get('origin', '')).strip().upper()}|{str(args.get('destination', '')).strip().upper()}|{norm_date}"
@@ -519,6 +521,12 @@ def validator_node(state: PevState) -> Dict:
             current_fp = get_fingerprint(draft.get("arguments"))
             for m in state.memory:
                 if m.get("type") in ["tool_result", "tool_error"] and m.get("action_taken") == draft.get("name"):
+                    # FIXED: Only reject if the previous result was SUCCESSFUL.
+                    # If it returned an "Error", the agent must be allowed to try again with fixed parameters.
+                    prev_obs = str(m.get("api_observation", "")).lower()
+                    if "error" in prev_obs or m.get("type") == "tool_error":
+                        continue # Allow retry after failures
+                        
                     prev_args = m.get("arguments_used") or m.get("arguments") or {}
                     prev_fp = get_fingerprint(prev_args)
                     if prev_fp == current_fp and draft.get("name") in immutable_tools:
