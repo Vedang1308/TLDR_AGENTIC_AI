@@ -24,7 +24,8 @@ class PEVEngineNative:
     Steps 1-11 implemented with local Gaudi-Native logic.
     """
     def __init__(self, tools_info: List[Dict[str, Any]], wiki: str, log_dir: str = "results/phase3_gaudi_native"):
-        self.tools_info = tools_info
+        # Filter out 'think' tool (redundant in REAct and leads to loops)
+        self.tools_info = [t for t in tools_info if (t.get('name') or t.get('function', {}).get('name', '')) != 'think']
         self.wiki = wiki
         self.log_dir = log_dir
         os.makedirs(self.log_dir, exist_ok=True)
@@ -40,7 +41,11 @@ class PEVEngineNative:
         for t in self.tools_info:
             name = t.get('name') or t.get('function', {}).get('name', 'unknown')
             desc = t.get('description') or t.get('function', {}).get('description', 'No description.')
-            params = list(t.get('parameters', {}).get('properties', {}).keys()) if 'parameters' in t else list(t.get('function', {}).get('parameters', {}).get('properties', {}).keys())
+            params = list(t.get('parameters', {}).get('properties', {}).keys()) if 'parameters' in t else list(t.get('function', {}).get('parameters', {}).get('properties', {}).get('parameters', {}).get('properties', {}).keys()) if 'function' in t and 'parameters' in t['function'] else []
+            # Safety check for parameter nesting
+            if not params and 'function' in t and 'parameters' in t['function']:
+                 params = list(t['function']['parameters'].get('properties', {}).keys())
+
             tools_desc.append(f"- {name}: {desc} (Args: {', '.join(params)})")
         self.tools_wiki = "\n".join(tools_desc)
         
