@@ -473,7 +473,7 @@ def validator_node(state: PevState) -> Dict:
         user_retry_intent = False
         if state.user_conversation:
             last_msg = str(state.user_conversation[-1].get("content", "")).lower()
-            retry_keywords = ["check again", "retry", "are you sure", "try again", "double check", "re-search"]
+            retry_keywords = ["check again", "retry", "are you sure", "try again", "double check", "re-search", "mix-up", "actually", "wrong", "rephrase", "looking for", "not to", "correction", "different"]
             if any(k in last_msg for k in retry_keywords):
                 user_retry_intent = True
 
@@ -582,11 +582,12 @@ MEMORY: {format_memory(state.memory)}
    - If a tool only accepts 'origin', 'destination', and 'date', you MUST approve technically valid drafts even if the user has other preferences. Filtering results is the Planner's job post-tool.
 2. CAPACITY & ID VERIFICATION (STRICT):
    - For booking/update actions: SUM all amounts in any payment lists. Verify against prices in MEMORY.
-   - REJECT if any identifier (ID) used in the draft has NOT appeared in your MEMORY at a previous step.
+   - VALID IDs: Approve identifiers if they appeared in EITHER a technical tool result (MEMORY) OR were provided by the user in the chat (HISTORY). 
    - REJECT if the agent tries to book an item previously seen as having 0 or NONE availability/stock/seats. 
 3. SEMANTIC FLUIDITY (SOURCE OF TRUTH):
    - The User is the Source of Truth. If the user corrects a route, date, or preference in a message, APPROVE IT. 
    - DO NOT reject based on a previous "Initial Mission" if the User has provided new data.
+   - NEVER reject a search tool (search_direct_flight, search_onestop_flight) simply because it differs from one performed earlier; user corrections are valid reasons to re-perform a similar search at a different step.
    - 24-HOUR CONVERSION: 'After 11 AM' is 11:00-23:59 (19:00 is successful).
    - VICTORY BYPASS: If the VERY LAST TECHNICAL ACTION in MEMORY (ignore previous 'think' or 'respond' blocks) was a SUCCESSFUL state-mutation tool (e.g. update, book, calculate, or cancel), you MUST APPROVE the drafting of a final 'respond' call to close the loop with the user.
    - DO NOT enforce tool "consistency." Pivoting between tools is a sign of intelligence.
