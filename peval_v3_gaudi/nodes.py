@@ -446,16 +446,17 @@ def validator_node(state: PevState) -> Dict:
         # 1. Seat Availability Check
         flights_to_book = draft.get("arguments", {}).get("flights", [])
         for flight_num in flights_to_book:
+            # Handle cases where agent passes a dict instead of a flight_number string
+            f_id = str(flight_num.get("flight_number")) if isinstance(flight_num, dict) else str(flight_num)
+            
             # Search memory for the latest observation containing this flight number
-            found_availability = None
             for m in reversed(state.memory):
                 obs_str = str(m.get("api_observation", ""))
-                if flight_num in obs_str:
+                if f_id in obs_str:
                     # Very simple heuristic: search for the seat count in the string
-                    # e.g. "economy": 0
                     if '"economy": 0' in obs_str.lower() or "'economy': 0" in obs_str.lower():
                         return {
-                            "rejection_feedback": f"Availability Mismatch: You are trying to book flight {flight_num}, but your memory in Step {state.memory.index(m)+1} shows that flight has 0 economy seats. You MUST try a different flight or seat class.",
+                            "rejection_feedback": f"Availability Mismatch: You are trying to book flight {f_id}, but your memory in Step {state.memory.index(m)+1} shows that flight has 0 economy seats. You MUST try a different flight or seat class.",
                             "rejection_source": "validator",
                             "internal_retry_count": retries,
                             "node_logs": [{"node": "validator", "status": "rejected (seat availability loop)"}]
