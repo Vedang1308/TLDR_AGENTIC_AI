@@ -430,10 +430,9 @@ def validator_node(state: PevState) -> Dict:
             }
             
     # Redundancy Check: Prevent the agent from repeating ANY search it already has data for
+    # Redundancy Check: Prevent the agent from repeating technical actions it already has data for
     if draft and state.memory:
-        immutable_tools = ["search_direct_flight", "search_onestop_flight"]
-        
-        # EXCEPTION: If the user explicitly asked to "check again" or "retry", bypass the redundancy gate.
+        # 1. Detect User Retry Intent
         user_retry_intent = False
         if state.user_conversation:
             last_msg = str(state.user_conversation[-1].get("content", "")).lower()
@@ -441,46 +440,46 @@ def validator_node(state: PevState) -> Dict:
             if any(k in last_msg for k in retry_keywords):
                 user_retry_intent = True
 
+        # 2. Airtight Fingerprinting
         def get_fingerprint(args):
             if not args: return ""
-            # Absolute Date Normalization
-            raw_date = str(args.get('date', '')).lower()
-            month_map = {"jan": "01", "feb": "02", "mar": "03", "apr": "04", "may": "05", "jun": "06", 
-                         "jul": "07", "aug": "08", "sep": "09", "oct": "10", "nov": "11", "dec": "12"}
-            
-            # Extract all numbers from the date string
+            raw_date = str(args.get('date', raw_date_if_missing := "")).lower()
+            # Month mapping
+            month_map = {"jan":"01", "feb":"02", "mar":"03", "apr":"04", "may":"05", "jun":"06", 
+                         "jul":"07", "aug":"08", "sep":"09", "oct":"10", "nov":"11", "dec":"12"}
             nums = re.findall(r'\d+', raw_date)
-            # Find any month name
-            m_found = "01" 
+            m_found = "01"
             for m_name, m_val in month_map.items():
                 if m_name in raw_date:
-                    m_found = m_val
-                    break
-            
-            # Heuristic: largest number is likely the year, others are day/month
-            year = "2024" # Default for this domain
-            day = "01"
-            if len(nums) >= 1:
+                    m_found = m_val; break
+            year, day = "2024", "01"
+            if nums:
                 nums_sorted = sorted([int(n) for n in nums], reverse=True)
                 if nums_sorted[0] > 1000: year = str(nums_sorted[0])
                 if len(nums_sorted) > 1: day = str(nums_sorted[-1])
-
-            norm_date = f"{year}{m_found}{day.zfill(2)}"
+            norm_date = f"{year}{m_found}{str(day).zfill(2)}"
+            
+            # Anchor fingerprint on origin, destination, and normalized date
             return f"{str(args.get('origin', '')).strip().upper()}|{str(args.get('destination', '')).strip().upper()}|{norm_date}"
 
+        # 3. Apply Gate
         if not user_retry_intent:
+            immutable_tools = [
+                "search_direct_flight", "search_onestop_flight", 
+                "get_user_details", "update_reservation_baggages", 
+                "book_reservation", "calculate", "list_reservations", "get_reservation_details"
+            ]
             current_fp = get_fingerprint(draft.get("arguments"))
             for m in state.memory:
-                # Check ALL state-mutation and search tools for redundancy
                 if m.get("type") in ["tool_result", "tool_error"] and m.get("action_taken") == draft.get("name"):
                     prev_args = m.get("arguments_used") or m.get("arguments") or {}
                     prev_fp = get_fingerprint(prev_args)
                     if prev_fp == current_fp and draft.get("name") in immutable_tools:
                         return {
-                            "rejection_feedback": f"Absolute Redundancy Gate: You already have the data for {current_fp} in your MEMORY. Repeating this search is a waste of resources. Look at the Result Observation in Step {state.memory.index(m)+1} and pivot to an alternative date or airport if those flights didn't work.",
+                            "rejection_feedback": f"Broad Redundancy Gate: You already performed '{draft.get('name')}' for {current_fp} at Step {state.memory.index(m)+1}. Repeating this exactly is a waste. Pivot or check results.",
                             "rejection_source": "validator",
                             "internal_retry_count": retries,
-                            "node_logs": [{"node": "validator", "status": "rejected (hard redundant search)"}]
+                            "node_logs": [{"node": "validator", "status": "rejected (hard redundant action)"}]
                         }
 
     # SEAT-AWARENESS & ID-SAFE GROUNDING (New for Phase 4.1)
@@ -518,7 +517,7 @@ def validator_node(state: PevState) -> Dict:
                     "node_logs": [{"node": "validator", "status": "rejected (hallucinated certificate id)"}]
                 }
 
-    sys_prompt = f"""You are the strict structural and SEMANTIC VALIDATOR. Pre-flight simulate:
+    sys_prompt = f"""You are the strict structural and TECHNICAL VALIDATOR. 
 DRAFT: {json.dumps(state.drafted_tool_call)}
 MEMORY: {format_memory(state.memory)}
 
@@ -530,14 +529,13 @@ MEMORY: {format_memory(state.memory)}
    - For `book_reservation`: SUM all amounts in the `payment` list. 
    - IF the SUM == the price in MEMORY, you MUST APPROVE the math. 
    - REJECT if any `id` (certificate_id, credit_card_id) used in the draft has NOT appeared in your MEMORY at a previous step.
-3. MISSION SHIELD & CLOCK-SAFETY (CRITICAL):
+3. MISSION SHIELD & CLOCK-SAFETY (PHYSICAL ONLY):
    - 24-HOUR CONVERSION: 'After 11 AM' means 11:00 through 23:59.
    - Note that 7:00 PM (19:00) is SUCCESSFUL/LATER than 11 AM. Do NOT hallucinate that PM hours are earlier than AM.
    - REJECT if the draft violates the original route or time constraints while searching.
-   - REJECT REDUNDANCY: If the MEMORY already contains a result for these EXACT parameters, you must REJECT to prevent a loop.
+   - DO NOT enforce tool "consistency." It is perfectly valid for the agent to switch tools (e.g. from search_direct to search_onestop) as its strategy evolves.
 
-Your job is NOT to judge high-level strategy.
-Approve or Reject. Be VERY specific about technical errors."""
+Your job is NOT to judge high-level strategy or path selection. Approve if technical and physical constraints are met."""
     
     tools = [{
         "type": "function",

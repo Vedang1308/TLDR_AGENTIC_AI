@@ -30,10 +30,16 @@ class ContextDistiller:
         if not state.memory and not state.user_conversation:
             return {"summary": "", "world_snapshot": {}}
 
-        # 1. Structured Variable Extraction
+        # 1. History-level distillation helpers
+        def safe_truncate(obj, limit=1000):
+            s = str(obj)
+            return s[:limit] + "... [TRUNCATED]" if len(s) > limit else s
+
+        # 1. Structured Variable Extraction with safety truncation
+        processed_mem = [safe_truncate(m, limit=3000) for m in state.memory[-5:]]
         extraction_prompt = [
             {"role": "system", "content": "You are an Advanced Variable Extraction Engine. Scan the history and ARCHIVE all discovered 'Task Variables' into a JSON dictionary {}. ONLY OUTPUT RAW JSON."},
-            {"role": "user", "content": f"History to scan: {state.memory[-5:]}"}
+            {"role": "user", "content": f"History to scan: {processed_mem}"}
         ]
         
         extracted_raw = self.client.chat(extraction_prompt)

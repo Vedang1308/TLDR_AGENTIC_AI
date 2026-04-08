@@ -188,6 +188,10 @@ class PEVEngineNative:
                 # 6. Validator (Step 7)
                 print(f"  [Step {step+1}.{inner_step}] Node: Validator...")
                 v_out = validator_node(state)
+                # Overwrite draft if Validator provides a fallback (e.g. Validation Timeout)
+                if v_out.get("drafted_tool_call"):
+                    state.drafted_tool_call = v_out["drafted_tool_call"]
+                
                 if v_out.get("rejection_feedback"):
                     print(f"    ! REJECTED (Validator): {v_out['rejection_feedback']}")
                     state.rejection_feedback = v_out["rejection_feedback"]
