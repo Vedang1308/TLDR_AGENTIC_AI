@@ -235,11 +235,14 @@ Your ONLY tool is `submit_plan`.
 
 ### THE EXHAUSTION MANDATE (CRITICAL):
 - If a search tool returns an empty list `[]`, that means NO flights exist for those parameters.
+- If a search tool returns a flight with `available_seats: 0` for your target class, that flight is IMPOSSIBLE to book for that class.
 - DO NOT repeat the same search (unless the user explicitly asked you to "check again").
-- If a search fails, you MUST pivot intelligently: 
+- If a search fails or a flight is full, you MUST pivot intelligently: 
     1. Try different search tools (e.g. if direct failed, try one-stop).
     2. Suggest/try adjacent dates (e.g. if May 20 is empty, try May 21).
     3. Suggest different airport options.
+    4. If economy is full, check if business class price is acceptable, or find a different flight number.
+- NEVER try to book a flight that you previously saw had 0 seats. That is an automatic failure.
 - Your response to the user must be PROACTIVE: Do not just say "none found"; say "I couldn't find those, but I can check tomorrow or a different airport. Which do you prefer?"
 
 ### YOUR STRATEGIC CONTEXT:
@@ -408,7 +411,7 @@ def validator_node(state: PevState) -> Dict:
                 "node_logs": [{"node": "validator", "status": "rejected (consecutive think)"}]
             }
             
-    # Redundancy Check: Prevent the agent from repeating empty or static searches
+    # Redundancy Check: Prevent the agent from repeating ANY search it already has data for
     if draft and state.memory:
         immutable_tools = ["search_direct_flight", "search_onestop_flight"]
         
@@ -432,22 +435,45 @@ def validator_node(state: PevState) -> Dict:
                     prev_fp = get_fingerprint(prev_args)
                     if prev_fp == current_fp and draft.get("name") in immutable_tools:
                         return {
-                            "rejection_feedback": f"Redundant action! You already searched for {current_fp}. If the database was empty [], it won't change. You MUST explain this to the user and suggest alternatives (different dates/airports).",
+                            "rejection_feedback": f"Absolute Redundancy Gate: You already have the data for {current_fp} in your MEMORY. Repeating this search is a waste of resources. Look at the Result Observation in Step {state.memory.index(m)+1} and pivot to an alternative date or airport if those flights didn't work.",
                             "rejection_source": "validator",
                             "internal_retry_count": retries,
-                            "node_logs": [{"node": "validator", "status": "rejected (fuzzy redundancy - no retry intent)"}]
+                            "node_logs": [{"node": "validator", "status": "rejected (hard redundant search)"}]
                         }
-                    
-                    # Fallback for other tools returning empty results
-                    if normalize_args(prev_args) == normalize_args(draft.get("arguments")):
-                        obs = str(m.get("api_observation"))
-                        if obs == "[]" or obs == "{}" or "not found" in obs.lower():
-                            return {
-                                "rejection_feedback": f"Redundant action. You already tried {draft.get('name')} and it returned no results.",
-                                "rejection_source": "validator",
-                                "internal_retry_count": retries,
-                                "node_logs": [{"node": "validator", "status": "rejected (redundant empty search - no retry intent)"}]
-                            }
+
+    # SEAT-AWARENESS & ID-SAFE GROUNDING (New for Phase 4.1)
+    if draft and draft.get("name") == "book_reservation":
+        # 1. Seat Availability Check
+        flights_to_book = draft.get("arguments", {}).get("flights", [])
+        for flight_num in flights_to_book:
+            # Search memory for the latest observation containing this flight number
+            found_availability = None
+            for m in reversed(state.memory):
+                obs_str = str(m.get("api_observation", ""))
+                if flight_num in obs_str:
+                    # Very simple heuristic: search for the seat count in the string
+                    # e.g. "economy": 0
+                    if '"economy": 0' in obs_str.lower() or "'economy': 0" in obs_str.lower():
+                        return {
+                            "rejection_feedback": f"Availability Mismatch: You are trying to book flight {flight_num}, but your memory in Step {state.memory.index(m)+1} shows that flight has 0 economy seats. You MUST try a different flight or seat class.",
+                            "rejection_source": "validator",
+                            "internal_retry_count": retries,
+                            "node_logs": [{"node": "validator", "status": "rejected (seat availability loop)"}]
+                        }
+                    break
+        
+        # 2. ID-Safe Grounding (Grounded in World Snapshot)
+        payment_list = draft.get("arguments", {}).get("payment", [])
+        memory_str = str(state.memory)
+        for p in payment_list:
+            cid = p.get("certificate_id")
+            if cid and cid not in memory_str:
+                return {
+                    "rejection_feedback": f"ID Hallucination: certificate_id '{cid}' has not appeared in any tool result or user message. You MUST call get_user_details to find the real certificate IDs before booking.",
+                    "rejection_source": "validator",
+                    "internal_retry_count": retries,
+                    "node_logs": [{"node": "validator", "status": "rejected (hallucinated certificate id)"}]
+                }
 
     sys_prompt = f"""You are the strict structural and SEMANTIC VALIDATOR. Pre-flight simulate:
 DRAFT: {json.dumps(state.drafted_tool_call)}
