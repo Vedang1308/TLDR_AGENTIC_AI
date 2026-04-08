@@ -24,7 +24,25 @@ class PEVEngineNative:
     Steps 1-11 implemented with local Gaudi-Native logic.
     """
     def __init__(self, tools_info: List[Dict[str, Any]], wiki: str, log_dir: str = "results/phase3_gaudi_native"):
-        self.tools_info = tools_info
+        # The environment tools + the mandatory 'respond' action for user interaction
+        self.tools_info = tools_info + [{
+            "type": "function",
+            "function": {
+                "name": "respond",
+                "description": "Respond to the user with a message or ask them a clarifying question.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "content": {
+                            "type": "string",
+                            "description": "The message content to send to the user."
+                        }
+                    },
+                    "required": ["content"]
+                }
+            }
+        }]
+        
         self.wiki = wiki
         self.log_dir = log_dir
         os.makedirs(self.log_dir, exist_ok=True)
