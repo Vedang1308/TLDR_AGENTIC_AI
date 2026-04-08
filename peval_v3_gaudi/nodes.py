@@ -206,9 +206,27 @@ def planner_node(state: PevState) -> Dict:
     tool_wiki_section = f"\nTECHNICAL TOOL WIKI:\n{state.tools_wiki}\n" if state.tools_wiki else ""
     reflection_section = f"\n\nERROR REFLECTION (from Learning Node):\n{state.error_reflection}\n" if state.error_reflection else ""
 
+    # MISSION ANCHOR (Temporal Support): Detect repeat empty searches by year
+    temporal_hint = ""
+    year_failures = {}
+    for m in state.memory:
+        if m.get("type") == "tool_result" and "search_" in str(m.get("action_taken")):
+            if str(m.get("api_observation")) == "[]":
+                args = m.get("arguments_used") or {}
+                # Extract year from date string
+                raw_date = str(args.get("date", ""))
+                year_match = re.search(r'\b(2023|2024)\b', raw_date)
+                if year_match:
+                    y = year_match.group(1)
+                    year_failures[y] = year_failures.get(y, 0) + 1
+    
+    for y, count in year_failures.items():
+        if count >= 2:
+            temporal_hint = f"\n[STRATEGIC NOTE]: You have {count} failed searches for the year {y}. This often indicates a 'Year Mismatch'. Verify if the mission should be 2024 instead of 2023.\n"
+
     # STRATEGIC KERNEL integration (Step 3/4 in Diagram)
     kernel_section = f"\nSTRATEGIC KERNEL (Compressed Context):\n{state.strategic_kernel}\n" if state.strategic_kernel else ""
-    snapshot_section = f"\nWORLD SNAPSHOT (Harvested Facts):\n{json.dumps(state.world_snapshot, indent=2)}\n" if state.world_snapshot else ""
+    snapshot_section = f"\nWORLD SNAPSHOT (Harvested Facts):\n{json.dumps(state.world_snapshot, indent=2)}\n{temporal_hint}\n" if state.world_snapshot else f"{temporal_hint}\n"
 
     # MISSION ANCHOR: Search history for the first message containing actual data (City or Date)
     initial_mission = "Unknown Mission"
@@ -425,12 +443,36 @@ def validator_node(state: PevState) -> Dict:
 
         def get_fingerprint(args):
             if not args: return ""
-            return f"{str(args.get('origin', '')).strip().upper()}|{str(args.get('destination', '')).strip().upper()}|{str(args.get('date', '')).strip()}"
+            # Absolute Date Normalization
+            raw_date = str(args.get('date', '')).lower()
+            month_map = {"jan": "01", "feb": "02", "mar": "03", "apr": "04", "may": "05", "jun": "06", 
+                         "jul": "07", "aug": "08", "sep": "09", "oct": "10", "nov": "11", "dec": "12"}
+            
+            # Extract all numbers from the date string
+            nums = re.findall(r'\d+', raw_date)
+            # Find any month name
+            m_found = "01" 
+            for m_name, m_val in month_map.items():
+                if m_name in raw_date:
+                    m_found = m_val
+                    break
+            
+            # Heuristic: largest number is likely the year, others are day/month
+            year = "2024" # Default for this domain
+            day = "01"
+            if len(nums) >= 1:
+                nums_sorted = sorted([int(n) for n in nums], reverse=True)
+                if nums_sorted[0] > 1000: year = str(nums_sorted[0])
+                if len(nums_sorted) > 1: day = str(nums_sorted[-1])
+
+            norm_date = f"{year}{m_found}{day.zfill(2)}"
+            return f"{str(args.get('origin', '')).strip().upper()}|{str(args.get('destination', '')).strip().upper()}|{norm_date}"
 
         if not user_retry_intent:
             current_fp = get_fingerprint(draft.get("arguments"))
             for m in state.memory:
-                if m.get("type") == "tool_result" and m.get("action_taken") == draft.get("name"):
+                # Check ALL state-mutation and search tools for redundancy
+                if m.get("type") in ["tool_result", "tool_error"] and m.get("action_taken") == draft.get("name"):
                     prev_args = m.get("arguments_used") or m.get("arguments") or {}
                     prev_fp = get_fingerprint(prev_args)
                     if prev_fp == current_fp and draft.get("name") in immutable_tools:
