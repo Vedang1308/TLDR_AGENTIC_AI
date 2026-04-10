@@ -33,4 +33,4 @@ python3 -m vllm.entrypoints.openai.api_server \
     --block-size 128 \
     --max-num-seqs 64 \
     --device hpu \
-    --served-model-name "qwen-72b-agent"
+    --served-model-name "qwen-72b-agent" 2>&1 | tee agent_model_4b.log

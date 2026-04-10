@@ -26,11 +26,11 @@ export HF_XET_CACHE=/data/huggingface_cache/xet
 # Launch vLLM Server (Gaudi fork specifically)
 python3 -m vllm.entrypoints.openai.api_server \
     --model "$MODEL_ID" \
-    --tensor-parallel-size $TP_SIZE \
-    --gpu-memory-utilization $MEM_UTIL \
+    --tensor-parallel-size "$TP_SIZE" \
+    --gpu-memory-utilization "$MEM_UTIL" \
     --port 8225 \
     --host 0.0.0.0 \
     --block-size 128 \
     --max-num-seqs 64 \
     --device hpu \
-    --served-model-name "qwen-72b-simulator"
+    --served-model-name "qwen-72b-simulator" 2>&1 | tee user_model.log
