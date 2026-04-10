@@ -25,6 +25,15 @@ def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, 
     
     # 1. Setup Environment
     print(f"--- [INIT] Powering up Environment: {domain} ---")
+    
+    # PROACTIVE VALIDATION: Gaudi/Apptainer toolchains often break if the path has spaces.
+    current_path = os.getcwd()
+    if " " in current_path:
+        print(f"\033[31m[CRITICAL ERROR]\033[0m: Your project path contains spaces: '{current_path}'")
+        print("Intel Gaudi compiler toolchains (SynapseAI/vLLM) often fail to compile graphs when paths have spaces.")
+        print("Please move your project to a path without spaces (e.g. ~/gaudi_setup/TLDR_AGENTIC_AI) and try again.")
+        sys.exit(1)
+
     os.environ["OPENAI_API_BASE"] = PEVConfig.USER_ENDPOINT
     os.environ["OPENAI_BASE_URL"] = PEVConfig.USER_ENDPOINT
     os.environ["OPENAI_API_KEY"] = PEVConfig.OPENAI_API_KEY or "none"
@@ -37,7 +46,21 @@ def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, 
 
     def wait_for_server(url, name, model_name=None):
         print(f"--- [CHECK] Waiting for {name} ({url})... ---")
+        log_file = "agent_model_4b.log" if "Agent" in name else "user_model.log"
+        
         while True:
+            # Check for crashes in log file
+            if os.path.exists(log_file):
+                with open(log_file, "r") as f:
+                    log_tail = f.read()[-2000:] # Check last 2KB
+                    if "RuntimeError" in log_tail or "Engine core initialization failed" in log_tail or "clang++: error" in log_tail:
+                        print(f"\n\033[31m[CRASH DETECTED]\033[0m: {name} appears to have failed.")
+                        print("Check the end of the log file for details:")
+                        print("-" * 40)
+                        print(log_tail.splitlines()[-10:])
+                        print("-" * 40)
+                        sys.exit(1)
+
             try:
                 res = requests.get(f"{url}/models", timeout=30).json()
                 if model_name:

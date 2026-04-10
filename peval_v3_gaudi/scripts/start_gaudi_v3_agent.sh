@@ -26,8 +26,8 @@ export HF_XET_CACHE=/data/huggingface_cache/xet
 # Launch vLLM Server (Gaudi fork specifically)
 python3 -m vllm.entrypoints.openai.api_server \
     --model "$MODEL_ID" \
-    --tensor-parallel-size $TP_SIZE \
-    --gpu-memory-utilization $MEM_UTIL \
+    --tensor-parallel-size "$TP_SIZE" \
+    --gpu-memory-utilization "$MEM_UTIL" \
     --port 8224 \
     --host 0.0.0.0 \
     --block-size 128 \
