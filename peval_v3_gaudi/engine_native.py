@@ -116,14 +116,30 @@ class PEVEngineNative:
 
     def _harvest_facts_to_snapshot(self, state: PevState, tool_name: str, observation: Any):
         """Extracts technical IDs and values from tool outputs into the world_snapshot (Scratchpad)."""
-        if not observation:
+        if observation is None:
             return
 
         # Initialize snapshot if empty
         if not state.world_snapshot:
             state.world_snapshot = {}
 
-        # 1. Attempt to parse as JSON if it's a string
+        # 1. Detect Exhausted (Empty) Searches - PERSISTENT TRACE
+        obs_str = str(observation).strip()
+        if "search" in tool_name.lower() and (obs_str == "[]" or obs_str == "" or obs_str.lower() == "none"):
+            if "exhausted_searches" not in state.world_snapshot:
+                state.world_snapshot["exhausted_searches"] = []
+            
+            last_args = {}
+            if state.memory:
+                 last_m = state.memory[-1]
+                 if last_m.get("action_taken") == tool_name:
+                     last_args = last_m.get("arguments_used") or {}
+            
+            entry = f"{tool_name}({json.dumps(last_args)}) -> EMPTY"
+            if entry not in state.world_snapshot["exhausted_searches"]:
+                state.world_snapshot["exhausted_searches"].append(entry)
+
+        # 2. Attempt to parse as JSON if it's a string
         data = observation
         if isinstance(observation, str):
             try:
@@ -134,11 +150,10 @@ class PEVEngineNative:
             except:
                 pass
 
-        # 2. Extract common technical keys
+        # 3. Extract common technical keys
         def recursive_extract(obj):
             if isinstance(obj, dict):
                 for k, v in obj.items():
-                    # We want to capture IDs, flight numbers, prices, etc.
                     if any(term in k.lower() for term in ["id", "number", "price", "amount", "total", "fee", "method", "email"]):
                         if isinstance(v, (str, int, float)) and len(str(v)) < 100:
                             state.world_snapshot[k] = v
@@ -149,9 +164,8 @@ class PEVEngineNative:
 
         recursive_extract(data)
 
-        # 3. Special handling for specific tools
+        # 4. Special handling for specific tools
         if "get_user_details" in tool_name and isinstance(data, dict):
-            # Capture lists of IDs like 'reservations'
             for k in ["reservations", "payment_methods", "saved_passengers", "orders"]:
                 if k in data:
                     state.world_snapshot[f"available_{k}"] = data[k]

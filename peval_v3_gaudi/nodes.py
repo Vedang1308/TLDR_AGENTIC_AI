@@ -223,9 +223,12 @@ def planner_node(state: PevState) -> Dict:
     # MISSION ANCHOR (Temporal Support): Detect repeat empty searches by year
     temporal_hint = ""
     year_failures = {}
+    exhausted_searches = state.world_snapshot.get("exhausted_searches", [])
+    
     for m in state.memory:
+        obs_str = str(m.get("api_observation", "")).strip()
         if m.get("type") == "tool_result" and "search" in str(m.get("action_taken")).lower():
-            if str(m.get("api_observation")) == "[]":
+            if obs_str == "[]" or obs_str == "" or obs_str.lower() == "none":
                 args = m.get("arguments_used") or {}
                 raw_date = str(args.get("date", ""))
                 ym = re.search(r'\b(20[2-3][0-9])\b', raw_date)
@@ -236,6 +239,9 @@ def planner_node(state: PevState) -> Dict:
     for y, count in year_failures.items():
         if count >= 2:
             temporal_hint = f"\n[STRATEGIC NOTE]: You have {count} failed searches for the year {y}. This often indicates a 'Year Mismatch'. Verify if the mission should be a different year (e.g. {int(y)+1}).\n"
+
+    if exhausted_searches:
+        temporal_hint += "\n[EXHAUSTED SEARCHES - PERMANENT LOG]:\n - " + "\n - ".join(exhausted_searches) + "\n"
 
     # ANTI-APOLOGY GATE: Prevent infinite conversational loops
     respond_count = 0
@@ -318,7 +324,7 @@ Example check (if applicable):
 {reflection_section}
 
 MEMORY KERNEL (Recent raw steps):
-{format_memory(state.memory[-5:])}
+{format_memory(state.memory[-15:])} # Memory window increased to prevent amnesia
 
 TOOL ATTEMPT COUNTS (Task-wide):
 {json.dumps(state.tool_attempts, indent=2) if state.tool_attempts else "None."}
@@ -605,26 +611,26 @@ def validator_node(state: PevState) -> Dict:
                     }
 
     sys_prompt = f"""You are the strict structural and TECHNICAL VALIDATOR. 
-DRAFT: {json.dumps(state.drafted_tool_call)}
-MEMORY: {format_memory(state.memory)}
+DRAFTED ACTION: {json.dumps(state.drafted_tool_call)}
+HISTORY: {format_memory(state.memory)}
+
+### THE GROUND TRUTH: AVAILABLE TOOLS WIKI ###
+{json.dumps(state.tools_info, indent=2)}
 
 ### YOUR MANDATE ###
-1. SCHEMA-FIRST VALIDITY: Verify tool name and argument types against the Tool Wiki.
-   - DO NOT reject for missing user constraints (like time, baggage, or insurance) if those parameters are NOT in the Tool Wiki JSON schema for that tool.
-   - If a tool only accepts 'origin', 'destination', and 'date', you MUST approve technically valid drafts even if the user has other preferences. Filtering results is the Planner's job post-tool.
+1. SCHEMA-FIRST VALIDITY: Verify tool name and argument types against the Ground Truth Wiki above.
+   - NEVER suggest or allow a tool name that is not in the Wiki. If the agent drafts a non-existent tool (e.g., 'search_multistop_flight'), you MUST reject it.
+   - Do NOT try to be 'helpful' by guessing what tool should exist. If it is not in the Wiki, it does NOT exist.
 2. CAPACITY & ID VERIFICATION (STRICT):
    - For booking/update actions: SUM all amounts in any payment lists. Verify against prices in MEMORY.
    - VALID IDs: Approve identifiers if they appeared in EITHER a technical tool result (MEMORY) OR were provided by the user in the chat (HISTORY). 
    - REJECT if the agent tries to book an item previously seen as having 0 or NONE availability/stock/seats. 
 3. SEMANTIC FLUIDITY (SOURCE OF TRUTH):
    - The User is the Source of Truth. If the user corrects a route, date, or preference in a message, APPROVE IT. 
-   - DO NOT reject based on a previous "Initial Mission" if the User has provided new data.
-   - NEVER reject a search tool (search_direct_flight, search_onestop_flight) simply because it differs from one performed earlier; user corrections are valid reasons to re-perform a similar search at a different step.
-   - 24-HOUR CONVERSION: 'After 11 AM' is 11:00-23:59 (19:00 is successful).
-   - VICTORY BYPASS: If the VERY LAST TECHNICAL ACTION in MEMORY (ignore previous 'think' or 'respond' blocks) was a SUCCESSFUL state-mutation tool (e.g. update, book, calculate, or cancel), you MUST APPROVE the drafting of a final 'respond' call to close the loop with the user.
+   - VICTORY BYPASS: If the VERY LAST TECHNICAL ACTION in MEMORY (ignore previous 'think' or 'respond' blocks) was a SUCCESSFUL state-mutation tool (e.g. update, book, calculate, or cancel), you MUST APPROVE the drafting of a final 'respond' call.
    - DO NOT enforce tool "consistency." Pivoting between tools is a sign of intelligence.
 
-Your job is NOT to judge high-level strategy or path selection. Approve if technical schema and physical constraints are met.
+Your job is NOT to judge high-level strategy. Verify strictly against the Wiki and physical constraints.
 """
     
     tools = [{
