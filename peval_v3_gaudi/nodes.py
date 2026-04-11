@@ -301,8 +301,13 @@ Example check (if applicable):
    - If a search tool returns `[]`, mark that date/route as EXHAUSTED. 
    - Pivot immediately to adjacent dates or alternative airport codes. Do NOT repeat failed searches.
 
-4. TRANSACTIONAL INTEGRITY:
+4. TRANSACTIONAL INTEGRITY & NUMERICAL OWNERSHIP:
    - For multi-part requests (e.g. flight change + baggage), you MUST perform the flight change first, verify the new reservation state, then perform the baggage update. DO NOT skip the ancillary parts.
+   - If a tool returns a 'Payment Mismatch' or 'Does not add up' error, your next step MUST be to re-verify all components (Base Price + Ancillary Fees) against the VERIFIED TECHNICAL SCRATCHPAD. Use the `calculate` tool if the math is complex.
+
+5. THE GUIDANCE MANDATE:
+   - Your task is NOT successfully completed until you have explicitly addressed every 'How-to', 'Insurance Claim', or 'Procedure' request from the user. 
+   - Simply performing the technical action (e.g., cancel) is a partial failure if the user asked for guidance. You MUST explain the process, refund rules, or insurance steps in your final response.
 
 ### YOUR STRATEGIC CONTEXT:
 {kernel_section}
@@ -547,8 +552,13 @@ def validator_node(state: PevState) -> Dict:
                 if m.get("type") in ["tool_result", "tool_error"] and m.get("action_taken") == draft.get("name"):
                     # FIXED: Only reject if the previous result was SUCCESSFUL.
                     # If it returned an "Error", the agent must be allowed to try again with fixed parameters.
+                    # [PHASE 4.23]: Allow discovery/calculation retries if the previous action was a tool_error.
                     prev_obs = str(m.get("api_observation", "")).lower()
-                    if "error" in prev_obs or m.get("type") == "tool_error":
+                    is_discovery = any(kw in draft.get("name") for kw in ["calculate", "get_", "list_"])
+                    
+                    if ("error" in prev_obs or m.get("type") == "tool_error") and is_discovery:
+                        continue # Allow retry of discovery tools to fix errors
+                    elif "error" in prev_obs or m.get("type") == "tool_error":
                         continue # Allow retry after failures
                         
                     prev_args = m.get("arguments_used") or m.get("arguments") or {}
