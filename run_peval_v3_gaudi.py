@@ -44,7 +44,7 @@ def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, 
     os.environ["AGENT_MODEL_NAME"] = model_name
     os.environ["AGENT_API_BASE"] = PEVConfig.AGENT_ENDPOINT
 
-    def wait_for_server(url, name, model_name=None):
+    def wait_for_server(url, name, target_names=None):
         print(f"--- [CHECK] Waiting for {name} ({url})... ---")
         log_file = "agent_model_4b.log" if "Agent" in name else "user_model.log"
         
@@ -63,10 +63,17 @@ def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, 
 
             try:
                 res = requests.get(f"{url}/models", timeout=30).json()
-                if model_name:
+                if target_names:
+                    # Convert single string to list for consistency
+                    if isinstance(target_names, str):
+                        target_names = [target_names]
+                        
                     available_models = [m["id"] for m in res.get("data", [])]
-                    if model_name not in available_models:
-                        print(f"  ... {name} is up, but model '{model_name}' is still loading...")
+                    # Check if ANY of our targets are in the list
+                    found_any = any(t in available_models for t in target_names)
+                    
+                    if not found_any:
+                        print(f"  ... {name} is up, but model {target_names} is still loading...")
                         time.sleep(10)
                         continue
                 print(f"--- [SUCCESS] {name} is LIVE ---")
@@ -75,8 +82,8 @@ def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, 
                 print(f"  ... {name} not ready yet (retrying in 5s)...")
                 time.sleep(5)
 
-    wait_for_server(PEVConfig.USER_ENDPOINT, "User Simulator", PEVConfig.USER_MODEL)
-    wait_for_server(PEVConfig.AGENT_ENDPOINT, "Agent Server", model_name)
+    wait_for_server(PEVConfig.USER_ENDPOINT, "User Simulator", [PEVConfig.USER_MODEL, "qwen-72b-simulator"])
+    wait_for_server(PEVConfig.AGENT_ENDPOINT, "Agent Server", [model_name, "qwen-72b-agent"])
 
     # 2. Load Tau-Bench Environment
     from tau_bench.envs.retail.env import MockRetailDomainEnv
