@@ -69,21 +69,32 @@ def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, 
                         target_names = [target_names]
                         
                     available_models = [m["id"] for m in res.get("data", [])]
-                    # Check if ANY of our targets are in the list
-                    found_any = any(t in available_models for t in target_names)
                     
-                    if not found_any:
+                    # Find which target name is actually being served
+                    found_model = next((t for t in target_names if t in available_models), None)
+                    
+                    if not found_model:
                         print(f"  ... {name} is up, but model {target_names} is still loading...")
                         time.sleep(10)
                         continue
+                        
+                    print(f"--- [SUCCESS] {name} is LIVE (ID: {found_model}) ---")
+                    return found_model
                 print(f"--- [SUCCESS] {name} is LIVE ---")
-                return
+                return None
             except Exception:
                 print(f"  ... {name} not ready yet (retrying in 5s)...")
                 time.sleep(5)
 
     wait_for_server(PEVConfig.USER_ENDPOINT, "User Simulator", [PEVConfig.USER_MODEL, "qwen-72b-simulator"])
-    wait_for_server(PEVConfig.AGENT_ENDPOINT, "Agent Server", [model_name, "qwen-72b-agent"])
+    found_agent_model = wait_for_server(PEVConfig.AGENT_ENDPOINT, "Agent Server", [model_name, "qwen-72b-agent"])
+    
+    # CRITICAL: If the server is using a nickname (like qwen-72b-agent), we MUST use that
+    # in all subsequent API calls to avoid 404 errors.
+    if found_agent_model:
+        print(f"--- [OIDC] Negotiated Agent Model ID: {found_agent_model} ---")
+        PEVConfig.AGENT_MODEL = found_agent_model
+        os.environ["AGENT_MODEL_NAME"] = found_agent_model
 
     # 2. Load Tau-Bench Environment
     from tau_bench.envs.retail.env import MockRetailDomainEnv
