@@ -111,7 +111,52 @@ class PEVEngineNative:
                 try:
                     res = env.step(Action(name=t_name, kwargs={arg_name: rid}))
                     state.memory.append({"action": "AUTO_PREFETCH", "args": {arg_name: rid}, "observation": str(res.observation)})
+                    self._harvest_facts_to_snapshot(state, t_name, res.observation)
                 except: pass
+
+    def _harvest_facts_to_snapshot(self, state: PevState, tool_name: str, observation: Any):
+        """Extracts technical IDs and values from tool outputs into the world_snapshot (Scratchpad)."""
+        if not observation:
+            return
+
+        # Initialize snapshot if empty
+        if not state.world_snapshot:
+            state.world_snapshot = {}
+
+        # 1. Attempt to parse as JSON if it's a string
+        data = observation
+        if isinstance(observation, str):
+            try:
+                # Find the first JSON block if it's wrapped in text
+                json_match = re.search(r'(\[.*\]|\{.*\})', observation, re.DOTALL)
+                if json_match:
+                    data = json.loads(json_match.group())
+            except:
+                pass
+
+        # 2. Extract common technical keys
+        def recursive_extract(obj):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    # We want to capture IDs, flight numbers, prices, etc.
+                    if any(term in k.lower() for term in ["id", "number", "price", "amount", "total", "fee", "method", "email"]):
+                        if isinstance(v, (str, int, float)) and len(str(v)) < 100:
+                            state.world_snapshot[k] = v
+                    recursive_extract(v)
+            elif isinstance(obj, list):
+                for item in obj:
+                    recursive_extract(item)
+
+        recursive_extract(data)
+
+        # 3. Special handling for specific tools
+        if "get_user_details" in tool_name and isinstance(data, dict):
+            # Capture lists of IDs like 'reservations'
+            for k in ["reservations", "payment_methods", "saved_passengers", "orders"]:
+                if k in data:
+                    state.world_snapshot[f"available_{k}"] = data[k]
+        
+        print(f"  [SCRATCHPAD] Updated with {len(state.world_snapshot)} facts.")
 
     def solve(self, env: Env, task_index: Optional[int] = None, max_steps: int = 30) -> SolveResult:
         env_res = env.reset(task_index=task_index)
@@ -136,7 +181,9 @@ class PEVEngineNative:
             # 1. Distill (Step 3: Strategic Kernel)
             distilled = self.summarizer(state)
             state.strategic_kernel = distilled["summary"]
-            state.world_snapshot = distilled["world_snapshot"]
+            # Merge distilled facts into our high-fidelity scratchpad
+            if not state.world_snapshot: state.world_snapshot = {}
+            state.world_snapshot.update(distilled.get("world_snapshot", {}))
 
             # [STRATEGY HOOK]: IRMA Reformulation
             if strategy == "irma":
@@ -234,6 +281,10 @@ class PEVEngineNative:
                 "arguments_used": action.kwargs,
                 "api_observation": res.observation
             })
+            
+            # [PHASE 4.22] Live Scratchpad Harvesting
+            if not is_error:
+                self._harvest_facts_to_snapshot(state, action.name, res.observation)
             
             # 8. Learning Node (Step 9/10)
             if is_error:

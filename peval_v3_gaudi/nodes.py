@@ -250,12 +250,24 @@ def planner_node(state: PevState) -> Dict:
 
     # STRATEGIC KERNEL integration
     kernel_section = f"\nSTRATEGIC KERNEL (Compressed Context):\n{state.strategic_kernel}\n" if state.strategic_kernel else ""
-    snapshot_section = f"\nWORLD SNAPSHOT (Harvested Facts):\n{json.dumps(state.world_snapshot, indent=2)}\n{temporal_hint}\n{anti_apology_mandate}\n" if state.world_snapshot else f"{temporal_hint}\n{anti_apology_mandate}\n"
+    snapshot_section = f"\n### VERIFIED TECHNICAL SCRATCHPAD (WORLD SNAPSHOT) ###\n{json.dumps(state.world_snapshot, indent=2) if state.world_snapshot else '[] - DISCOVERY REQUIRED'}\n{temporal_hint}\n{anti_apology_mandate}\n"
 
-    # VICTORY DETECTION: Check for existing reservation/status success
+    # TOOL LOCK LOGIC
+    discovery_tools = ["get_user_details", "get_reservation_details", "list_reservations"]
+    mutation_tools = ["book_reservation", "update_reservation_flights", "update_reservation_baggages", "cancel_reservation"]
+    
+    has_res_id = any("reservation_id" in str(k) or "available_reservations" in str(k) for k in state.world_snapshot.keys())
+    lock_status = "\n### TOOL LOCK STATUS ###\n"
+    lock_status += f"- DISCOVERY TOOLS: UNLOCKED (Always available)\n"
+    if has_res_id:
+        lock_status += f"- MUTATION TOOLS: UNLOCKED (Reservation ID found in Scratchpad)\n"
+    else:
+        lock_status += f"- MUTATION TOOLS: [LOCKED] (You MUST call a Discovery tool first to find a reservation_id)\n"
+
+    # VICTORY DETECTION
     victory_status = ""
-    if state.world_snapshot and any(k in str(v).lower() for k in ["reservation_id", "booking_id", "order_id", "status_confirmed", "cancelled"] for v in state.world_snapshot.values()):
-        victory_status = "\n[!] VICTORY DETECTED: Technical win confirmed. STOP technical work. Your goal is now to confirm these final details to the user and END the trial using the 'respond' tool immediately.\n"
+    if state.world_snapshot and any(k in str(v).lower() for k in ["reservation_id", "status_confirmed", "cancelled"] for v in state.world_snapshot.values()):
+        victory_status = "\n[!] VICTORY DETECTED: Technical win confirmed. STOP technical work. END the trial using 'respond' immediately.\n"
 
     sys_prompt = f"""You are the HIERARCHICAL STRATEGIST (Planner). 
 Your ONLY tool is `submit_plan`. 
@@ -264,35 +276,36 @@ Your ONLY tool is `submit_plan`.
 {initial_mission}
 {victory_status}
 
-### THE IDENTITY GROUNDING MANDATE (PRIORITY 1):
-- You are FORBIDDEN from searching for flights or modifying system state until you have 'grounded' the conversation in the user's profile. 
-- Your absolute first technical goal of any trial is to call `get_user_details`.
-- FLOW: 
-    1. If user_id is unknown -> Use `respond` to ask the user for their name or ID.
-    2. If user_id is known -> Use `get_user_details` immediately.
-    3. ONLY AFTER the `get_user_details` results are in your history can you proceed to searches or other technical tasks.
+{snapshot_section}
+{lock_status}
 
-### THE EXHAUSTION MANDATE:
-- If a search tool returns an empty list `[]`, that means NO flights exist for those parameters.
-- The environment is unforgiving. If a search tool returns a flight with `available_seats: 0` for your target class, or a departure time that violates user constraints, that flight is a DEAD END.
-- DO NOT repeat the same search. DO NOT apologize endlessly.
-- If a search result (like `search_direct_flight`) fails your constraints (e.g., all flights are at 6 AM but user wants after 11 AM), you MUST pivot intelligently: 
-    1. IMMEDIARE FALLBACK: If direct flights fail constraints, try `search_onestop_flight` immediately.
-    2. ADJACENT SEARCH: Suggest/try adjacent dates (e.g. if May 20 is empty, try May 21).
-    3. ADJACENT LOCATIONS: Suggest different airport options in the same region.
+### THE DYNAMIC REQUIREMENT CHECKLIST ###
+You must track EVERY part of the user's request. 
+Example check (if applicable):
+- [ ] User Identification (get_user_details)
+- [ ] Flight Discovery (search_direct_flight / search_onestop_flight)
+- [ ] Primary Action (book_reservation / update_reservation_flights)
+- [ ] Ancillary Actions (update_reservation_baggages / update_reservation_insurance)
+- [ ] Final Confirmation (respond)
 
-### TRANSACTIONAL & NUMERICAL INTEGRITY:
-- If any technical tool fails with a 'mismatch', 'invalid total', or 'amount' error, you MUST NOT guess. Immediately use the `calculate` tool to re-verify the numbers and use your discovery tools (get_details, list, etc.) to ensure your inputs exactly match the current system state.
-- Treat all identifiers (IDs) found in conversation or previous results as Ground Truth. If a state-mutation fails because an ID is "not found," proactively harvest system details to resolve the reference.
+### MANDATORY POLICIES ###
+1. THE IDENTITY GROUNDING MANDATE: 
+   - Your absolute first priority is to call `get_user_details`. 
+   - DO NOT attempt to modify reservations or search specifically for a user's existing trip until they are grounded.
 
-- Your response to the user must be ACTIONABLE: If you have no technical tools left to try, summarize exactly what you checked and ask the user for a specific pivot (date or airport).
-- MATH & PRICING: If the user asks for "total cost", "price", or "total", you MUST use the `calculate` tool. Do NOT estimate or guess totals in conversation.
-- ID CONTEXT MANDATE: Whenever using a reservation-specific tool (update, cancel, get_reservation_details), you MUST include BOTH 'user_id' AND 'reservation_id' if both are available in MEMORY.
-- PROACTIVE HARVESTING: If you are missing a 'reservation_id', do NOT just ask the user. Immediately call `get_user_details` to harvest any existing reservations from the user's profile.
+2. THE SCRATCHPAD MANDATE:
+   - You are STRICTLY FORBIDDEN from using an ID (Reservation ID, Payment ID, Flight Number) that does not appear in the VERIFIED TECHNICAL SCRATCHPAD.
+   - If a tool requires an ID you don't have, your ONLY option is to use a Discovery tool or ASK the user. NEVER guess.
+
+3. THE EXHAUSTION MANDATE:
+   - If a search tool returns `[]`, mark that date/route as EXHAUSTED. 
+   - Pivot immediately to adjacent dates or alternative airport codes. Do NOT repeat failed searches.
+
+4. TRANSACTIONAL INTEGRITY:
+   - For multi-part requests (e.g. flight change + baggage), you MUST perform the flight change first, verify the new reservation state, then perform the baggage update. DO NOT skip the ancillary parts.
 
 ### YOUR STRATEGIC CONTEXT:
 {kernel_section}
-{snapshot_section}
 
 ### TECHNICAL CONSTRAINTS:
 {wisdom_section}
@@ -562,25 +575,23 @@ def validator_node(state: PevState) -> Dict:
                 # This check ensures the agent doesn't loop booking impossible items in ANY domain.
                 pass # The prompt below will enforce the exact logic based on this harvested context.
 
-    # 2. UNIVERSAL ID-SAFE GROUNDING
-    # Ensure any ID used in a state-mutation tool (book, update, delete) exists in memory.
+    # 2. HALLUCINATION BLOCKADE (Scratchpad-Integrated)
+    # Ensure any ID used in a state-mutation tool (book, update, delete) exists in the World Snapshot.
     if draft and any(k in draft.get("name", "").lower() for k in ["book", "update", "delete", "cancel"]):
-        # Robust ID detection: Only flag values that look like system IDs (prefixed and numeric/random)
-        # and ensure we aren't flagging Tool Schema keys (like flight_type)
-        # Total History ID Scan: Check memory AND user conversation for identifiers
-        memory_str = str(state.memory)
+        snapshot_str = str(state.world_snapshot)
         history_str = str(state.user_conversation)
+        
         for key, value in draft.get("arguments", {}).items():
             val_str = str(value)
-            # Match typical system ID patterns (e.g., credit_card_123, reservation_ABC)
+            # Match typical system ID patterns
             if re.search(r'^[a-zA-Z0-9]+_[a-zA-Z0-9]{4,}$', val_str):
-                # Valid if found in tool results OR provided by the user in conversation
-                if val_str not in memory_str and val_str not in history_str:
+                # Valid if found in Snapshot OR provided by User
+                if val_str not in snapshot_str and val_str not in history_str:
                     return {
-                        "rejection_feedback": f"ID Hallucination: The identifier '{val_str}' has not appeared in your memory or conversation history. You MUST call a discovery tool (get_details, list_all, etc.) or get it from the user before performing this action.",
+                        "rejection_feedback": f"ID Hallucination Blockade: The identifier '{val_str}' is NOT in the Verified Technical Scratchpad. You are FORBIDDEN from using IDs that haven't been harvested by a tool call or given by the user. Use a Discovery tool (get_user_details, etc.) first.",
                         "rejection_source": "validator",
                         "internal_retry_count": retries,
-                        "node_logs": [{"node": "validator", "status": "rejected (hallucinated id)"}]
+                        "node_logs": [{"node": "validator", "status": "rejected (scratchpad violation)"}]
                     }
 
     sys_prompt = f"""You are the strict structural and TECHNICAL VALIDATOR. 
