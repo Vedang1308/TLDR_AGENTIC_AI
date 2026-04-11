@@ -264,7 +264,15 @@ Your ONLY tool is `submit_plan`.
 {initial_mission}
 {victory_status}
 
-### THE EXHAUSTION MANDATE (CRITICAL):
+### THE IDENTITY GROUNDING MANDATE (PRIORITY 1):
+- You are FORBIDDEN from searching for flights or modifying system state until you have 'grounded' the conversation in the user's profile. 
+- Your absolute first technical goal of any trial is to call `get_user_details`.
+- FLOW: 
+    1. If user_id is unknown -> Use `respond` to ask the user for their name or ID.
+    2. If user_id is known -> Use `get_user_details` immediately.
+    3. ONLY AFTER the `get_user_details` results are in your history can you proceed to searches or other technical tasks.
+
+### THE EXHAUSTION MANDATE:
 - If a search tool returns an empty list `[]`, that means NO flights exist for those parameters.
 - The environment is unforgiving. If a search tool returns a flight with `available_seats: 0` for your target class, or a departure time that violates user constraints, that flight is a DEAD END.
 - DO NOT repeat the same search. DO NOT apologize endlessly.
