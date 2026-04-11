@@ -118,25 +118,25 @@ def run_experiment(domain="airline", model_name="qwen-72b-agent", num_tasks=-1, 
     sanitized_model = model_name.replace("/", "_")
     results_file = os.path.join(PEVConfig.LOG_DIR, f"v3_gaudi_{domain}_{sanitized_model}_results.json")
     os.makedirs(os.path.dirname(results_file), exist_ok=True)
-    consistency_results = {}
+    # 5. Benchmark Loop (Trial-Sweep Restructuring)
+    consistency_results = {f"task_{i}": {"rewards": []} for i in range(num_tasks)}
     
-    # 5. Benchmark Loop
-    for t_idx in range(num_tasks):
-        print(f"\n--- [TASK {t_idx}] Starting Evaluation ---")
-        consistency_results[f"task_{t_idx}"] = {"rewards": []}
+    for trial in range(trials):
+        print(f"\n--- [SWEEP {trial + 1}/{trials}] Starting Full Domain Sweep ---")
         
-        for trial in range(trials):
-            print(f"  > Trial {trial + 1}/{trials}")
+        for t_idx in range(num_tasks):
+            print(f"\n--- [TASK {t_idx} | SWEEP {trial + 1}] Starting Evaluation ---")
+            
             result = engine.solve(env, task_index=t_idx)
             consistency_results[f"task_{t_idx}"]["rewards"].append(result.reward)
             
             status = "\033[92m[PASSED]\033[0m" if result.reward == 1.0 else "\033[91m[FAILED]\033[0m"
-            print(f"  >>> RESULT: {status} (Reward: {result.reward})")
+            print(f"  >>> SWEEP {trial + 1} RESULT: {status} (Reward: {result.reward})")
             
-        # Ensure directory exists again just in case before final write
-        os.makedirs(os.path.dirname(results_file), exist_ok=True)
-        with open(results_file, 'w') as f:
-            json.dump(consistency_results, f, indent=4)
+            # Periodic Save (Every Task)
+            os.makedirs(os.path.dirname(results_file), exist_ok=True)
+            with open(results_file, 'w') as f:
+                json.dump(consistency_results, f, indent=4)
     
     print(f"\n--- EXPERIMENT CONCLUDED ---")
     print(f"Results saved to: {results_file}")
