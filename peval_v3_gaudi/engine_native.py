@@ -207,10 +207,11 @@ class PEVEngineNative:
                 if ref_out.get("reformulated_observation"):
                     state.strategic_kernel = f"### REFORMULATED FOCUS ###\n{ref_out['reformulated_observation']}\n\n{state.strategic_kernel}"
 
-            # Reset internal retries and feedback at the start of a new Step
+            # Reset internal retries and conditionally reset feedback
             state.internal_retry_count = 0
-            state.rejection_feedback = None
-            state.rejection_source = None
+            if "VALIDATION TIMEOUT:" not in str(state.rejection_feedback):
+                state.rejection_feedback = None
+                state.rejection_source = None
             
             inner_step = 0
             while inner_step < 10: # Safety cap for internal reasoning
