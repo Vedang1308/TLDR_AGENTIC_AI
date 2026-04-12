@@ -475,15 +475,20 @@ def executor_node(state: PevState) -> Dict:
         forbidden_note = f"\n\n### [!!!] FORBIDDEN ACTION: 'respond' IS DISABLED DUE TO STAGNATION (Ratio: {stagnation_report['ratio']:.2f}) [!!!]\n"
         forbidden_note += "YOU MUST ATTEMPT A TECHNICAL TOOL CALL OR STRATEGY SHIFT.\n"
 
-    failed_actions_note = ""
-    if state.failure_log:
-        failed_names = list(set(f.get('action') for f in state.failure_log[-4:] if f.get('action')))
-        failed_actions_note = f"\n\n[ALREADY FAILED]: {failed_names}\n"
-    
+    # Tool Audit Log and Snapshot for Executor (Phase 4.31 Fix)
+    audit_section = "\n### TECHNICAL TOOL AUDIT LOG (Internal Technical History) ###\n"
+    if state.tool_audit_log:
+        audit_section += "\n".join(state.tool_audit_log[-12:]) + "\n"
+    else:
+        audit_section += "No technical attempts yet.\n"
+        
+    snapshot_section = f"\n### VERIFIED TECHNICAL SCRATCHPAD (WORLD SNAPSHOT) ###\n{json.dumps(state.world_snapshot, indent=2) if state.world_snapshot else '[] - DISCOVERY REQUIRED'}\n"
+
     sys_prompt = f"""You are the TECHNICAL EXECUTOR.
 PLAN: {state.current_plan}
 MEMORY: {format_memory(state.memory)}
-{audit_section if 'audit_section' in locals() else ""}
+{audit_section}
+{snapshot_section}
 {failed_actions_note}
 {forbidden_note}
 
@@ -494,6 +499,9 @@ Reference your Tool Wiki carefully. Common requirements:
 - book_reservation: REQUIRES [user_id], [flight_numbers], [passenger_names], [payment_id]
 - get_user_details: REQUIRES [user_id]
 - update_reservation_flights: REQUIRES [reservation_id], [new_flights], [payment_id]
+
+### CRITICAL DISCOVERY MANDATE ###
+If the user provides a user_id or reservation_id, and it is NOT present in your Verified Technical Scratchpad, you MUST call the discovery tool ('get_user_details' or 'get_reservation_details') immediately.
 
 Draft the single best tool call. Choose concisely."""
 
@@ -552,13 +560,14 @@ def validator_node(state: PevState) -> Dict:
         # [PHASE 4.29] WINDOW-BASED LOOP DETECTION
         stagnation_report = detect_progress_stagnation(state)
         
-        # VICTORY BYPASS: If a technical tool call just succeeded, allow the termination response.
+        # VICTORY BYPASS: If the IMMEDIATELY PRECEDING action was a technical success, allow 'respond'.
         technical_success = False
-        for m in reversed(state.memory):
-            if m.get("type") == "tool_result" and m.get("action_taken") not in ["respond", "think"] and "Error" not in str(m.get("api_observation")) and "[]" not in str(m.get("api_observation")):
-                technical_success = True; break
-            elif m.get("type") == "action" and m.get("action_taken") not in ["respond", "think"]:
-                break # Hit a technical attempt that hasn't succeeded yet
+        if state.memory:
+            for m in reversed(state.memory):
+                if m.get("type") == "tool_result" and m.get("action_taken") != "think":
+                    if m.get("action_taken") != "respond" and "Error" not in str(m.get("api_observation")) and "[]" not in str(m.get("api_observation")):
+                        technical_success = True
+                    break # ALWAYS break on the first non-think tool_result
 
         if stagnation_report["stagnated"] and not technical_success:
             return {
