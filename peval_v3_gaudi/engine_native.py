@@ -292,6 +292,11 @@ class PEVEngineNative:
             
             # 7. Dispatch to Env (Step 8)
             print(f"  [Step {step+1}] Dispatching Action: {action.name}")
+            if action.name == "respond":
+                print(f"  [AGENT 🗣️] -> \"{action.kwargs.get('content', '')}\"")
+            elif action.name == "think":
+                print(f"  [AGENT 🧠] -> \"{action.kwargs.get('thought', '')}\"")
+                
             state.tool_attempts[action.name] = state.tool_attempts.get(action.name, 0) + 1
             res = env.step(action)
             print(f"  [Step {step+1}] Observation (Environment): {str(res.observation)[:1000]}...") # Increased to 1000 chars
