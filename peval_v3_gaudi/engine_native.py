@@ -207,6 +207,11 @@ class PEVEngineNative:
                 if ref_out.get("reformulated_observation"):
                     state.strategic_kernel = f"### REFORMULATED FOCUS ###\n{ref_out['reformulated_observation']}\n\n{state.strategic_kernel}"
 
+            # Reset internal retries and feedback at the start of a new Step
+            state.internal_retry_count = 0
+            state.rejection_feedback = None
+            state.rejection_source = None
+            
             inner_step = 0
             while inner_step < 10: # Safety cap for internal reasoning
                 inner_step += 1
@@ -233,6 +238,10 @@ class PEVEngineNative:
                 # 5. Syntax Monitor (Step 6)
                 print(f"  [Step {step+1}.{inner_step}] Node: Syntax Monitor...")
                 m_out = syntax_monitor_node(state)
+                # Overwrite draft if Syntax Monitor provides a fallback (e.g. Timeout)
+                if m_out.get("drafted_tool_call"):
+                    state.drafted_tool_call = m_out["drafted_tool_call"]
+                    
                 if m_out.get("rejection_feedback"):
                     print(f"    ! REJECTED (Syntax): {m_out['rejection_feedback']}")
                     state.rejection_feedback = m_out["rejection_feedback"]
