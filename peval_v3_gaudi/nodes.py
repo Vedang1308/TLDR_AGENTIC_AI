@@ -507,6 +507,14 @@ If the user provides a user_id or reservation_id, and it is NOT present in your 
 ### IMPOSSIBLE REQUEST POLICY ###
 If the user asks you to perform an operation that is physically unsupported by your Tool Wiki schemas (e.g., upgrading a single passenger when the schema requires a global 'cabin' parameter, or deleting an entity when no delete tool exists), you MUST NOT hallucinate invalid arguments. Instead, unconditionally use the 'respond' tool to inform the user that the system does not support their requested operation.
 
+### RESPONSE FIDELITY: TEMPORAL GROUNDING ###
+Whenever confirming a flight booking, update, or search result to the user, your response **MUST** include:
+1. Flight Number
+2. Scheduled Departure Time (EST)
+3. Scheduled Arrival Time (EST)
+4. Travel Date
+Since the booking tools themselves often omit times, you MUST retrieve these exact details from your previous `search_onestop_flight` or `search_direct_flight` tool results in the **MEMORY**. Do not hallucinate; if you haven't searched for the specific flight details yet, you must do so before responding to the user.
+
 Draft the single best tool call. Choose concisely."""
 
     if state.rejection_feedback:
@@ -743,6 +751,9 @@ HISTORY: {format_memory(state.memory)}
    - YOU MUST NOT REJECT an action by claiming it was "already attempted" unless you see the EXACT SAME ARGUMENTS in the HISTORY. Retrying a tool with DIFFERENT arguments, DIFFERENT dates, or DIFFERENT airport codes is VALID EXPLORATION and MUST be APPROVED.
    - NEVER reject a tool by claiming it "does not exist in the environment" if it is listed in the Ground Truth Wiki. Read the function names carefully.
    - NEVER enforce domain rules that are not explicitly stated in the Tool Wiki (e.g., do not hallucinate that payment methods must match previous bookings).
+5. TEMPORAL FIDELITY CHECK:
+   - If the agent drafts a final 'respond' call to confirm a new booking or flight change, verify if it has included the Scheduled Departure and Arrival times. 
+   - If it only stated 'Your flight is updated' without the schedule, REJECT it and tell the agent to include the full schedule details (times) from the search results in memory.
 
 Your job is NOT to judge high-level strategy. Verify strictly against the Wiki, the Scratchpad, and physical constraints.
 """
