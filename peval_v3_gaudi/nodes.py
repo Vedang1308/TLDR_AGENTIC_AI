@@ -474,7 +474,7 @@ def executor_node(state: PevState) -> Dict:
     if stagnation_report["stagnated"]:
         forbidden_note = f"\n\n### [!!!] FORBIDDEN ACTION: 'respond' IS DISABLED DUE TO STAGNATION (Ratio: {stagnation_report['ratio']:.2f}) [!!!]\n"
         forbidden_note += "YOU MUST ATTEMPT A TECHNICAL TOOL CALL OR STRATEGY SHIFT.\n"
-        forbidden_note += "GUIDANCE: Your previous searches for the specific origin/destination yielded nothing. Try searching for segments to/from hub airports like ATL, DFW, ORD, or DEN to find a multi-city path, or change the travel date.\n"
+        forbidden_note += "GUIDANCE: Your previous searches for the specific origin/destination yielded nothing. Try searching for segments via major connecting hub airports to find a multi-city path, or change the travel date.\n"
 
     # Tool Audit Log and Snapshot for Executor (Phase 4.31 Fix)
     audit_section = "\n### TECHNICAL TOOL AUDIT LOG (Internal Technical History) ###\n"
@@ -591,7 +591,7 @@ def validator_node(state: PevState) -> Dict:
         if last_action == "think":
             rejection_text = "Consecutive thinking detected without progress. Use a primary tool or respond to the user."
             if stagnation_report["stagnated"]:
-                rejection_text = "Consecutive thinking detected while STAGNATED. You MUST execute a technical search with DIFFERENT arguments (try hubs like ATL/DFW or shift the date) to break the loop."
+                rejection_text = "Consecutive thinking detected while STAGNATED. You MUST execute a technical search with DIFFERENT arguments (try major connecting hubs or shift the date) to break the loop."
             return {
                 "rejection_feedback": rejection_text,
                 "rejection_source": "validator",
