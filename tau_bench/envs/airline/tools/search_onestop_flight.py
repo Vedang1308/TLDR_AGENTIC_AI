@@ -51,7 +51,7 @@ class SearchOnestopFlight(Tool):
             "type": "function",
             "function": {
                 "name": "search_onestop_flight",
-                "description": "Search one-stop/connected flights between two cities on a specific date.",
+                "description": "Search direct flights between two cities on a specific date.",
                 "parameters": {
                     "type": "object",
                     "properties": {
