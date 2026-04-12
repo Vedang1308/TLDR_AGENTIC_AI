@@ -555,7 +555,7 @@ def validator_node(state: PevState) -> Dict:
         # VICTORY BYPASS: If a technical tool call just succeeded, allow the termination response.
         technical_success = False
         for m in reversed(state.memory):
-            if m.get("type") == "tool_result" and "Error" not in str(m.get("api_observation")) and "[]" not in str(m.get("api_observation")):
+            if m.get("type") == "tool_result" and m.get("action_taken") not in ["respond", "think"] and "Error" not in str(m.get("api_observation")) and "[]" not in str(m.get("api_observation")):
                 technical_success = True; break
             elif m.get("type") == "action" and m.get("action_taken") not in ["respond", "think"]:
                 break # Hit a technical attempt that hasn't succeeded yet
@@ -705,6 +705,9 @@ HISTORY: {format_memory(state.memory)}
    - The User is the Source of Truth. If the user corrects a route, date, or preference in a message, APPROVE IT. 
    - VICTORY BYPASS: If the VERY LAST TECHNICAL ACTION in MEMORY (ignore previous 'think' or 'respond' blocks) was a SUCCESSFUL state-mutation tool (e.g. update, book, calculate, or cancel), you MUST APPROVE the drafting of a final 'respond' call.
    - DO NOT enforce tool "consistency." Pivoting between tools is a sign of intelligence.
+4. FALSE REJECTIONS ARE FATAL (ANTI-HALLUCINATION):
+   - YOU MUST NOT REJECT an action by claiming it was "already attempted" unless you see the EXACT SAME ARGUMENTS in the HISTORY. Retrying a tool with DIFFERENT arguments, DIFFERENT dates, or DIFFERENT airport codes is VALID EXPLORATION and MUST be APPROVED.
+   - NEVER reject a tool by claiming it "does not exist in the environment" if it is listed in the Ground Truth Wiki. Read the function names carefully.
 
 Your job is NOT to judge high-level strategy. Verify strictly against the Wiki and physical constraints.
 """
