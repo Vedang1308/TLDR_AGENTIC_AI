@@ -36,6 +36,31 @@ def format_memory(memory_list: List[Dict]) -> str:
              out.append(f"Observation: {obs}")
     return "\n".join(out) if out else "No parseable actions."
 
+def detect_progress_stagnation(state: PevState, window_size: int = 8) -> Dict[str, Any]:
+    """
+    Architectural Gate: Checks if the agent has made technical progress in the last N entries.
+    Progress = Successful technical tool result (non-empty search, valid ID retrieval).
+    Stagnation = Apologies, failed validation, or empty searches.
+    """
+    if not state.memory:
+        return {"stagnated": False, "ratio": 0.0}
+    
+    window = state.memory[-window_size:]
+    stagnant_entries = 0
+    total = len(window)
+    
+    for m in window:
+        # Responds and failed validations are signs of stagnation
+        if m.get("action_taken") == "respond" or m.get("type") == "tool_error":
+            stagnant_entries += 1
+        # Empty searches are also non-progress
+        elif m.get("type") == "tool_result" and "[]" in str(m.get("api_observation")):
+            stagnant_entries += 1
+            
+    ratio = stagnant_entries / total if total > 0 else 0.0
+    # If more than 75% of the window is stagnation, we hit the gate
+    return {"stagnated": ratio >= 0.75, "ratio": ratio}
+
 def invoke_with_paradigm(client, sys_prompt: str, user_msgs: List, tools: List[Dict], reasoning_mode: str, role_name: str):
     """
     Standard invoker from Phase 3, adapted for ModelClient.
@@ -243,33 +268,35 @@ def planner_node(state: PevState) -> Dict:
     if exhausted_searches:
         temporal_hint += "\n[EXHAUSTED SEARCHES - PERMANENT LOG]:\n - " + "\n - ".join(exhausted_searches) + "\n"
 
-    # ANTI-APOLOGY GATE: Prevent infinite conversational loops
-    respond_entries = 0
-    for m in reversed(state.memory):
-        if m.get("action_taken") == "respond":
-            respond_entries += 1
-        else: break
-    
-    respond_turns = respond_entries // 2 # Accounting for dual-logging (Action + Result)
+    # ANTI-APOLOGY GATE: Prevent infinite conversational loops using Window-Based Progress
+    stagnation_report = detect_progress_stagnation(state)
+    stagnated = stagnation_report["stagnated"]
     
     anti_apology_mandate = ""
     hard_forbidden_respond = False
-    if respond_turns >= 1:
-        anti_apology_mandate = f"\n[TACTICAL PIVOT MANDATE]: You have responded to the user {respond_turns} times in a row without technical progress. STOP apologizing or summarizing. You MUST attempt a technical tool call (search, get_details, etc.) NOW to break this loop.\n"
-        if respond_turns >= 2:
-             hard_forbidden_respond = True
-             anti_apology_mandate += "### [!] HARD CONSTRAINT: THE 'respond' TOOL IS TEMPORARILY FORBIDDEN. YOU MUST CHOOSE A TECHNICAL ACTION. [!]\n"
+    if stagnated:
+         hard_forbidden_respond = True
+         anti_apology_mandate = f"\n### [!] HARD CONSTRAINT: PROGRESS STAGNATION DETECTED (Ratio: {stagnation_report['ratio']:.2f}) [!]\n"
+         anti_apology_mandate += "The 'respond' tool is TEMPORARILY DISABLED. You MUST attempt a technical action with DIFFERENT parameters to break this loop.\n"
+
+    # STRATEGIC RECOVERY HINTS (Domain Agnostic Phase 4.29)
+    recovery_hints = ""
+    if any("EMPTY" in str(s) or "0 results" in str(s) for s in state.tool_audit_log[-5:]):
+        recovery_hints = "\n### STRATEGIC RECOVERY HINTS (Universal) ###\n"
+        recovery_hints += "- If a search returns no results, try exploring alternative nearby location codes or adjacent dates (+/- 1 day).\n"
+        recovery_hints += "- If identifying the user fails, prioritize verifying the spelling of names or trying a different identification tool.\n"
+        recovery_hints += "- You MUST change at least one mandatory parameter to explore new solution space.\n"
 
     # TOOL AUDIT LOG formatting (User Suggestion)
     audit_section = "\n### TECHNICAL TOOL AUDIT LOG (Internal Technical History) ###\n"
     if state.tool_audit_log:
-        audit_section += "\n".join(state.tool_audit_log[-10:]) + "\n"
+        audit_section += "\n".join(state.tool_audit_log[-12:]) + "\n"
     else:
         audit_section += "No technical attempts yet.\n"
 
     # STRATEGIC KERNEL integration
     kernel_section = f"\nSTRATEGIC KERNEL (Compressed Context):\n{state.strategic_kernel}\n" if state.strategic_kernel else ""
-    snapshot_section = f"\n### VERIFIED TECHNICAL SCRATCHPAD (WORLD SNAPSHOT) ###\n{json.dumps(state.world_snapshot, indent=2) if state.world_snapshot else '[] - DISCOVERY REQUIRED'}\n{temporal_hint}\n{audit_section}\n{anti_apology_mandate}\n"
+    snapshot_section = f"\n### VERIFIED TECHNICAL SCRATCHPAD (WORLD SNAPSHOT) ###\n{json.dumps(state.world_snapshot, indent=2) if state.world_snapshot else '[] - DISCOVERY REQUIRED'}\n{temporal_hint}\n{audit_section}\n{recovery_hints}\n{anti_apology_mandate}\n"
 
     # TOOL LOCK LOGIC
     discovery_tools = ["get_user_details", "get_reservation_details", "list_reservations"]
@@ -441,14 +468,12 @@ def executor_node(state: PevState) -> Dict:
         failed_names = list(set(f.get('action') for f in state.failure_log[-4:] if f.get('action')))
         failed_actions_note = f"\n\n[ALREADY FAILED]: {failed_names}\n"
     
-    # Check for forbidden actions from Planner gate
+    # [PHASE 4.29] ARCHITECTURAL LOOP CIRCUIT-BREAKER
     forbidden_note = ""
-    respond_entries = 0
-    for m in reversed(state.memory):
-        if m.get("action_taken") == "respond": respond_entries += 1
-        else: break
-    if (respond_entries // 2) >= 2:
-        forbidden_note = "\n\n### [!!!] FORBIDDEN ACTION: DO NOT USE 'respond'. YOU MUST ATTEMPT A TECHNICAL TOOL CALL. [!!!]\n"
+    stagnation_report = detect_progress_stagnation(state)
+    if stagnation_report["stagnated"]:
+        forbidden_note = f"\n\n### [!!!] FORBIDDEN ACTION: 'respond' IS DISABLED DUE TO STAGNATION (Ratio: {stagnation_report['ratio']:.2f}) [!!!]\n"
+        forbidden_note += "YOU MUST ATTEMPT A TECHNICAL TOOL CALL OR STRATEGY SHIFT.\n"
 
     failed_actions_note = ""
     if state.failure_log:
@@ -479,6 +504,14 @@ Draft the single best tool call. Choose concisely."""
             sys_prompt += "\nGUIDANCE: Do NOT repeat the previous action. Switch to a DIFFERENT tool or check the Scratchpad for corrected IDs.\n"
 
     tools = state.tools_info.copy()
+    
+    # [PHASE 4.28/29] PHYSICAL TOOL FILTERING (The Nuclear Option)
+    stagnation_report = detect_progress_stagnation(state)
+    if stagnation_report["stagnated"]:
+        # Physically remove the 'respond' tool from available capabilities
+        tools = [t for t in tools if t.get("function", {}).get("name") != "respond"]
+        sys_prompt += "\n[SYSTEM ALERT]: THE 'respond' TOOL IS DISABLED. YOU MUST PERFORM A TECHNICAL ACTION OR SEARCH VARIATION.\n"
+
     parsed, raw = invoke_with_paradigm(client, sys_prompt, [], tools, reasoning_mode, "Executor")
     return {"drafted_tool_call": parsed, "node_logs": [{"node": "executor", "raw_output": raw}]}
 
@@ -516,25 +549,20 @@ def validator_node(state: PevState) -> Dict:
         return {"drafted_tool_call": {"name": "respond", "arguments": {"content": "Validation Timeout."}}, "internal_retry_count": 0}
 
     if draft and draft.get("name") == "respond":
-        # CONVERSATIONAL LOOP DETECTION: Prevent infinite 'apology loops'
-        # Fixed: Use action_taken key to sync with Engine's memory storage
-        respond_count = 0
-        for m in reversed(state.memory):
-            if m.get("action_taken") == "respond":
-                respond_count += 1
-            else: break
+        # [PHASE 4.29] WINDOW-BASED LOOP DETECTION
+        stagnation_report = detect_progress_stagnation(state)
         
         # VICTORY BYPASS: If a technical tool call just succeeded, allow the termination response.
         technical_success = False
         for m in reversed(state.memory):
-            if m.get("type") == "tool_result" and "Error" not in str(m.get("api_observation")):
+            if m.get("type") == "tool_result" and "Error" not in str(m.get("api_observation")) and "[]" not in str(m.get("api_observation")):
                 technical_success = True; break
             elif m.get("type") == "action" and m.get("action_taken") not in ["respond", "think"]:
                 break # Hit a technical attempt that hasn't succeeded yet
 
-        if respond_count >= 2 and not technical_success:
+        if stagnation_report["stagnated"] and not technical_success:
             return {
-                "rejection_feedback": f"Infinite Loop Detected: You have responded to the user {respond_count} times in a row without making technical progress. You are FORBIDDEN from responding further until you perform a technical action (search, get_details, etc.). Call a tool now.",
+                "rejection_feedback": f"Infinite Loop Detected: Progress Stagnation Ratio: {stagnation_report['ratio']:.2f}. You are FORBIDDEN from responding further until you make technical progress. Call a different technical tool now and CHANGE your arguments.",
                 "rejection_source": "validator",
                 "internal_retry_count": retries,
                 "node_logs": [{"node": "validator", "status": "rejected (forced technical pivot)"}]
