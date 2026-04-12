@@ -269,7 +269,7 @@ class PEVEngineNative:
                 break
             else:
                 # If we exhausted all internal retries without a break (approval), force stop.
-                print(f"    ! FAILED: Internal validation/syntax limit reached for Step {step+1}. Forcing fallback to respond.")
+                print(f"    ! FAILED: Internal validation/syntax limit reached for Step {step+1}. Forcing fallback to think.")
                 state.drafted_tool_call = None
                 # PRESERVE feedback so the Planner knows WHY we failed in the next turn
                 if state.rejection_feedback:
@@ -278,7 +278,7 @@ class PEVEngineNative:
             if state.task_completed: break
             
             drafted = state.drafted_tool_call
-            if not drafted: action = Action(name=RESPOND_ACTION_NAME, kwargs={"content": "Confused."})
+            if not drafted: action = Action(name="think", kwargs={"thought": "System loop limit reached. I am recalibrating my strategy to break out of this failure state."})
             else: action = Action(name=drafted["name"], kwargs=drafted.get("arguments", {}))
             
             # 7. Dispatch to Env (Step 8)

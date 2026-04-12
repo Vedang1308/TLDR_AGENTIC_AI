@@ -528,7 +528,7 @@ def syntax_monitor_node(state: PevState) -> Dict:
     retries = state.internal_retry_count + 1
     
     if retries >= 5:
-        return {"drafted_tool_call": {"name": "respond", "arguments": {"content": "Internal Error."}}, "internal_retry_count": 0}
+        return {"drafted_tool_call": {"name": "think", "arguments": {"thought": "Syntax error timeout. Rebooting cognitive state."}}, "internal_retry_count": 0}
     
     if not draft or "name" not in draft or "arguments" not in draft:
         return {"rejection_feedback": "Invalid JSON structure.", "rejection_source": "syntax_monitor", "internal_retry_count": retries}
@@ -553,21 +553,24 @@ def validator_node(state: PevState) -> Dict:
     retries = state.internal_retry_count + 1
     draft = state.drafted_tool_call
     
-    if retries >= 5:
-        return {"drafted_tool_call": {"name": "respond", "arguments": {"content": "Validation Timeout."}}, "internal_retry_count": 0}
+    # [PHASE 4.29] WINDOW-BASED LOOP DETECTION 
+    # Determine stagnation first so we don't accidentally bypass it
+    stagnation_report = detect_progress_stagnation(state)
+        
+    # VICTORY BYPASS: If the IMMEDIATELY PRECEDING action was a technical success, allow 'respond'.
+    technical_success = False
+    if state.memory:
+        for m in reversed(state.memory):
+            if m.get("type") == "tool_result" and m.get("action_taken") != "think":
+                if m.get("action_taken") != "respond" and "Error" not in str(m.get("api_observation")) and "[]" not in str(m.get("api_observation")):
+                    technical_success = True
+                break # ALWAYS break on the first non-think tool_result
+
+    if retries >= 6:
+        # Instead of 'respond', force 'think' so it doesn't trigger conversational loops
+        return {"drafted_tool_call": {"name": "think", "arguments": {"thought": "Validation timeout. Reassessing structure."}}, "internal_retry_count": 0}
 
     if draft and draft.get("name") == "respond":
-        # [PHASE 4.29] WINDOW-BASED LOOP DETECTION
-        stagnation_report = detect_progress_stagnation(state)
-        
-        # VICTORY BYPASS: If the IMMEDIATELY PRECEDING action was a technical success, allow 'respond'.
-        technical_success = False
-        if state.memory:
-            for m in reversed(state.memory):
-                if m.get("type") == "tool_result" and m.get("action_taken") != "think":
-                    if m.get("action_taken") != "respond" and "Error" not in str(m.get("api_observation")) and "[]" not in str(m.get("api_observation")):
-                        technical_success = True
-                    break # ALWAYS break on the first non-think tool_result
 
         if stagnation_report["stagnated"] and not technical_success:
             return {
