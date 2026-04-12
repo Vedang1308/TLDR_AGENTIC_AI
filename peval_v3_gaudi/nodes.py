@@ -244,15 +244,21 @@ def planner_node(state: PevState) -> Dict:
         temporal_hint += "\n[EXHAUSTED SEARCHES - PERMANENT LOG]:\n - " + "\n - ".join(exhausted_searches) + "\n"
 
     # ANTI-APOLOGY GATE: Prevent infinite conversational loops
-    respond_count = 0
+    respond_entries = 0
     for m in reversed(state.memory):
         if m.get("action_taken") == "respond":
-            respond_count += 1
+            respond_entries += 1
         else: break
     
+    respond_turns = respond_entries // 2 # Accounting for dual-logging (Action + Result)
+    
     anti_apology_mandate = ""
-    if respond_count >= 2:
-        anti_apology_mandate = f"\n[TACTICAL PIVOT MANDATE]: You have responded to the user {respond_count} times in a row without technical progress. STOP apologizing or summarizing. You MUST attempt a technical tool call (search, get_details, etc.) NOW to break this loop.\n"
+    hard_forbidden_respond = False
+    if respond_turns >= 2:
+        anti_apology_mandate = f"\n[TACTICAL PIVOT MANDATE]: You have responded to the user {respond_turns} times in a row without technical progress. STOP apologizing or summarizing. You MUST attempt a technical tool call (search, get_details, etc.) NOW to break this loop.\n"
+        if respond_turns >= 3:
+             hard_forbidden_respond = True
+             anti_apology_mandate += "### [!] HARD CONSTRAINT: THE 'respond' TOOL IS TEMPORARILY FORBIDDEN. YOU MUST CHOOSE A TECHNICAL ACTION. [!]\n"
 
     # STRATEGIC KERNEL integration
     kernel_section = f"\nSTRATEGIC KERNEL (Compressed Context):\n{state.strategic_kernel}\n" if state.strategic_kernel else ""
@@ -281,6 +287,7 @@ Your ONLY tool is `submit_plan`.
 ### IMMOVABLE MISSION (ORIGINAL REQUEST) ###
 {initial_mission}
 {victory_status}
+{"[!!!] FORBIDDEN ACTION: DO NOT USE THE 'respond' TOOL THIS TURN. YOU ARE IN A CONVERSATIONAL LOOP. [!!!]" if hard_forbidden_respond else ""}
 
 {snapshot_section}
 {lock_status}
@@ -427,17 +434,26 @@ def executor_node(state: PevState) -> Dict:
         failed_names = list(set(f.get('action') for f in state.failure_log[-4:] if f.get('action')))
         failed_actions_note = f"\n\n[ALREADY FAILED]: {failed_names}\n"
     
-    sys_prompt = f"""You are the EXECUTOR.
+    sys_prompt = f"""You are the TECHNICAL EXECUTOR.
 PLAN: {state.current_plan}
 MEMORY: {format_memory(state.memory)}
 {failed_actions_note}
-Draft the single best tool call."""
+
+### MANDATORY SCHEMA GROUNDING (GROUND TRUTH) ###
+You are FORBIDDEN from drafting technical tools without ALL mandatory arguments.
+Reference your Tool Wiki carefully. Common requirements:
+- search_direct_flight / search_onestop_flight: REQUIRES [origin], [destination], [date]
+- book_reservation: REQUIRES [user_id], [flight_numbers], [passenger_names], [payment_id]
+- get_user_details: REQUIRES [user_id]
+- update_reservation_flights: REQUIRES [reservation_id], [new_flights], [payment_id]
+
+Draft the single best tool call. Choose concisely."""
 
     if state.rejection_feedback:
         sys_prompt += f"\n\n[!!! CRITICAL CORRECTION !!! from {state.rejection_source.upper()}]:\n>> {state.rejection_feedback}\n"
         sys_prompt += "\nYour previous attempt was INVALID. You MUST change your arguments or strategy based on this feedback immediately. DO NOT repeat the same mistake.\n"
-        if "loop" in str(state.rejection_feedback).lower() or "redundant" in str(state.rejection_feedback).lower():
-            sys_prompt += "\nGUIDANCE: Do NOT repeat the previous action. Switch to a different tool (Interacting with User or searching differently).\n"
+        if "loop" in str(state.rejection_feedback).lower() or "redundant" in str(state.rejection_feedback).lower() or "TIMEOUT" in str(state.rejection_feedback):
+            sys_prompt += "\nGUIDANCE: Do NOT repeat the previous action. Switch to a DIFFERENT tool or check the Scratchpad for corrected IDs.\n"
 
     tools = state.tools_info.copy()
     parsed, raw = invoke_with_paradigm(client, sys_prompt, [], tools, reasoning_mode, "Executor")

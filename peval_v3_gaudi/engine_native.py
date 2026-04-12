@@ -269,10 +269,11 @@ class PEVEngineNative:
                 break
             else:
                 # If we exhausted all internal retries without a break (approval), force stop.
-                # This prevents the 'Redundancy Leak' if a Validator rejection was ignored.
                 print(f"    ! FAILED: Internal validation/syntax limit reached for Step {step+1}. Forcing fallback to respond.")
                 state.drafted_tool_call = None
-                state.rejection_feedback = None # Clear feedback to stop loops
+                # PRESERVE feedback so the Planner knows WHY we failed in the next turn
+                if state.rejection_feedback:
+                    state.rejection_feedback = f"VALIDATION TIMEOUT: Your last drafted action was REJECTED multiple times. REASON: {state.rejection_feedback}"
 
             if state.task_completed: break
             
