@@ -504,6 +504,9 @@ Reference your Tool Wiki carefully. Common requirements:
 ### CRITICAL DISCOVERY MANDATE ###
 If the user provides a user_id or reservation_id, and it is NOT present in your Verified Technical Scratchpad, you MUST call the discovery tool ('get_user_details' or 'get_reservation_details') immediately.
 
+### IMPOSSIBLE REQUEST POLICY ###
+If the user asks you to perform an operation that is physically unsupported by your Tool Wiki schemas (e.g., upgrading a single passenger when the schema requires a global 'cabin' parameter, or deleting an entity when no delete tool exists), you MUST NOT hallucinate invalid arguments. Instead, unconditionally use the 'respond' tool to inform the user that the system does not support their requested operation.
+
 Draft the single best tool call. Choose concisely."""
 
     if state.rejection_feedback:
@@ -733,10 +736,10 @@ HISTORY: {format_memory(state.memory)}
    - For booking/update actions: SUM all amounts in any payment lists. Verify against prices in the Snapshot.
    - REJECT if the agent tries to book an item previously seen as having 0 or NONE availability/stock/seats. 
 3. SEMANTIC FLUIDITY (SOURCE OF TRUTH):
-   - The User is the Source of Truth. If the user corrects a route, date, or preference in a message, APPROVE IT. 
    - VICTORY BYPASS: If the VERY LAST TECHNICAL ACTION in MEMORY (ignore previous 'think' or 'respond' blocks) was a SUCCESSFUL state-mutation tool (e.g. update, book, calculate, or cancel), you MUST APPROVE the drafting of a final 'respond' call.
    - DO NOT enforce tool "consistency." Pivoting between tools is a sign of intelligence.
 4. FALSE REJECTIONS ARE FATAL (ANTI-HALLUCINATION):
+   - NEVER REJECT A TOOL BECAUSE IT DOES NOT SOLVE THE USER'S REQUEST. Your ONLY job is structural JSON validity against the Tool Wiki. If the user asks for something structurally impossible (like splitting a cabin or removing an item from a fixed array) and the Agent drafts a perfectly valid JSON that fails to achieve it, YOU MUST APPROVE IT. Do NOT enforce business logic or user intent.
    - YOU MUST NOT REJECT an action by claiming it was "already attempted" unless you see the EXACT SAME ARGUMENTS in the HISTORY. Retrying a tool with DIFFERENT arguments, DIFFERENT dates, or DIFFERENT airport codes is VALID EXPLORATION and MUST be APPROVED.
    - NEVER reject a tool by claiming it "does not exist in the environment" if it is listed in the Ground Truth Wiki. Read the function names carefully.
    - NEVER enforce domain rules that are not explicitly stated in the Tool Wiki (e.g., do not hallucinate that payment methods must match previous bookings).
