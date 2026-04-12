@@ -17,8 +17,8 @@ def format_memory(memory_list: List[Dict]) -> str:
     out = []
     for i, m in enumerate(memory_list):
         obs = str(m.get('api_observation', 'None'))
-        if len(obs) > 800:
-            obs = obs[:800] + "... [TRUNCATED for brevity]"
+        if len(obs) > 1200:
+            obs = obs[:1200] + "... [TRUNCATED for brevity]"
             
         if m.get('type') == 'tool_result':
             out.append(f"--- Step {i+1} ---")
@@ -474,6 +474,7 @@ def executor_node(state: PevState) -> Dict:
     if stagnation_report["stagnated"]:
         forbidden_note = f"\n\n### [!!!] FORBIDDEN ACTION: 'respond' IS DISABLED DUE TO STAGNATION (Ratio: {stagnation_report['ratio']:.2f}) [!!!]\n"
         forbidden_note += "YOU MUST ATTEMPT A TECHNICAL TOOL CALL OR STRATEGY SHIFT.\n"
+        forbidden_note += "GUIDANCE: Your previous searches for the specific origin/destination yielded nothing. Try searching for segments to/from hub airports like ATL, DFW, ORD, or DEN to find a multi-city path, or change the travel date.\n"
 
     # Tool Audit Log and Snapshot for Executor (Phase 4.31 Fix)
     audit_section = "\n### TECHNICAL TOOL AUDIT LOG (Internal Technical History) ###\n"
@@ -518,7 +519,7 @@ Draft the single best tool call. Choose concisely."""
     if stagnation_report["stagnated"]:
         # Physically remove the 'respond' tool from available capabilities
         tools = [t for t in tools if t.get("function", {}).get("name") != "respond"]
-        sys_prompt += "\n[SYSTEM ALERT]: THE 'respond' TOOL IS DISABLED. YOU MUST PERFORM A TECHNICAL ACTION OR SEARCH VARIATION.\n"
+        sys_prompt += "\n[SYSTEM ALERT]: THE 'respond' TOOL IS DISABLED. YOU MUST PERFORM A TECHNICAL ACTION OR SEARCH VARIATION. Try a different city or date.\n"
 
     parsed, raw = invoke_with_paradigm(client, sys_prompt, [], tools, reasoning_mode, "Executor")
     return {"drafted_tool_call": parsed, "node_logs": [{"node": "executor", "raw_output": raw}]}
@@ -531,7 +532,11 @@ def syntax_monitor_node(state: PevState) -> Dict:
         return {"drafted_tool_call": {"name": "think", "arguments": {"thought": "Syntax error timeout. Rebooting cognitive state."}}, "internal_retry_count": 0}
     
     if not draft or "name" not in draft or "arguments" not in draft:
-        return {"rejection_feedback": "Invalid JSON structure.", "rejection_source": "syntax_monitor", "internal_retry_count": retries}
+        return {"rejection_feedback": "Invalid JSON structure. You must provide a 'name' and 'arguments' object.", "rejection_source": "syntax_monitor", "internal_retry_count": retries}
+    
+    # Check for empty arguments in technical tools (Phase 4.34 Fix)
+    if draft.get("name") != "think" and not draft.get("arguments"):
+        return {"rejection_feedback": f"The tool '{draft.get('name')}' requires mandatory arguments. You provided an empty arguments object. Refer to the Tool Wiki.", "rejection_source": "syntax_monitor", "internal_retry_count": retries}
         
     return {"node_logs": [{"node": "syntax_monitor", "status": "passed"}], "internal_retry_count": 0}
 
@@ -584,8 +589,11 @@ def validator_node(state: PevState) -> Dict:
     if draft and draft.get("name") == "think":
         last_action = state.memory[-1].get("action_taken") if state.memory else None
         if last_action == "think":
+            rejection_text = "Consecutive thinking detected without progress. Use a primary tool or respond to the user."
+            if stagnation_report["stagnated"]:
+                rejection_text = "Consecutive thinking detected while STAGNATED. You MUST execute a technical search with DIFFERENT arguments (try hubs like ATL/DFW or shift the date) to break the loop."
             return {
-                "rejection_feedback": "Consecutive thinking detected without progress. Use a primary tool or respond to the user.",
+                "rejection_feedback": rejection_text,
                 "rejection_source": "validator",
                 "internal_retry_count": retries,
                 "node_logs": [{"node": "validator", "status": "rejected (consecutive think)"}]
@@ -663,8 +671,11 @@ def validator_node(state: PevState) -> Dict:
                         
             threshold = 2 if user_retry_intent else 1
             if exact_matches >= threshold:
+                rejection_text = f"Broad Redundancy Gate: You already performed '{draft.get('name')}' exactly {exact_matches} times for these arguments. The exact same search will yield the exact same results. Pivot to a different parameter or respond to the user."
+                if stagnation_report["stagnated"]:
+                    rejection_text = f"STAGNATION BREAKING REJECTION: You already tried '{draft.get('name')}' with these arguments. Since 'respond' is disabled, you MUST change your search parameters (Date, City, or Segment) to find new data. Try searching for segments to hub airports."
                 return {
-                    "rejection_feedback": f"Broad Redundancy Gate: You already performed '{draft.get('name')}' exactly {exact_matches} times for these arguments. The exact same search will yield the exact same results. Pivot to a different parameter or respond to the user.",
+                    "rejection_feedback": rejection_text,
                     "rejection_source": "validator",
                     "internal_retry_count": retries,
                     "node_logs": [{"node": "validator", "status": "rejected (hard redundant action)"}]

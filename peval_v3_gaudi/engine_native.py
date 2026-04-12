@@ -288,7 +288,11 @@ class PEVEngineNative:
             if state.task_completed: break
             
             drafted = state.drafted_tool_call
-            if not drafted: action = Action(name="think", kwargs={"thought": "System loop limit reached. I am recalibrating my strategy to break out of this failure state."})
+            if not drafted: 
+                thought = "Validation loop limit reached. I am recalibrating my strategy."
+                if state.rejection_feedback:
+                    thought = f"RECOVERY MODE: My previous attempts were REJECTED for this reason: {state.rejection_feedback}. I must change strategy."
+                action = Action(name="think", kwargs={"thought": thought})
             else: action = Action(name=drafted["name"], kwargs=drafted.get("arguments", {}))
             
             # 7. Dispatch to Env (Step 8)
