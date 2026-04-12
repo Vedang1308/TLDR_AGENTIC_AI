@@ -54,3 +54,6 @@ class PevState(BaseModel):
     tool_attempts: Dict[str, int] = Field(default_factory=dict)
     
     current_time: str = ""
+    
+    # Granular Technical History (Audit Log) for self-correction
+    tool_audit_log: List[str] = Field(default_factory=list)

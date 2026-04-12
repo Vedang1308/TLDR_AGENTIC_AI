@@ -254,15 +254,22 @@ def planner_node(state: PevState) -> Dict:
     
     anti_apology_mandate = ""
     hard_forbidden_respond = False
-    if respond_turns >= 2:
+    if respond_turns >= 1:
         anti_apology_mandate = f"\n[TACTICAL PIVOT MANDATE]: You have responded to the user {respond_turns} times in a row without technical progress. STOP apologizing or summarizing. You MUST attempt a technical tool call (search, get_details, etc.) NOW to break this loop.\n"
-        if respond_turns >= 3:
+        if respond_turns >= 2:
              hard_forbidden_respond = True
              anti_apology_mandate += "### [!] HARD CONSTRAINT: THE 'respond' TOOL IS TEMPORARILY FORBIDDEN. YOU MUST CHOOSE A TECHNICAL ACTION. [!]\n"
 
+    # TOOL AUDIT LOG formatting (User Suggestion)
+    audit_section = "\n### TECHNICAL TOOL AUDIT LOG (Internal Technical History) ###\n"
+    if state.tool_audit_log:
+        audit_section += "\n".join(state.tool_audit_log[-10:]) + "\n"
+    else:
+        audit_section += "No technical attempts yet.\n"
+
     # STRATEGIC KERNEL integration
     kernel_section = f"\nSTRATEGIC KERNEL (Compressed Context):\n{state.strategic_kernel}\n" if state.strategic_kernel else ""
-    snapshot_section = f"\n### VERIFIED TECHNICAL SCRATCHPAD (WORLD SNAPSHOT) ###\n{json.dumps(state.world_snapshot, indent=2) if state.world_snapshot else '[] - DISCOVERY REQUIRED'}\n{temporal_hint}\n{anti_apology_mandate}\n"
+    snapshot_section = f"\n### VERIFIED TECHNICAL SCRATCHPAD (WORLD SNAPSHOT) ###\n{json.dumps(state.world_snapshot, indent=2) if state.world_snapshot else '[] - DISCOVERY REQUIRED'}\n{temporal_hint}\n{audit_section}\n{anti_apology_mandate}\n"
 
     # TOOL LOCK LOGIC
     discovery_tools = ["get_user_details", "get_reservation_details", "list_reservations"]
@@ -356,7 +363,7 @@ MANDATORY POLICY CHECKLIST:
 1. USER IDENTIFIED? [{"X" if state.user_identified else " "}] 
    - IF NO: You MUST prioritize obtaining user_id or reservation_id immediately.
    - IF YES: Proceed with requested services.
-3. CONSECUTIVE FAILURES? If any tool has > 3 attempts in 'TOOL ATTEMPT COUNTS', you MUST PIVOT autonomously. Do NOT just repeat. Instead:
+3. CONSECUTIVE FAILURES? If any tool has > 3 attempts in 'TOOL ATTEMPT COUNTS' or 'AUDIT LOG', you MUST PIVOT autonomously. Do NOT just repeat. Instead:
    - Try a different search tool (e.g., one-stop instead of direct).
    - Change search parameters (e.g., +/- 1 day or different airport).
    - Re-calculate and verify your arguments against the MEMORY.
@@ -434,10 +441,26 @@ def executor_node(state: PevState) -> Dict:
         failed_names = list(set(f.get('action') for f in state.failure_log[-4:] if f.get('action')))
         failed_actions_note = f"\n\n[ALREADY FAILED]: {failed_names}\n"
     
+    # Check for forbidden actions from Planner gate
+    forbidden_note = ""
+    respond_entries = 0
+    for m in reversed(state.memory):
+        if m.get("action_taken") == "respond": respond_entries += 1
+        else: break
+    if (respond_entries // 2) >= 2:
+        forbidden_note = "\n\n### [!!!] FORBIDDEN ACTION: DO NOT USE 'respond'. YOU MUST ATTEMPT A TECHNICAL TOOL CALL. [!!!]\n"
+
+    failed_actions_note = ""
+    if state.failure_log:
+        failed_names = list(set(f.get('action') for f in state.failure_log[-4:] if f.get('action')))
+        failed_actions_note = f"\n\n[ALREADY FAILED]: {failed_names}\n"
+    
     sys_prompt = f"""You are the TECHNICAL EXECUTOR.
 PLAN: {state.current_plan}
 MEMORY: {format_memory(state.memory)}
+{audit_section if 'audit_section' in locals() else ""}
 {failed_actions_note}
+{forbidden_note}
 
 ### MANDATORY SCHEMA GROUNDING (GROUND TRUTH) ###
 You are FORBIDDEN from drafting technical tools without ALL mandatory arguments.

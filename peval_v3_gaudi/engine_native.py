@@ -300,6 +300,20 @@ class PEVEngineNative:
                 "action_taken": action.name,
                 "api_observation": res.observation
             })
+
+            # [PHASE 4.27] Technical Audit Logging (User Suggestion)
+            if action.name != RESPOND_ACTION_NAME:
+                # Format a concise summary of the attempt
+                outcome = "ERROR" if is_error else "SUCCESS"
+                if "search" in action.name and not is_error:
+                    # Summarize search success/empty
+                    count = len(res.observation) if isinstance(res.observation, list) else (1 if res.observation and "[]" not in str(res.observation) else 0)
+                    outcome = f"SUCCESS ({count} results found)" if count > 0 else "EMPTY (0 results found)"
+                
+                # Cleanup arguments for log readability
+                args_str = ", ".join([f"{k}={v}" for k, v in action.kwargs.items()])
+                log_entry = f"Step {step+1}: {action.name}({args_str}) -> {outcome}"
+                state.tool_audit_log.append(log_entry)
             
             # [PHASE 4.22] Live Scratchpad Harvesting
             if not is_error:
