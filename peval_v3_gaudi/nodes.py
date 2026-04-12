@@ -695,9 +695,12 @@ def validator_node(state: PevState) -> Dict:
                         "node_logs": [{"node": "validator", "status": "rejected (scratchpad violation)"}]
                     }
 
+    snapshot_section = f"\n### VERIFIED TECHNICAL SCRATCHPAD (WORLD SNAPSHOT) ###\n{json.dumps(state.world_snapshot, indent=2) if state.world_snapshot else '[] - DISCOVERY REQUIRED'}\n"
+
     sys_prompt = f"""You are the strict structural and TECHNICAL VALIDATOR. 
 DRAFTED ACTION: {json.dumps(state.drafted_tool_call)}
 HISTORY: {format_memory(state.memory)}
+{snapshot_section}
 
 ### THE GROUND TRUTH: AVAILABLE TOOLS WIKI ###
 {json.dumps(state.tools_info, indent=2)}
@@ -707,8 +710,8 @@ HISTORY: {format_memory(state.memory)}
    - NEVER suggest or allow a tool name that is not in the Wiki. If the agent drafts a non-existent tool (e.g., 'search_multistop_flight'), you MUST reject it.
    - Do NOT try to be 'helpful' by guessing what tool should exist. If it is not in the Wiki, it does NOT exist.
 2. CAPACITY & ID VERIFICATION (STRICT):
-   - For booking/update actions: SUM all amounts in any payment lists. Verify against prices in MEMORY.
-   - VALID IDs: Approve identifiers if they appeared in EITHER a technical tool result (MEMORY) OR were provided by the user in the chat (HISTORY). 
+   - Check the VERIFIED TECHNICAL SCRATCHPAD for all IDs (payment_id, user_id, reservation_id). If the ID exists in the Scratchpad or the User chat, it IS VALID.
+   - For booking/update actions: SUM all amounts in any payment lists. Verify against prices in the Snapshot.
    - REJECT if the agent tries to book an item previously seen as having 0 or NONE availability/stock/seats. 
 3. SEMANTIC FLUIDITY (SOURCE OF TRUTH):
    - The User is the Source of Truth. If the user corrects a route, date, or preference in a message, APPROVE IT. 
@@ -717,8 +720,9 @@ HISTORY: {format_memory(state.memory)}
 4. FALSE REJECTIONS ARE FATAL (ANTI-HALLUCINATION):
    - YOU MUST NOT REJECT an action by claiming it was "already attempted" unless you see the EXACT SAME ARGUMENTS in the HISTORY. Retrying a tool with DIFFERENT arguments, DIFFERENT dates, or DIFFERENT airport codes is VALID EXPLORATION and MUST be APPROVED.
    - NEVER reject a tool by claiming it "does not exist in the environment" if it is listed in the Ground Truth Wiki. Read the function names carefully.
+   - NEVER enforce domain rules that are not explicitly stated in the Tool Wiki (e.g., do not hallucinate that payment methods must match previous bookings).
 
-Your job is NOT to judge high-level strategy. Verify strictly against the Wiki and physical constraints.
+Your job is NOT to judge high-level strategy. Verify strictly against the Wiki, the Scratchpad, and physical constraints.
 """
     
     tools = [{
