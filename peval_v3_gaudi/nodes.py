@@ -635,35 +635,40 @@ def validator_node(state: PevState) -> Dict:
             return f"{tool_name.upper()}:{json.dumps(args, sort_keys=True)}"
 
         # 3. Apply Gate
-        if not user_retry_intent:
-            immutable_tools = [
-                "search_direct_flight", "search_onestop_flight", 
-                "get_user_details", "update_reservation_baggages", 
-                "book_reservation", "calculate", "list_reservations", "get_reservation_details"
-            ]
+        immutable_tools = [
+            "search_direct_flight", "search_onestop_flight", 
+            "get_user_details", "update_reservation_baggages", 
+            "book_reservation", "calculate", "list_reservations", "get_reservation_details"
+        ]
+        
+        if draft.get("name") in immutable_tools:
             current_fp = get_fingerprint(draft.get("name"), draft.get("arguments", {}))
+            exact_matches = 0
+            
             for m in state.memory:
                 if m.get("type") in ["tool_result", "tool_error"] and m.get("action_taken") == draft.get("name"):
-                    # FIXED: Only reject if the previous result was SUCCESSFUL.
-                    # If it returned an "Error", the agent must be allowed to try again with fixed parameters.
-                    # [PHASE 4.23]: Allow discovery/calculation retries if the previous action was a tool_error.
                     prev_obs = str(m.get("api_observation", "")).lower()
                     is_discovery = any(kw in draft.get("name") for kw in ["calculate", "get_", "list_"])
                     
                     if ("error" in prev_obs or m.get("type") == "tool_error") and is_discovery:
-                        continue # Allow retry of discovery tools to fix errors
+                        continue 
                     elif "error" in prev_obs or m.get("type") == "tool_error":
-                        continue # Allow retry after failures
+                        continue 
                         
                     prev_args = m.get("arguments_used") or m.get("arguments") or {}
                     prev_fp = get_fingerprint(m.get("action_taken"), prev_args)
-                    if prev_fp == current_fp and draft.get("name") in immutable_tools:
-                        return {
-                            "rejection_feedback": f"Broad Redundancy Gate: You already performed '{draft.get('name')}' for {current_fp} at Step {state.memory.index(m)+1}. Repeating this exactly is a waste. Pivot or check results.",
-                            "rejection_source": "validator",
-                            "internal_retry_count": retries,
-                            "node_logs": [{"node": "validator", "status": "rejected (hard redundant action)"}]
-                        }
+                    
+                    if prev_fp == current_fp:
+                        exact_matches += 1
+                        
+            threshold = 2 if user_retry_intent else 1
+            if exact_matches >= threshold:
+                return {
+                    "rejection_feedback": f"Broad Redundancy Gate: You already performed '{draft.get('name')}' exactly {exact_matches} times for these arguments. The exact same search will yield the exact same results. Pivot to a different parameter or respond to the user.",
+                    "rejection_source": "validator",
+                    "internal_retry_count": retries,
+                    "node_logs": [{"node": "validator", "status": "rejected (hard redundant action)"}]
+                }
 
     # SEAT-AWARENESS & ID-SAFE GROUNDING (New for Phase 4.1)
     # 1. UNIVERSAL CAPACITY HEURISTICS (Domain Agnostic)
