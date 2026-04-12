@@ -290,9 +290,13 @@ class PEVEngineNative:
             # Record Observation
             is_error = any(kw in str(res.observation).lower() for kw in ["error", "invalid", "failed", "not found"])
             state.memory.append({
-                "type": "tool_error" if is_error else "tool_result",
+                "type": "action",
                 "action_taken": action.name,
                 "arguments_used": action.kwargs,
+            })
+            state.memory.append({
+                "type": "tool_error" if is_error else "tool_result",
+                "action_taken": action.name,
                 "api_observation": res.observation
             })
             

@@ -246,7 +246,7 @@ def planner_node(state: PevState) -> Dict:
     # ANTI-APOLOGY GATE: Prevent infinite conversational loops
     respond_count = 0
     for m in reversed(state.memory):
-        if m.get("type") == "action" and m.get("action_taken") == "respond":
+        if m.get("action_taken") == "respond":
             respond_count += 1
         else: break
     
@@ -314,6 +314,15 @@ Example check (if applicable):
 5. THE GUIDANCE MANDATE:
    - Your task is NOT successfully completed until you have explicitly addressed every 'How-to', 'Insurance Claim', or 'Procedure' request from the user. 
    - Simply performing the technical action (e.g., cancel) is a partial failure if the user asked for guidance. You MUST explain the process, refund rules, or insurance steps in your final response.
+
+6. THE COMPLETION MANDATE (MANDATORY):
+   - You only succeed if you CONFIRM the outcome to the user. After every final state-mutation (book, update, cancel), you MUST use the `respond` tool to tell the user exactly what was done and what the final state is.
+   - DO NOT just stop after a technical tool call. The loop is only closed when you respond.
+
+7. THE FACT-ANCHORING MANDATE:
+   - You are STRICTLY FORBIDDEN from fabricating technical data. 
+   - NEVER state a flight is "delayed", "on time", or has a specific "reason" (like weather) unless that EXACT text appears in a tool observation in your MEMORY.
+   - If a tool for 'Flight Status' does not exist, you must inform the user you cannot check it. NEVER make up a status.
 
 ### YOUR STRATEGIC CONTEXT:
 {kernel_section}
