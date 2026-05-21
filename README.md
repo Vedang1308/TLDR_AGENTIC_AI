@@ -1,4 +1,4 @@
-# TLDR Agentic AI Project - Gaudi Branch
+# TLDR Agentic AI Project
 
 This codebase contains the implementation and experimentation scripts for evaluating various Large Language Models (LLMs) on agentic tasks, particularly using a setup based on the Tau Bench. 
 
