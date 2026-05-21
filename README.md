@@ -1,4 +1,4 @@
-# TLDR Agentic AI Project - Phase 1 (Vedang Branch)
+# TLDR Agentic AI Project - Phase 1
 
 This codebase contains the implementation and experimentation scripts for evaluating various Large Language Models (LLMs) on agentic tasks, particularly using a setup based on the Tau Bench. 
 
